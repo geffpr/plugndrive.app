@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plug n Drive — OCPP Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --navy:#0d1b3d;
+  --blue:#2f95d6;
+  --blue-dark:#1c6fa8;
+  --blue-light:#eaf5fc;
+  --blue-mid:#bfe0f5;
+  --bg:#ffffff;
+  --surface:#f7f9fb;
+  --border:#e3e7ec;
+  --text:#0d1b3d;
+  --text-secondary:#5b6472;
+  --text-muted:#98a2ae;
+  --red:#d64545;
+  --red-light:#fdecea;
+  --amber:#b8791a;
+  --amber-light:#fdf3e3;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);font-size:14px;-webkit-font-smoothing:antialiased;}
+h1,h2,h3{font-family:'Poppins',sans-serif;font-weight:600;color:var(--navy);}
+button{font-family:'Inter',sans-serif;cursor:pointer;}
+input,select{font-family:'Inter',sans-serif;font-size:13px;}
+
+.app{display:grid;grid-template-columns:220px 1fr;min-height:100vh;}
+
+.sidebar{background:var(--navy);color:#fff;padding:20px 14px;display:flex;flex-direction:column;gap:4px;}
+.brand{display:flex;align-items:center;gap:10px;padding:6px 8px 22px;}
+.brand-icon{width:30px;height:30px;border-radius:8px;background:var(--blue);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;}
+.brand-text{line-height:1.2;}
+.brand-title{font-family:'Poppins',sans-serif;font-weight:600;font-size:15px;}
+.brand-sub{font-size:10px;color:#8fa3c9;letter-spacing:.02em;}
+
+.navitem{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;font-size:13px;color:#c7d2e8;text-decoration:none;transition:background .15s;}
+.navitem:hover{background:rgba(255,255,255,.06);}
+.navitem.active{background:var(--blue);color:#fff;font-weight:500;}
+.navitem .ic{width:18px;text-align:center;font-size:14px;}
+
+.main{display:flex;flex-direction:column;min-height:100vh;}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 26px;border-bottom:1px solid var(--border);}
+.topbar-title{font-size:18px;}
+.topbar-right{display:flex;align-items:center;gap:14px;}
+.avatar{width:30px;height:30px;border-radius:50%;background:var(--blue-light);color:var(--blue-dark);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;}
+
+.content{padding:22px 26px;flex:1;}
+.page{display:none;}
+.page.active{display:block;}
+
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:22px;}
+.kpi{background:var(--surface);border-radius:10px;padding:14px 16px;}
+.kpi-label{font-size:11px;color:var(--text-muted);margin-bottom:6px;}
+.kpi-value{font-size:22px;font-weight:600;color:var(--navy);font-family:'Poppins',sans-serif;}
+.kpi-value.red{color:var(--red);}
+
+.section-title{font-size:13px;font-weight:600;color:var(--text-secondary);margin:20px 0 10px;text-transform:uppercase;letter-spacing:.03em;}
+
+.card{background:#fff;border:1px solid var(--border);border-radius:10px;}
+.card-pad{padding:14px 16px;}
+
+table{width:100%;border-collapse:collapse;}
+th{text-align:left;font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.03em;padding:8px 12px;border-bottom:1px solid var(--border);}
+td{padding:10px 12px;font-size:13px;border-bottom:1px solid var(--border);vertical-align:middle;}
+tr.rowlink{cursor:pointer;}
+tr.rowlink:hover td{background:var(--blue-light);}
+.path{font-size:11px;color:var(--text-muted);}
+
+.badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;}
+.badge-dot{width:6px;height:6px;border-radius:50%;}
+.badge.avail{background:var(--surface);color:var(--text-secondary);}
+.badge.avail .badge-dot{background:var(--text-muted);}
+.badge.charging{background:var(--blue-light);color:var(--blue-dark);}
+.badge.charging .badge-dot{background:var(--blue);}
+.badge.faulted{background:var(--red-light);color:var(--red);}
+.badge.faulted .badge-dot{background:var(--red);}
+.badge.offline{background:#f1f1f1;color:#8a8a8a;}
+.badge.offline .badge-dot{background:#b3b3b3;}
+.badge.active{background:var(--blue-light);color:var(--blue-dark);}
+.badge.blocked{background:var(--red-light);color:var(--red);}
+.badge.type{background:var(--blue-light);color:var(--blue-dark);font-weight:500;}
+
+.filters{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center;}
+.filters select, .filters input[type=text]{border:1px solid var(--border);border-radius:8px;padding:7px 10px;background:#fff;color:var(--text);}
+.filters .search{min-width:200px;}
+
+.btn{border:1px solid var(--border);background:#fff;color:var(--navy);padding:8px 14px;border-radius:8px;font-size:13px;font-weight:500;}
+.btn:hover{background:var(--surface);}
+.btn-primary{background:var(--blue);border-color:var(--blue);color:#fff;}
+.btn-primary:hover{background:var(--blue-dark);}
+.btn-danger{background:#fff;border-color:var(--red);color:var(--red);}
+.btn-danger:hover{background:var(--red-light);}
+.btn-sm{padding:5px 10px;font-size:12px;}
+.btn-block{width:100%;}
+
+.back-link{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--blue-dark);cursor:pointer;margin-bottom:14px;font-weight:500;}
+.back-link:hover{text-decoration:underline;}
+
+.tree-node{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-radius:8px;margin-bottom:6px;border:1px solid var(--border);}
+.tree-node .left{display:flex;align-items:center;gap:10px;}
+.tree-label{font-size:13px;font-weight:500;}
+.tree-sub{font-size:11px;color:var(--text-muted);}
+
+.gauge-wrap{margin-top:6px;}
+.gauge-bar{width:100%;height:8px;background:var(--blue-light);border-radius:4px;overflow:hidden;}
+.gauge-fill{height:100%;background:var(--blue);}
+.gauge-fill.high{background:var(--amber);}
+.gauge-fill.over{background:var(--red);}
+.gauge-labels{display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-top:5px;}
+
+.two-col{display:grid;grid-template-columns:1.5fr 1fr;gap:18px;}
+.form-row{margin-bottom:14px;}
+.form-row label{display:block;font-size:12px;color:var(--text-secondary);margin-bottom:5px;}
+.form-row input,.form-row select{width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 10px;background:#fff;color:var(--text);}
+.url-box{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 10px;}
+.url-box code{flex:1;font-size:12px;color:var(--blue-dark);overflow-x:auto;white-space:nowrap;}
+
+.steps{display:flex;flex-direction:column;gap:10px;margin-top:16px;}
+.step{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text-muted);}
+.step .dot{width:18px;height:18px;border-radius:50%;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0;}
+.step.done{color:var(--text);}
+.step.done .dot{background:var(--blue);border-color:var(--blue);color:#fff;}
+.step.active{color:var(--navy);font-weight:500;}
+.step.active .dot{border-color:var(--blue);}
+
+.detail-panel{margin-top:16px;}
+.empty{padding:40px;text-align:center;color:var(--text-muted);font-size:13px;}
+
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(13,27,61,.35);align-items:center;justify-content:center;z-index:50;}
+.modal-bg.open{display:flex;}
+.modal{background:#fff;border-radius:12px;padding:20px;width:360px;}
+.modal h3{margin-bottom:14px;font-size:15px;}
+.modal-actions{display:flex;gap:8px;margin-top:16px;justify-content:flex-end;}
+
+@media(max-width:900px){
+  .app{grid-template-columns:1fr;}
+  .sidebar{display:none;}
+  .kpi-grid{grid-template-columns:repeat(2,1fr);}
+  .two-col{grid-template-columns:1fr;}
+}
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <div class="sidebar">
+    <div class="brand">
+      <div class="brand-icon">⚡</div>
+      <div class="brand-text">
+        <div class="brand-title">Plug n Drive</div>
+        <div class="brand-sub">OCPP CONSOLE</div>
+      </div>
+    </div>
+    <a class="navitem active" data-page="dashboard" onclick="showPage('dashboard')"><span class="ic">▦</span>Dashboard</a>
+    <a class="navitem" data-page="sites" onclick="showPage('sites')"><span class="ic">◫</span>Sites</a>
+    <a class="navitem" data-page="chargers" onclick="showPage('chargers')"><span class="ic">⛽</span>Chargers</a>
+    <a class="navitem" data-page="addcharger" onclick="showPage('addcharger')"><span class="ic">+</span>Add charger</a>
+    <a class="navitem" data-page="sessions" onclick="showPage('sessions')"><span class="ic">◷</span>Sessions</a>
+    <a class="navitem" data-page="rfid" onclick="showPage('rfid')"><span class="ic">▭</span>RFID cards</a>
+    <a class="navitem" data-page="load" onclick="showPage('load')"><span class="ic">◔</span>Load management</a>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-title" id="topbar-title">Dashboard</div>
+      <div class="topbar-right">
+        <div style="font-size:12px;color:var(--text-muted);">All amounts in ZAR (R)</div>
+        <div class="avatar">RB</div>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- DASHBOARD -->
+      <div class="page active" id="page-dashboard">
+        <div class="kpi-grid">
+          <div class="kpi"><div class="kpi-label">Sites</div><div class="kpi-value" id="kpi-sites">-</div></div>
+          <div class="kpi"><div class="kpi-label">Chargers</div><div class="kpi-value" id="kpi-chargers">-</div></div>
+          <div class="kpi"><div class="kpi-label">Charging now</div><div class="kpi-value" id="kpi-charging">-</div></div>
+          <div class="kpi"><div class="kpi-label">Needs attention</div><div class="kpi-value red" id="kpi-attention">-</div></div>
+        </div>
+
+        <div class="two-col">
+          <div>
+            <div class="section-title">All complexes</div>
+            <div class="card">
+              <table>
+                <thead><tr><th>Site</th><th>City</th><th>Chargers</th><th>Load</th></tr></thead>
+                <tbody id="dash-sites-body"></tbody>
+              </table>
+            </div>
+          </div>
+          <div>
+            <div class="section-title">Needs attention</div>
+            <div class="card card-pad" id="dash-alerts"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SITES -->
+      <div class="page" id="page-sites">
+        <div id="sites-list-view">
+          <div class="filters">
+            <select id="sites-type-filter" onchange="renderSites()">
+              <option value="all">All types</option>
+              <option value="Complex">Complex</option>
+              <option value="Building">Building</option>
+              <option value="Parking">Parking</option>
+              <option value="Standalone site">Standalone site</option>
+            </select>
+            <input class="search" type="text" id="sites-search" placeholder="Search sites..." oninput="renderSites()">
+          </div>
+          <div class="card">
+            <table>
+              <thead><tr><th>Name</th><th>Type</th><th>City</th><th>Chargers</th><th>Capacity</th></tr></thead>
+              <tbody id="sites-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="site-detail-view" style="display:none;">
+          <div class="back-link" onclick="backToSites()">← Back to all sites</div>
+          <h2 id="site-detail-name"></h2>
+          <div style="font-size:12px;color:var(--text-muted);margin:4px 0 18px;" id="site-detail-meta"></div>
+          <div class="section-title">Structure</div>
+          <div id="site-tree"></div>
+        </div>
+      </div>
+
+      <!-- CHARGERS -->
+      <div class="page" id="page-chargers">
+        <div id="chargers-list-view">
+          <div class="filters">
+            <select id="chg-complex-filter" onchange="renderChargers()"></select>
+            <select id="chg-status-filter" onchange="renderChargers()">
+              <option value="all">All statuses</option>
+              <option value="Available">Available</option>
+              <option value="Charging">Charging</option>
+              <option value="Faulted">Faulted</option>
+              <option value="Offline">Offline</option>
+            </select>
+            <input class="search" type="text" id="chg-search" placeholder="Search chargers..." oninput="renderChargers()">
+          </div>
+          <div class="card">
+            <table>
+              <thead><tr><th>Charger</th><th>Location</th><th>Status</th><th>Power</th><th>Current user</th></tr></thead>
+              <tbody id="chargers-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="charger-detail-view" style="display:none;">
+          <div class="back-link" onclick="backToChargers()">← Back to all chargers</div>
+          <div class="two-col">
+            <div>
+              <h2 id="cd-name"></h2>
+              <div style="font-size:12px;color:var(--text-muted);margin:4px 0 18px;" id="cd-path"></div>
+              <div class="card card-pad">
+                <table>
+                  <tr><td style="color:var(--text-muted);">Status</td><td id="cd-status" style="text-align:right;"></td></tr>
+                  <tr><td style="color:var(--text-muted);">OCPP version</td><td id="cd-ocpp" style="text-align:right;"></td></tr>
+                  <tr><td style="color:var(--text-muted);">Vendor / model</td><td id="cd-model" style="text-align:right;"></td></tr>
+                  <tr><td style="color:var(--text-muted);">Connector</td><td id="cd-connector" style="text-align:right;"></td></tr>
+                  <tr><td style="color:var(--text-muted);">Max power</td><td id="cd-power" style="text-align:right;"></td></tr>
+                  <tr><td style="color:var(--text-muted);">WebSocket URL</td><td id="cd-ws" style="text-align:right;font-size:11px;color:var(--blue-dark);"></td></tr>
+                </table>
+              </div>
+              <div class="section-title">Recent sessions</div>
+              <div class="card">
+                <table>
+                  <thead><tr><th>Date</th><th>Resident</th><th>kWh</th><th>Cost</th></tr></thead>
+                  <tbody id="cd-sessions"></tbody>
+                </table>
+              </div>
+            </div>
+            <div>
+              <div class="section-title">Actions</div>
+              <div class="card card-pad" style="display:flex;flex-direction:column;gap:8px;">
+                <button class="btn btn-primary btn-block" id="cd-remote-btn" onclick="toggleRemote()"></button>
+                <button class="btn btn-block" onclick="testChargerConnection()">Test connection</button>
+                <button class="btn btn-danger btn-block" onclick="openUnpair()">Unpair charger</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ADD CHARGER -->
+      <div class="page" id="page-addcharger">
+        <div class="two-col">
+          <div>
+            <div class="section-title">New charger details</div>
+            <div class="card card-pad">
+              <div class="form-row">
+                <label>Charger name</label>
+                <input type="text" id="new-charger-name" placeholder="e.g. Charger C1" value="Charger C1">
+              </div>
+              <div class="form-row">
+                <label>Location</label>
+                <select id="new-charger-location"></select>
+              </div>
+              <div class="form-row">
+                <label>Connector type</label>
+                <select id="new-charger-connector">
+                  <option>Type 2</option>
+                  <option>CCS2</option>
+                  <option>CHAdeMO</option>
+                </select>
+              </div>
+              <div class="form-row">
+                <label>Max power (kW)</label>
+                <select id="new-charger-power">
+                  <option>7</option>
+                  <option selected>11</option>
+                  <option>22</option>
+                </select>
+              </div>
+              <div class="form-row">
+                <label>OCPP version</label>
+                <select id="new-charger-ocpp">
+                  <option>1.6J</option>
+                  <option>2.0.1</option>
+                </select>
+              </div>
+              <button class="btn btn-primary btn-block" onclick="generateCharger()">Generate connection details</button>
+            </div>
+          </div>
+          <div>
+            <div class="section-title">Connection</div>
+            <div class="card card-pad">
+              <div class="form-row">
+                <label>WebSocket URL</label>
+                <div class="url-box"><code id="gen-ws-url">Not generated yet</code></div>
+              </div>
+              <div class="form-row">
+                <label>Auth password (OCPP 1.6J basic auth)</label>
+                <div class="url-box"><code id="gen-auth">-</code></div>
+              </div>
+              <button class="btn btn-block" id="test-conn-btn" onclick="runConnectionTest()" disabled>Test connection</button>
+              <div class="steps" id="conn-steps"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SESSIONS -->
+      <div class="page" id="page-sessions">
+        <div class="filters">
+          <select id="ses-complex-filter" onchange="renderSessions()"></select>
+          <select id="ses-period-filter" onchange="renderSessions()">
+            <option value="all">All time</option>
+            <option value="week">This week</option>
+            <option value="month">This month</option>
+          </select>
+        </div>
+        <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);">
+          <div class="kpi"><div class="kpi-label">Sessions shown</div><div class="kpi-value" id="ses-count">-</div></div>
+          <div class="kpi"><div class="kpi-label">Total kWh</div><div class="kpi-value" id="ses-kwh">-</div></div>
+          <div class="kpi"><div class="kpi-label">Total revenue</div><div class="kpi-value" id="ses-revenue">-</div></div>
+        </div>
+        <div class="card">
+          <table>
+            <thead><tr><th>Date</th><th>Charger</th><th>Resident</th><th>Duration</th><th>kWh</th><th>Cost</th><th>Payment</th></tr></thead>
+            <tbody id="sessions-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- RFID -->
+      <div class="page" id="page-rfid">
+        <div class="filters">
+          <select id="rfid-complex-filter" onchange="renderRfid()"></select>
+          <select id="rfid-status-filter" onchange="renderRfid()">
+            <option value="all">All statuses</option>
+            <option value="active">Active</option>
+            <option value="blocked">Blocked</option>
+          </select>
+          <div style="margin-left:auto;">
+            <button class="btn btn-primary" onclick="openAssignCard()">+ Assign new card</button>
+          </div>
+        </div>
+        <div class="card">
+          <table>
+            <thead><tr><th>Card UID</th><th>Resident</th><th>Unit</th><th>Complex</th><th>Status</th><th></th></tr></thead>
+            <tbody id="rfid-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- LOAD MANAGEMENT -->
+      <div class="page" id="page-load">
+        <div class="section-title">Site capacity</div>
+        <div id="load-list"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="modal-bg">
+  <div class="modal">
+    <h3 id="modal-title">Confirm</h3>
+    <div id="modal-body" style="font-size:13px;color:var(--text-secondary);"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" id="modal-confirm">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const locations = [
+  {id:'complex-fynbos', name:'Fynbos Residence', type:'Complex', parentId:null, city:'Cape Town', capacityKVA:80},
+  {id:'building-a', name:'Block A', type:'Building', parentId:'complex-fynbos'},
+  {id:'building-b', name:'Block B', type:'Building', parentId:'complex-fynbos'},
+  {id:'parking-fynbos', name:'Basement Parking P1', type:'Parking', parentId:'complex-fynbos'},
+  {id:'spot-12', name:'Spot 12', type:'Parking spot', parentId:'parking-fynbos'},
+  {id:'spot-13', name:'Spot 13', type:'Parking spot', parentId:'parking-fynbos'},
+
+  {id:'complex-oceanview', name:'Oceanview Complex', type:'Complex', parentId:null, city:'Durban', capacityKVA:60},
+  {id:'building-ocean-1', name:'Tower 1', type:'Building', parentId:'complex-oceanview'},
+
+  {id:'parking-citycenter', name:'City Center Parking', type:'Parking', parentId:null, city:'Johannesburg', capacityKVA:45},
+
+  {id:'standalone-kloof', name:'Kloof Street Charger', type:'Standalone site', parentId:null, city:'Cape Town', capacityKVA:20},
+];
+
+const chargers = [
+  {id:'chg-a1', name:'Charger A1', locationId:'building-a', status:'Charging', powerKW:22, connector:'Type 2', ocpp:'1.6J', vendor:'Ovrod OV-22T', resident:'T. Ndlovu', unit:'Apt 4B', currentKW:16},
+  {id:'chg-a2', name:'Charger A2', locationId:'building-a', status:'Charging', powerKW:22, connector:'Type 2', ocpp:'1.6J', vendor:'Ovrod OV-22T', resident:'S. Pillay', unit:'Apt 7A', currentKW:15},
+  {id:'chg-b1', name:'Charger B1', locationId:'building-b', status:'Available', powerKW:22, connector:'Type 2', ocpp:'1.6J', vendor:'Ovrod OV-22T'},
+  {id:'chg-spot12', name:'Charger Spot 12', locationId:'spot-12', status:'Faulted', powerKW:11, connector:'Type 2', ocpp:'1.6J', vendor:'Ovrod OV-11S'},
+  {id:'chg-spot13', name:'Charger Spot 13', locationId:'spot-13', status:'Offline', powerKW:11, connector:'Type 2', ocpp:'1.6J', vendor:'Ovrod OV-11S'},
+  {id:'chg-ocean1', name:'Charger T1-01', locationId:'building-ocean-1', status:'Charging', powerKW:22, connector:'Type 2', ocpp:'2.0.1', vendor:'Ovrod OV-22T', resident:'M. Botha', unit:'Unit 12', currentKW:18},
+  {id:'chg-ocean2', name:'Charger T1-02', locationId:'building-ocean-1', status:'Available', powerKW:22, connector:'Type 2', ocpp:'2.0.1', vendor:'Ovrod OV-22T'},
+  {id:'chg-cc01', name:'Charger P-01', locationId:'parking-citycenter', status:'Available', powerKW:22, connector:'Type 2', ocpp:'1.6J', vendor:'Ovrod OV-22T'},
+  {id:'chg-cc02', name:'Charger P-02', locationId:'parking-citycenter', status:'Charging', powerKW:22, connector:'Type 2', ocpp:'1.6J', vendor:'Ovrod OV-22T', resident:'Visitor', unit:'-', currentKW:14},
+  {id:'chg-cc03', name:'Charger P-03', locationId:'parking-citycenter', status:'Offline', powerKW:22, connector:'Type 2', ocpp:'1.6J', vendor:'Ovrod OV-22T'},
+  {id:'chg-kloof', name:'Kloof St Charger', locationId:'standalone-kloof', status:'Available', powerKW:22, connector:'Type 2', ocpp:'1.6J', vendor:'Ovrod OV-22T'},
+];
+
+const sessions = [
+  {chargerId:'chg-a1', resident:'T. Ndlovu', date:'2026-08-04', duration:'2h 10m', kwh:34.2, cost:119.70, payment:'RFID card'},
+  {chargerId:'chg-a2', resident:'S. Pillay', date:'2026-08-04', duration:'1h 45m', kwh:28.0, cost:98.00, payment:'RFID card'},
+  {chargerId:'chg-a1', resident:'T. Ndlovu', date:'2026-08-02', duration:'3h 05m', kwh:41.6, cost:145.60, payment:'RFID card'},
+  {chargerId:'chg-b1', resident:'K. van Wyk', date:'2026-08-01', duration:'2h 30m', kwh:36.4, cost:127.40, payment:'App / card'},
+  {chargerId:'chg-ocean1', resident:'M. Botha', date:'2026-08-03', duration:'2h 50m', kwh:39.1, cost:136.85, payment:'RFID card'},
+  {chargerId:'chg-ocean2', resident:'L. Naidoo', date:'2026-07-30', duration:'1h 20m', kwh:19.8, cost:69.30, payment:'App / card'},
+  {chargerId:'chg-cc02', resident:'Visitor', date:'2026-08-05', duration:'0h 55m', kwh:12.1, cost:42.35, payment:'QR / online'},
+  {chargerId:'chg-cc01', resident:'Visitor', date:'2026-08-04', duration:'1h 10m', kwh:15.4, cost:53.90, payment:'QR / online'},
+  {chargerId:'chg-kloof', resident:'Visitor', date:'2026-08-04', duration:'0h 40m', kwh:9.2, cost:32.20, payment:'QR / online'},
+  {chargerId:'chg-spot12', resident:'J. Adams', date:'2026-07-28', duration:'1h 55m', kwh:21.3, cost:74.55, payment:'RFID card'},
+  {chargerId:'chg-b1', resident:'K. van Wyk', date:'2026-07-25', duration:'2h 00m', kwh:29.6, cost:103.60, payment:'App / card'},
+  {chargerId:'chg-a2', resident:'S. Pillay', date:'2026-07-22', duration:'2h 15m', kwh:31.5, cost:110.25, payment:'RFID card'},
+];
+
+const rfidCards = [
+  {uid:'A3:F2:19:0C', resident:'T. Ndlovu', unit:'Apt 4B', complexId:'complex-fynbos', status:'active'},
+  {uid:'B1:88:C4:21', resident:'S. Pillay', unit:'Apt 7A', complexId:'complex-fynbos', status:'active'},
+  {uid:'D4:0E:77:9A', resident:'K. van Wyk', unit:'Apt 2C', complexId:'complex-fynbos', status:'active'},
+  {uid:'F2:19:AB:03', resident:'J. Adams', unit:'Spot 12', complexId:'complex-fynbos', status:'blocked'},
+  {uid:'C7:33:1D:5E', resident:'M. Botha', unit:'Unit 12', complexId:'complex-oceanview', status:'active'},
+  {uid:'E9:5A:02:F1', resident:'L. Naidoo', unit:'Unit 05', complexId:'complex-oceanview', status:'active'},
+  {uid:'A0:6C:44:B7', resident:'R. Dlamini', unit:'Unit 09', complexId:'complex-oceanview', status:'blocked'},
+];
+
+function rootOf(locId){
+  let loc = locations.find(l=>l.id===locId);
+  while(loc.parentId){ loc = locations.find(l=>l.id===loc.parentId); }
+  return loc;
+}
+function pathOf(locId){
+  let chain = [];
+  let loc = locations.find(l=>l.id===locId);
+  while(loc){ chain.unshift(loc.name); loc = loc.parentId ? locations.find(l=>l.id===loc.parentId) : null; }
+  return chain.join(' › ');
+}
+function chargersAt(locId){ return chargers.filter(c=>c.locationId===locId); }
+function childrenOf(locId){ return locations.filter(l=>l.parentId===locId); }
+function statusBadge(status){
+  const map={Available:'avail',Charging:'charging',Faulted:'faulted',Offline:'offline'};
+  return `<span class="badge ${map[status]}"><span class="badge-dot"></span>${status}</span>`;
+}
+function fmtR(n){ return 'R ' + n.toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+
+function showPage(id){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  document.querySelectorAll('.navitem').forEach(n=>n.classList.remove('active'));
+  document.querySelector(`.navitem[data-page="${id}"]`).classList.add('active');
+  const titles={dashboard:'Dashboard',sites:'Sites',chargers:'Chargers',addcharger:'Add charger',sessions:'Sessions',rfid:'RFID cards',load:'Load management'};
+  document.getElementById('topbar-title').textContent = titles[id];
+  if(id==='sites') renderSites();
+  if(id==='chargers') renderChargers();
+  if(id==='sessions') renderSessions();
+  if(id==='rfid') renderRfid();
+  if(id==='load') renderLoad();
+  if(id==='addcharger') renderAddCharger();
+  if(id==='dashboard') renderDashboard();
+}
+
+function renderDashboard(){
+  document.getElementById('kpi-sites').textContent = locations.filter(l=>!l.parentId).length;
+  document.getElementById('kpi-chargers').textContent = chargers.length;
+  document.getElementById('kpi-charging').textContent = chargers.filter(c=>c.status==='Charging').length;
+  document.getElementById('kpi-attention').textContent = chargers.filter(c=>c.status==='Faulted'||c.status==='Offline').length;
+
+  const roots = locations.filter(l=>!l.parentId);
+  document.getElementById('dash-sites-body').innerHTML = roots.map(r=>{
+    const allChargersUnder = chargers.filter(c=>rootOf(c.locationId).id===r.id);
+    const used = allChargersUnder.filter(c=>c.status==='Charging').reduce((s,c)=>s+(c.currentKW||0),0);
+    const cap = r.capacityKVA || 0;
+    return `<tr class="rowlink" onclick="showPage('sites');openSite('${r.id}')">
+      <td>${r.name}</td><td>${r.city||'-'}</td><td>${allChargersUnder.length}</td>
+      <td>${used} / ${cap} kW</td></tr>`;
+  }).join('');
+
+  const alerts = chargers.filter(c=>c.status==='Faulted'||c.status==='Offline');
+  document.getElementById('dash-alerts').innerHTML = alerts.length ? alerts.map(c=>`
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);">
+      <div><div style="font-weight:500;">${c.name}</div><div class="path">${pathOf(c.locationId)}</div></div>
+      ${statusBadge(c.status)}
+    </div>`).join('') : '<div class="empty">No alerts. All chargers healthy.</div>';
+}
+
+function renderSites(){
+  document.getElementById('sites-list-view').style.display='block';
+  document.getElementById('site-detail-view').style.display='none';
+  const typeF = document.getElementById('sites-type-filter').value;
+  const q = document.getElementById('sites-search').value.toLowerCase();
+  let rows = locations.filter(l=>!l.parentId);
+  if(typeF!=='all') rows = rows.filter(l=>l.type===typeF);
+  if(q) rows = rows.filter(l=>l.name.toLowerCase().includes(q));
+  document.getElementById('sites-body').innerHTML = rows.map(l=>{
+    const count = chargers.filter(c=>rootOf(c.locationId).id===l.id).length;
+    return `<tr class="rowlink" onclick="openSite('${l.id}')">
+      <td>${l.name}</td><td><span class="badge type">${l.type}</span></td><td>${l.city||'-'}</td>
+      <td>${count}</td><td>${l.capacityKVA?l.capacityKVA+' kVA':'-'}</td></tr>`;
+  }).join('');
+}
+
+function openSite(id){
+  document.getElementById('sites-list-view').style.display='none';
+  document.getElementById('site-detail-view').style.display='block';
+  const loc = locations.find(l=>l.id===id);
+  document.getElementById('site-detail-name').textContent = loc.name;
+  document.getElementById('site-detail-meta').textContent = `${loc.type} · ${loc.city||''} ${loc.capacityKVA?'· '+loc.capacityKVA+' kVA capacity':''}`;
+  document.getElementById('site-tree').innerHTML = renderTreeNode(id, 0);
+}
+function renderTreeNode(id, depth){
+  const loc = locations.find(l=>l.id===id);
+  const kids = childrenOf(id);
+  const own = chargersAt(id);
+  let html = `<div class="tree-node" style="margin-left:${depth*18}px;">
+    <div class="left"><span class="badge type">${loc.type}</span><span class="tree-label">${loc.name}</span></div>
+    <div class="tree-sub">${own.length} charger${own.length!==1?'s':''}</div>
+  </div>`;
+  own.forEach(c=>{
+    html += `<div class="tree-node rowlink" style="margin-left:${(depth+1)*18}px;" onclick="showPage('chargers');openCharger('${c.id}')">
+      <div class="left"><span class="ic" style="width:14px;">⚡</span><span class="tree-label">${c.name}</span></div>
+      ${statusBadge(c.status)}
+    </div>`;
+  });
+  kids.forEach(k=>{ html += renderTreeNode(k.id, depth+1); });
+  return html;
+}
+function backToSites(){ document.getElementById('sites-list-view').style.display='block'; document.getElementById('site-detail-view').style.display='none'; }
+
+function populateComplexFilter(selectId, includeAll){
+  const sel = document.getElementById(selectId);
+  const roots = locations.filter(l=>!l.parentId);
+  sel.innerHTML = (includeAll?'<option value="all">All complexes</option>':'') + roots.map(r=>`<option value="${r.id}">${r.name}</option>`).join('');
+}
+
+function renderChargers(){
+  document.getElementById('chargers-list-view').style.display='block';
+  document.getElementById('charger-detail-view').style.display='none';
+  if(!document.getElementById('chg-complex-filter').options.length) populateComplexFilter('chg-complex-filter', true);
+  const cf = document.getElementById('chg-complex-filter').value || 'all';
+  const sf = document.getElementById('chg-status-filter').value;
+  const q = document.getElementById('chg-search').value.toLowerCase();
+  let rows = chargers.slice();
+  if(cf!=='all') rows = rows.filter(c=>rootOf(c.locationId).id===cf);
+  if(sf!=='all') rows = rows.filter(c=>c.status===sf);
+  if(q) rows = rows.filter(c=>c.name.toLowerCase().includes(q));
+  document.getElementById('chargers-body').innerHTML = rows.map(c=>`
+    <tr class="rowlink" onclick="openCharger('${c.id}')">
+      <td>${c.name}</td><td class="path">${pathOf(c.locationId)}</td>
+      <td>${statusBadge(c.status)}</td><td>${c.powerKW} kW</td>
+      <td>${c.resident?c.resident+' · '+c.unit:'-'}</td>
+    </tr>`).join('');
+}
+
+let currentChargerId = null;
+function openCharger(id){
+  currentChargerId = id;
+  document.getElementById('chargers-list-view').style.display='none';
+  document.getElementById('charger-detail-view').style.display='block';
+  renderChargerDetail();
+}
+function renderChargerDetail(){
+  const c = chargers.find(x=>x.id===currentChargerId);
+  document.getElementById('cd-name').textContent = c.name;
+  document.getElementById('cd-path').textContent = pathOf(c.locationId);
+  document.getElementById('cd-status').innerHTML = statusBadge(c.status);
+  document.getElementById('cd-ocpp').textContent = c.ocpp;
+  document.getElementById('cd-model').textContent = c.vendor;
+  document.getElementById('cd-connector').textContent = c.connector;
+  document.getElementById('cd-power').textContent = c.powerKW + ' kW';
+  document.getElementById('cd-ws').textContent = `wss://ocpp.plugndrive.co.za/${c.id}`;
+  const btn = document.getElementById('cd-remote-btn');
+  if(c.status==='Charging'){ btn.textContent='Remote stop charging'; btn.className='btn btn-danger btn-block'; }
+  else if(c.status==='Available'){ btn.textContent='Remote start charging'; btn.className='btn btn-primary btn-block'; }
+  else { btn.textContent='Charger unavailable'; btn.className='btn btn-block'; btn.disabled=true; }
+  const rows = sessions.filter(s=>s.chargerId===c.id);
+  document.getElementById('cd-sessions').innerHTML = rows.length ? rows.map(s=>`
+    <tr><td>${s.date}</td><td>${s.resident}</td><td>${s.kwh} kWh</td><td>${fmtR(s.cost)}</td></tr>`).join('')
+    : '<tr><td colspan="4" class="empty">No sessions yet.</td></tr>';
+}
+function toggleRemote(){
+  const c = chargers.find(x=>x.id===currentChargerId);
+  if(c.status==='Available'){ c.status='Charging'; c.currentKW = Math.round(c.powerKW*0.7); c.resident=c.resident||'Remote start'; c.unit=c.unit||'-'; }
+  else if(c.status==='Charging'){ c.status='Available'; c.currentKW=0; }
+  renderChargerDetail();
+}
+function testChargerConnection(){
+  showModal('Test connection', 'Sending a fresh BootNotification and Heartbeat request to this charger over its WebSocket link. This mockup simulates the exchange.', ()=>{
+    closeModal();
+    alert('Connected — Heartbeat OK, last seen just now.');
+  }, 'Run test');
+}
+function openUnpair(){
+  showModal('Unpair charger', 'This removes the charger from Plug n Drive and closes its WebSocket link. This cannot be undone.', ()=>{
+    closeModal();
+    backToChargers();
+  }, 'Unpair');
+}
+function backToChargers(){ document.getElementById('chargers-list-view').style.display='block'; document.getElementById('charger-detail-view').style.display='none'; renderChargers(); }
+
+function renderAddCharger(){
+  const sel = document.getElementById('new-charger-location');
+  sel.innerHTML = locations.map(l=>`<option value="${l.id}">${pathOf(l.id)}</option>`).join('');
+  document.getElementById('gen-ws-url').textContent = 'Not generated yet';
+  document.getElementById('gen-auth').textContent = '-';
+  document.getElementById('test-conn-btn').disabled = true;
+  document.getElementById('conn-steps').innerHTML = '';
+}
+function slug(s){ return s.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,''); }
+function generateCharger(){
+  const name = document.getElementById('new-charger-name').value || 'new-charger';
+  const id = slug(name) + '-' + Math.floor(Math.random()*900+100);
+  document.getElementById('gen-ws-url').textContent = `wss://ocpp.plugndrive.co.za/${id}`;
+  document.getElementById('gen-auth').textContent = Math.random().toString(36).slice(2,10);
+  document.getElementById('test-conn-btn').disabled = false;
+  document.getElementById('conn-steps').innerHTML = '';
+}
+function runConnectionTest(){
+  const steps = ['Opening WebSocket connection','Waiting for BootNotification','Heartbeat received','Charger registered'];
+  const el = document.getElementById('conn-steps');
+  el.innerHTML = steps.map((s,i)=>`<div class="step" id="step-${i}"><div class="dot"></div>${s}</div>`).join('');
+  steps.forEach((s,i)=>{
+    setTimeout(()=>{
+      const stepEl = document.getElementById('step-'+i);
+      stepEl.classList.add(i===steps.length-1?'done':'active');
+      if(i>0) document.getElementById('step-'+(i-1)).className='step done';
+      document.getElementById('step-'+i).querySelector('.dot').textContent = (i===steps.length-1)?'✓':'';
+    }, (i+1)*700);
+  });
+}
+
+function renderSessions(){
+  if(!document.getElementById('ses-complex-filter').options.length) populateComplexFilter('ses-complex-filter', true);
+  const cf = document.getElementById('ses-complex-filter').value || 'all';
+  let rows = sessions.slice();
+  if(cf!=='all') rows = rows.filter(s=>rootOf(chargers.find(c=>c.id===s.chargerId).locationId).id===cf);
+  document.getElementById('ses-count').textContent = rows.length;
+  document.getElementById('ses-kwh').textContent = rows.reduce((s,r)=>s+r.kwh,0).toFixed(1)+' kWh';
+  document.getElementById('ses-revenue').textContent = fmtR(rows.reduce((s,r)=>s+r.cost,0));
+  document.getElementById('sessions-body').innerHTML = rows.map(s=>{
+    const c = chargers.find(x=>x.id===s.chargerId);
+    return `<tr><td>${s.date}</td><td>${c.name}</td><td>${s.resident}</td><td>${s.duration}</td><td>${s.kwh} kWh</td><td>${fmtR(s.cost)}</td><td>${s.payment}</td></tr>`;
+  }).join('');
+}
+
+function renderRfid(){
+  if(!document.getElementById('rfid-complex-filter').options.length) populateComplexFilter('rfid-complex-filter', true);
+  const cf = document.getElementById('rfid-complex-filter').value || 'all';
+  const sf = document.getElementById('rfid-status-filter').value;
+  let rows = rfidCards.slice();
+  if(cf!=='all') rows = rows.filter(r=>r.complexId===cf);
+  if(sf!=='all') rows = rows.filter(r=>r.status===sf);
+  document.getElementById('rfid-body').innerHTML = rows.map((r,i)=>{
+    const complexName = locations.find(l=>l.id===r.complexId).name;
+    return `<tr><td>${r.uid}</td><td>${r.resident}</td><td>${r.unit}</td><td>${complexName}</td>
+      <td><span class="badge ${r.status}">${r.status==='active'?'Active':'Blocked'}</span></td>
+      <td><button class="btn btn-sm" onclick="toggleCard('${r.uid}')">${r.status==='active'?'Block':'Unblock'}</button></td></tr>`;
+  }).join('');
+}
+function toggleCard(uid){
+  const c = rfidCards.find(r=>r.uid===uid);
+  c.status = c.status==='active' ? 'blocked' : 'active';
+  renderRfid();
+}
+function openAssignCard(){
+  showModal('Assign new card', "In the live product this reads the UID from a USB NFC reader or the charger's learning mode, then links it to a resident. This mockup adds a sample card.", ()=>{
+    rfidCards.push({uid:'NEW:'+Math.random().toString(16).slice(2,8).toUpperCase(),resident:'New resident',unit:'Unit —',complexId:locations.find(l=>!l.parentId).id,status:'active'});
+    closeModal();
+    renderRfid();
+  }, 'Assign card');
+}
+
+function renderLoad(){
+  const roots = locations.filter(l=>!l.parentId);
+  document.getElementById('load-list').innerHTML = roots.map(r=>{
+    const under = chargers.filter(c=>rootOf(c.locationId).id===r.id);
+    const used = under.filter(c=>c.status==='Charging').reduce((s,c)=>s+(c.currentKW||0),0);
+    const cap = r.capacityKVA||1;
+    const pct = Math.min(100, Math.round(used/cap*100));
+    const fillClass = pct>90?'over':pct>70?'high':'';
+    return `<div class="card card-pad" style="margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div><div style="font-weight:600;">${r.name}</div><div class="path">${r.city||''} · ${under.length} chargers</div></div>
+        <select style="border:1px solid var(--border);border-radius:8px;padding:6px 10px;">
+          <option>Equal split</option><option>Priority order</option><option>Off-peak scheduling</option>
+        </select>
+      </div>
+      <div class="gauge-wrap">
+        <div class="gauge-bar"><div class="gauge-fill ${fillClass}" style="width:${pct}%;"></div></div>
+        <div class="gauge-labels"><span>${used} kW used</span><span>${cap} kVA capacity</span></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+let modalConfirmCb = null;
+function showModal(title, body, onConfirm, confirmLabel){
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('modal-body').textContent = body;
+  const btn = document.getElementById('modal-confirm');
+  btn.textContent = confirmLabel || 'Confirm';
+  modalConfirmCb = onConfirm;
+  btn.onclick = ()=>modalConfirmCb();
+  document.getElementById('modal-bg').classList.add('open');
+}
+function closeModal(){ document.getElementById('modal-bg').classList.remove('open'); }
+
+renderDashboard();
+</script>
+</body>
+</html>
