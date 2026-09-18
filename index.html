@@ -171,7 +171,7 @@ tr.rowlink:hover td{background:var(--blue-light);}
     <div class="topbar">
       <div class="topbar-title" id="topbar-title">Dashboard</div>
       <div class="topbar-right">
-        <div style="font-size:12px;color:var(--text-muted);">All amounts in ZAR (R)</div>
+        <div style="font-size:12px;color:var(--text-muted);">Amounts shown per site currency</div>
         <div class="avatar">RB</div>
       </div>
     </div>
@@ -415,65 +415,46 @@ tr.rowlink:hover td{background:var(--blue-light);}
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-const locations = [
-  {id:'complex-fynbos', name:'Fynbos Residence', type:'Complex', parentId:null, city:'Cape Town', capacityKVA:80},
-  {id:'building-a', name:'Block A', type:'Building', parentId:'complex-fynbos'},
-  {id:'building-b', name:'Block B', type:'Building', parentId:'complex-fynbos'},
-  {id:'parking-fynbos', name:'Basement Parking P1', type:'Parking', parentId:'complex-fynbos'},
-  {id:'spot-12', name:'Spot 12', type:'Parking spot', parentId:'parking-fynbos'},
-  {id:'spot-13', name:'Spot 13', type:'Parking spot', parentId:'parking-fynbos'},
+const SUPABASE_URL = 'https://ozlnxhtguaoeuhjeejxq.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_91dDeI3PSGTwwz2wkFlqMg_Mct2dvKX';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-  {id:'complex-oceanview', name:'Oceanview Complex', type:'Complex', parentId:null, city:'Durban', capacityKVA:60},
-  {id:'building-ocean-1', name:'Tower 1', type:'Building', parentId:'complex-oceanview'},
+let locations = [];
+let chargers = [];
+let sessions = [];
+let rfidCards = [];
+let users = [];
+let tariffs = [];
 
-  {id:'parking-citycenter', name:'City Center Parking', type:'Parking', parentId:null, city:'Johannesburg', capacityKVA:45},
+function mapLocation(l){ return {id:l.id, name:l.name, type:l.type, parentId:l.parent_id, city:l.city, capacityKVA:l.capacity_kva, currency:l.currency}; }
+function mapCharger(c){ return {id:c.id, locationId:c.location_id, name:c.name, ocppId:c.ocpp_id, vendor:c.vendor, connector:c.connector, powerKW:c.power_kw, ocpp:c.ocpp_version, status:c.status, currentKW:c.current_kw}; }
+function mapSession(s){ return {id:s.id, chargerId:s.charger_id, userId:s.user_id, rfidCardId:s.rfid_card_id, kwh:s.kwh, cost:s.cost, currency:s.currency, startedAt:s.started_at, endedAt:s.ended_at, paymentStatus:s.payment_status, payment:s.payment_method}; }
+function mapRfid(r){ return {id:r.id, uid:r.uid, userId:r.user_id, complexId:r.location_id, status:r.status}; }
+function mapUser(u){ return {id:u.id, name:u.name, unit:u.unit, locationId:u.location_id, role:u.role}; }
+function mapTariff(t){ return {id:t.id, locationId:t.location_id, pricePerKwh:t.price_per_kwh, monthlyFee:t.monthly_ocpp_fee, currency:t.currency}; }
 
-  {id:'standalone-kloof', name:'Kloof Street Charger', type:'Standalone site', parentId:null, city:'Cape Town', capacityKVA:20},
-];
-
-const chargers = [
-  {id:'chg-a1', name:'Charger A1', locationId:'building-a', status:'Charging', powerKW:22, connector:'Type 2', ocpp:'1.6J', vendor:'Ovrod OV-22T', resident:'T. Ndlovu', unit:'Apt 4B', currentKW:16},
-  {id:'chg-a2', name:'Charger A2', locationId:'building-a', status:'Charging', powerKW:22, connector:'Type 2', ocpp:'1.6J', vendor:'Ovrod OV-22T', resident:'S. Pillay', unit:'Apt 7A', currentKW:15},
-  {id:'chg-b1', name:'Charger B1', locationId:'building-b', status:'Available', powerKW:22, connector:'Type 2', ocpp:'1.6J', vendor:'Ovrod OV-22T'},
-  {id:'chg-spot12', name:'Charger Spot 12', locationId:'spot-12', status:'Faulted', powerKW:11, connector:'Type 2', ocpp:'1.6J', vendor:'Ovrod OV-11S'},
-  {id:'chg-spot13', name:'Charger Spot 13', locationId:'spot-13', status:'Offline', powerKW:11, connector:'Type 2', ocpp:'1.6J', vendor:'Ovrod OV-11S'},
-  {id:'chg-ocean1', name:'Charger T1-01', locationId:'building-ocean-1', status:'Charging', powerKW:22, connector:'Type 2', ocpp:'2.0.1', vendor:'Ovrod OV-22T', resident:'M. Botha', unit:'Unit 12', currentKW:18},
-  {id:'chg-ocean2', name:'Charger T1-02', locationId:'building-ocean-1', status:'Available', powerKW:22, connector:'Type 2', ocpp:'2.0.1', vendor:'Ovrod OV-22T'},
-  {id:'chg-cc01', name:'Charger P-01', locationId:'parking-citycenter', status:'Available', powerKW:22, connector:'Type 2', ocpp:'1.6J', vendor:'Ovrod OV-22T'},
-  {id:'chg-cc02', name:'Charger P-02', locationId:'parking-citycenter', status:'Charging', powerKW:22, connector:'Type 2', ocpp:'1.6J', vendor:'Ovrod OV-22T', resident:'Visitor', unit:'-', currentKW:14},
-  {id:'chg-cc03', name:'Charger P-03', locationId:'parking-citycenter', status:'Offline', powerKW:22, connector:'Type 2', ocpp:'1.6J', vendor:'Ovrod OV-22T'},
-  {id:'chg-kloof', name:'Kloof St Charger', locationId:'standalone-kloof', status:'Available', powerKW:22, connector:'Type 2', ocpp:'1.6J', vendor:'Ovrod OV-22T'},
-];
-
-const sessions = [
-  {chargerId:'chg-a1', resident:'T. Ndlovu', date:'2026-08-04', duration:'2h 10m', kwh:34.2, cost:119.70, payment:'RFID card'},
-  {chargerId:'chg-a2', resident:'S. Pillay', date:'2026-08-04', duration:'1h 45m', kwh:28.0, cost:98.00, payment:'RFID card'},
-  {chargerId:'chg-a1', resident:'T. Ndlovu', date:'2026-08-02', duration:'3h 05m', kwh:41.6, cost:145.60, payment:'RFID card'},
-  {chargerId:'chg-b1', resident:'K. van Wyk', date:'2026-08-01', duration:'2h 30m', kwh:36.4, cost:127.40, payment:'App / card'},
-  {chargerId:'chg-ocean1', resident:'M. Botha', date:'2026-08-03', duration:'2h 50m', kwh:39.1, cost:136.85, payment:'RFID card'},
-  {chargerId:'chg-ocean2', resident:'L. Naidoo', date:'2026-07-30', duration:'1h 20m', kwh:19.8, cost:69.30, payment:'App / card'},
-  {chargerId:'chg-cc02', resident:'Visitor', date:'2026-08-05', duration:'0h 55m', kwh:12.1, cost:42.35, payment:'QR / online'},
-  {chargerId:'chg-cc01', resident:'Visitor', date:'2026-08-04', duration:'1h 10m', kwh:15.4, cost:53.90, payment:'QR / online'},
-  {chargerId:'chg-kloof', resident:'Visitor', date:'2026-08-04', duration:'0h 40m', kwh:9.2, cost:32.20, payment:'QR / online'},
-  {chargerId:'chg-spot12', resident:'J. Adams', date:'2026-07-28', duration:'1h 55m', kwh:21.3, cost:74.55, payment:'RFID card'},
-  {chargerId:'chg-b1', resident:'K. van Wyk', date:'2026-07-25', duration:'2h 00m', kwh:29.6, cost:103.60, payment:'App / card'},
-  {chargerId:'chg-a2', resident:'S. Pillay', date:'2026-07-22', duration:'2h 15m', kwh:31.5, cost:110.25, payment:'RFID card'},
-];
-
-const rfidCards = [
-  {uid:'A3:F2:19:0C', resident:'T. Ndlovu', unit:'Apt 4B', complexId:'complex-fynbos', status:'active'},
-  {uid:'B1:88:C4:21', resident:'S. Pillay', unit:'Apt 7A', complexId:'complex-fynbos', status:'active'},
-  {uid:'D4:0E:77:9A', resident:'K. van Wyk', unit:'Apt 2C', complexId:'complex-fynbos', status:'active'},
-  {uid:'F2:19:AB:03', resident:'J. Adams', unit:'Spot 12', complexId:'complex-fynbos', status:'blocked'},
-  {uid:'C7:33:1D:5E', resident:'M. Botha', unit:'Unit 12', complexId:'complex-oceanview', status:'active'},
-  {uid:'E9:5A:02:F1', resident:'L. Naidoo', unit:'Unit 05', complexId:'complex-oceanview', status:'active'},
-  {uid:'A0:6C:44:B7', resident:'R. Dlamini', unit:'Unit 09', complexId:'complex-oceanview', status:'blocked'},
-];
+async function loadAll(){
+  const [locRes, chgRes, sesRes, rfidRes, userRes, tarRes] = await Promise.all([
+    sb.from('locations').select('*'),
+    sb.from('chargers').select('*'),
+    sb.from('sessions').select('*').order('started_at', {ascending:false}),
+    sb.from('rfid_cards').select('*'),
+    sb.from('users').select('*'),
+    sb.from('tariffs').select('*'),
+  ]);
+  locations = (locRes.data||[]).map(mapLocation);
+  chargers = (chgRes.data||[]).map(mapCharger);
+  sessions = (sesRes.data||[]).map(mapSession);
+  rfidCards = (rfidRes.data||[]).map(mapRfid);
+  users = (userRes.data||[]).map(mapUser);
+  tariffs = (tarRes.data||[]).map(mapTariff);
+}
 
 function rootOf(locId){
   let loc = locations.find(l=>l.id===locId);
-  while(loc.parentId){ loc = locations.find(l=>l.id===loc.parentId); }
+  while(loc && loc.parentId){ loc = locations.find(l=>l.id===loc.parentId); }
   return loc;
 }
 function pathOf(locId){
@@ -488,7 +469,25 @@ function statusBadge(status){
   const map={Available:'avail',Charging:'charging',Faulted:'faulted',Offline:'offline'};
   return `<span class="badge ${map[status]}"><span class="badge-dot"></span>${status}</span>`;
 }
-function fmtR(n){ return 'R ' + n.toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function fmtMoney(n, currency){
+  const symbols = {ZAR:'R ', MZN:'MT '};
+  const sym = symbols[currency] || (currency ? currency+' ' : 'R ');
+  return sym + Number(n||0).toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function sumByCurrency(rows, key){
+  const totals = {};
+  rows.forEach(r=>{ if(r[key]==null) return; totals[r.currency] = (totals[r.currency]||0) + Number(r[key]); });
+  const entries = Object.entries(totals);
+  if(!entries.length) return fmtMoney(0,'ZAR');
+  return entries.map(([cur,val])=>fmtMoney(val,cur)).join(' + ');
+}
+function activeSessionFor(chargerId){ return sessions.find(s=>s.chargerId===chargerId && !s.endedAt); }
+function residentFor(chargerId){
+  const s = activeSessionFor(chargerId);
+  if(!s) return null;
+  const u = users.find(x=>x.id===s.userId);
+  return u ? {name:u.name, unit:u.unit} : {name:'Remote start', unit:'-'};
+}
 
 function showPage(id){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
@@ -514,7 +513,7 @@ function renderDashboard(){
 
   const roots = locations.filter(l=>!l.parentId);
   document.getElementById('dash-sites-body').innerHTML = roots.map(r=>{
-    const allChargersUnder = chargers.filter(c=>rootOf(c.locationId).id===r.id);
+    const allChargersUnder = chargers.filter(c=>{ const root=rootOf(c.locationId); return root && root.id===r.id; });
     const used = allChargersUnder.filter(c=>c.status==='Charging').reduce((s,c)=>s+(c.currentKW||0),0);
     const cap = r.capacityKVA || 0;
     return `<tr class="rowlink" onclick="showPage('sites');openSite('${r.id}')">
@@ -539,7 +538,7 @@ function renderSites(){
   if(typeF!=='all') rows = rows.filter(l=>l.type===typeF);
   if(q) rows = rows.filter(l=>l.name.toLowerCase().includes(q));
   document.getElementById('sites-body').innerHTML = rows.map(l=>{
-    const count = chargers.filter(c=>rootOf(c.locationId).id===l.id).length;
+    const count = chargers.filter(c=>{ const root=rootOf(c.locationId); return root && root.id===l.id; }).length;
     return `<tr class="rowlink" onclick="openSite('${l.id}')">
       <td>${l.name}</td><td><span class="badge type">${l.type}</span></td><td>${l.city||'-'}</td>
       <td>${count}</td><td>${l.capacityKVA?l.capacityKVA+' kVA':'-'}</td></tr>`;
@@ -551,7 +550,7 @@ function openSite(id){
   document.getElementById('site-detail-view').style.display='block';
   const loc = locations.find(l=>l.id===id);
   document.getElementById('site-detail-name').textContent = loc.name;
-  document.getElementById('site-detail-meta').textContent = `${loc.type} · ${loc.city||''} ${loc.capacityKVA?'· '+loc.capacityKVA+' kVA capacity':''}`;
+  document.getElementById('site-detail-meta').textContent = `${loc.type} · ${loc.city||''} ${loc.capacityKVA?'· '+loc.capacityKVA+' kVA capacity':''} · ${loc.currency}`;
   document.getElementById('site-tree').innerHTML = renderTreeNode(id, 0);
 }
 function renderTreeNode(id, depth){
@@ -582,20 +581,22 @@ function populateComplexFilter(selectId, includeAll){
 function renderChargers(){
   document.getElementById('chargers-list-view').style.display='block';
   document.getElementById('charger-detail-view').style.display='none';
-  if(!document.getElementById('chg-complex-filter').options.length) populateComplexFilter('chg-complex-filter', true);
+  populateComplexFilter('chg-complex-filter', true);
   const cf = document.getElementById('chg-complex-filter').value || 'all';
   const sf = document.getElementById('chg-status-filter').value;
   const q = document.getElementById('chg-search').value.toLowerCase();
   let rows = chargers.slice();
-  if(cf!=='all') rows = rows.filter(c=>rootOf(c.locationId).id===cf);
+  if(cf!=='all') rows = rows.filter(c=>{ const root=rootOf(c.locationId); return root && root.id===cf; });
   if(sf!=='all') rows = rows.filter(c=>c.status===sf);
   if(q) rows = rows.filter(c=>c.name.toLowerCase().includes(q));
-  document.getElementById('chargers-body').innerHTML = rows.map(c=>`
-    <tr class="rowlink" onclick="openCharger('${c.id}')">
+  document.getElementById('chargers-body').innerHTML = rows.map(c=>{
+    const res = residentFor(c.id);
+    return `<tr class="rowlink" onclick="openCharger('${c.id}')">
       <td>${c.name}</td><td class="path">${pathOf(c.locationId)}</td>
       <td>${statusBadge(c.status)}</td><td>${c.powerKW} kW</td>
-      <td>${c.resident?c.resident+' · '+c.unit:'-'}</td>
-    </tr>`).join('');
+      <td>${res?res.name+' · '+res.unit:'-'}</td>
+    </tr>`;
+  }).join('');
 }
 
 let currentChargerId = null;
@@ -614,22 +615,46 @@ function renderChargerDetail(){
   document.getElementById('cd-model').textContent = c.vendor;
   document.getElementById('cd-connector').textContent = c.connector;
   document.getElementById('cd-power').textContent = c.powerKW + ' kW';
-  document.getElementById('cd-ws').textContent = `wss://ocpp.plugndrive.co.za/${c.id}`;
+  document.getElementById('cd-ws').textContent = `wss://ocpp.plugndrive.co.za/${c.ocppId}`;
   const btn = document.getElementById('cd-remote-btn');
+  btn.disabled = false;
   if(c.status==='Charging'){ btn.textContent='Remote stop charging'; btn.className='btn btn-danger btn-block'; }
   else if(c.status==='Available'){ btn.textContent='Remote start charging'; btn.className='btn btn-primary btn-block'; }
   else { btn.textContent='Charger unavailable'; btn.className='btn btn-block'; btn.disabled=true; }
-  const rows = sessions.filter(s=>s.chargerId===c.id);
-  document.getElementById('cd-sessions').innerHTML = rows.length ? rows.map(s=>`
-    <tr><td>${s.date}</td><td>${s.resident}</td><td>${s.kwh} kWh</td><td>${fmtR(s.cost)}</td></tr>`).join('')
+  const rows = sessions.filter(s=>s.chargerId===c.id && s.endedAt).slice(0,10);
+  document.getElementById('cd-sessions').innerHTML = rows.length ? rows.map(s=>{
+    const u = users.find(x=>x.id===s.userId);
+    return `<tr><td>${(s.startedAt||'').slice(0,10)}</td><td>${u?u.name:'-'}</td><td>${s.kwh??'-'} kWh</td><td>${fmtMoney(s.cost, s.currency)}</td></tr>`;
+  }).join('')
     : '<tr><td colspan="4" class="empty">No sessions yet.</td></tr>';
 }
-function toggleRemote(){
+
+async function toggleRemote(){
   const c = chargers.find(x=>x.id===currentChargerId);
-  if(c.status==='Available'){ c.status='Charging'; c.currentKW = Math.round(c.powerKW*0.7); c.resident=c.resident||'Remote start'; c.unit=c.unit||'-'; }
-  else if(c.status==='Charging'){ c.status='Available'; c.currentKW=0; }
+  const btn = document.getElementById('cd-remote-btn');
+  btn.disabled = true;
+  if(c.status==='Available'){
+    const root = rootOf(c.locationId);
+    const newKW = Math.round(c.powerKW*0.7);
+    await sb.from('sessions').insert({charger_id:c.id, currency: root ? root.currency : 'ZAR', started_at: new Date().toISOString(), payment_status:'pending', payment_method:'Remote start'});
+    await sb.from('chargers').update({status:'Charging', current_kw:newKW}).eq('id', c.id);
+  } else if(c.status==='Charging'){
+    const s = activeSessionFor(c.id);
+    if(s){
+      const startedMs = new Date(s.startedAt).getTime();
+      const hours = Math.max((Date.now()-startedMs)/3600000, 0.02);
+      const kwh = Math.round(hours * (c.currentKW || c.powerKW*0.7) * 10)/10;
+      const tariff = tariffs.find(t=>t.locationId === (rootOf(c.locationId)||{}).id);
+      const price = tariff ? tariff.pricePerKwh : 0;
+      const cost = Math.round(kwh*price*100)/100;
+      await sb.from('sessions').update({ended_at:new Date().toISOString(), kwh, cost, payment_status:'paid'}).eq('id', s.id);
+    }
+    await sb.from('chargers').update({status:'Available', current_kw:0}).eq('id', c.id);
+  }
+  await loadAll();
   renderChargerDetail();
 }
+
 function testChargerConnection(){
   showModal('Test connection', 'Sending a fresh BootNotification and Heartbeat request to this charger over its WebSocket link. This mockup simulates the exchange.', ()=>{
     closeModal();
@@ -637,8 +662,10 @@ function testChargerConnection(){
   }, 'Run test');
 }
 function openUnpair(){
-  showModal('Unpair charger', 'This removes the charger from Plug n Drive and closes its WebSocket link. This cannot be undone.', ()=>{
+  showModal('Unpair charger', 'This removes the charger from Plug n Drive and closes its WebSocket link. This cannot be undone.', async ()=>{
+    await sb.from('chargers').delete().eq('id', currentChargerId);
     closeModal();
+    await loadAll();
     backToChargers();
   }, 'Unpair');
 }
@@ -653,9 +680,18 @@ function renderAddCharger(){
   document.getElementById('conn-steps').innerHTML = '';
 }
 function slug(s){ return s.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,''); }
+let pendingNewCharger = null;
 function generateCharger(){
   const name = document.getElementById('new-charger-name').value || 'new-charger';
   const id = slug(name) + '-' + Math.floor(Math.random()*900+100);
+  pendingNewCharger = {
+    location_id: document.getElementById('new-charger-location').value,
+    name: name,
+    ocpp_id: id,
+    connector: document.getElementById('new-charger-connector').value,
+    power_kw: Number(document.getElementById('new-charger-power').value),
+    ocpp_version: document.getElementById('new-charger-ocpp').value,
+  };
   document.getElementById('gen-ws-url').textContent = `wss://ocpp.plugndrive.co.za/${id}`;
   document.getElementById('gen-auth').textContent = Math.random().toString(36).slice(2,10);
   document.getElementById('test-conn-btn').disabled = false;
@@ -666,52 +702,76 @@ function runConnectionTest(){
   const el = document.getElementById('conn-steps');
   el.innerHTML = steps.map((s,i)=>`<div class="step" id="step-${i}"><div class="dot"></div>${s}</div>`).join('');
   steps.forEach((s,i)=>{
-    setTimeout(()=>{
+    setTimeout(async ()=>{
       const stepEl = document.getElementById('step-'+i);
       stepEl.classList.add(i===steps.length-1?'done':'active');
       if(i>0) document.getElementById('step-'+(i-1)).className='step done';
       document.getElementById('step-'+i).querySelector('.dot').textContent = (i===steps.length-1)?'✓':'';
+      if(i===steps.length-1 && pendingNewCharger){
+        await sb.from('chargers').insert({
+          location_id: pendingNewCharger.location_id,
+          name: pendingNewCharger.name,
+          ocpp_id: pendingNewCharger.ocpp_id,
+          vendor: 'Ovrod',
+          connector: pendingNewCharger.connector,
+          power_kw: pendingNewCharger.power_kw,
+          ocpp_version: pendingNewCharger.ocpp_version,
+          status: 'Available',
+          current_kw: 0
+        });
+        pendingNewCharger = null;
+        await loadAll();
+      }
     }, (i+1)*700);
   });
 }
 
 function renderSessions(){
-  if(!document.getElementById('ses-complex-filter').options.length) populateComplexFilter('ses-complex-filter', true);
+  populateComplexFilter('ses-complex-filter', true);
   const cf = document.getElementById('ses-complex-filter').value || 'all';
-  let rows = sessions.slice();
-  if(cf!=='all') rows = rows.filter(s=>rootOf(chargers.find(c=>c.id===s.chargerId).locationId).id===cf);
+  let rows = sessions.filter(s=>s.endedAt);
+  if(cf!=='all') rows = rows.filter(s=>{ const c=chargers.find(x=>x.id===s.chargerId); const root=c?rootOf(c.locationId):null; return root && root.id===cf; });
   document.getElementById('ses-count').textContent = rows.length;
-  document.getElementById('ses-kwh').textContent = rows.reduce((s,r)=>s+r.kwh,0).toFixed(1)+' kWh';
-  document.getElementById('ses-revenue').textContent = fmtR(rows.reduce((s,r)=>s+r.cost,0));
+  document.getElementById('ses-kwh').textContent = rows.reduce((s,r)=>s+(r.kwh||0),0).toFixed(1)+' kWh';
+  document.getElementById('ses-revenue').textContent = sumByCurrency(rows, 'cost');
   document.getElementById('sessions-body').innerHTML = rows.map(s=>{
     const c = chargers.find(x=>x.id===s.chargerId);
-    return `<tr><td>${s.date}</td><td>${c.name}</td><td>${s.resident}</td><td>${s.duration}</td><td>${s.kwh} kWh</td><td>${fmtR(s.cost)}</td><td>${s.payment}</td></tr>`;
+    const u = users.find(x=>x.id===s.userId);
+    return `<tr><td>${(s.startedAt||'').slice(0,10)}</td><td>${c?c.name:'-'}</td><td>${u?u.name:'-'}</td><td>-</td><td>${s.kwh??'-'} kWh</td><td>${fmtMoney(s.cost, s.currency)}</td><td>${s.payment||'-'}</td></tr>`;
   }).join('');
 }
 
 function renderRfid(){
-  if(!document.getElementById('rfid-complex-filter').options.length) populateComplexFilter('rfid-complex-filter', true);
+  populateComplexFilter('rfid-complex-filter', true);
   const cf = document.getElementById('rfid-complex-filter').value || 'all';
   const sf = document.getElementById('rfid-status-filter').value;
   let rows = rfidCards.slice();
   if(cf!=='all') rows = rows.filter(r=>r.complexId===cf);
   if(sf!=='all') rows = rows.filter(r=>r.status===sf);
-  document.getElementById('rfid-body').innerHTML = rows.map((r,i)=>{
-    const complexName = locations.find(l=>l.id===r.complexId).name;
-    return `<tr><td>${r.uid}</td><td>${r.resident}</td><td>${r.unit}</td><td>${complexName}</td>
+  document.getElementById('rfid-body').innerHTML = rows.map(r=>{
+    const u = users.find(x=>x.id===r.userId);
+    const complexName = (locations.find(l=>l.id===r.complexId)||{}).name || '-';
+    return `<tr><td>${r.uid}</td><td>${u?u.name:'-'}</td><td>${u?u.unit:'-'}</td><td>${complexName}</td>
       <td><span class="badge ${r.status}">${r.status==='active'?'Active':'Blocked'}</span></td>
       <td><button class="btn btn-sm" onclick="toggleCard('${r.uid}')">${r.status==='active'?'Block':'Unblock'}</button></td></tr>`;
   }).join('');
 }
-function toggleCard(uid){
+async function toggleCard(uid){
   const c = rfidCards.find(r=>r.uid===uid);
-  c.status = c.status==='active' ? 'blocked' : 'active';
+  const newStatus = c.status==='active' ? 'blocked' : 'active';
+  await sb.from('rfid_cards').update({status:newStatus}).eq('id', c.id);
+  await loadAll();
   renderRfid();
 }
 function openAssignCard(){
-  showModal('Assign new card', "In the live product this reads the UID from a USB NFC reader or the charger's learning mode, then links it to a resident. This mockup adds a sample card.", ()=>{
-    rfidCards.push({uid:'NEW:'+Math.random().toString(16).slice(2,8).toUpperCase(),resident:'New resident',unit:'Unit —',complexId:locations.find(l=>!l.parentId).id,status:'active'});
+  showModal('Assign new card', "In the live product this reads the UID from a USB NFC reader or the charger's learning mode, then links it to a resident. This mockup adds a sample card.", async ()=>{
+    const rootLoc = locations.find(l=>!l.parentId);
+    if(rootLoc){
+      const {data:newUser} = await sb.from('users').insert({name:'New resident', unit:'Unit —', location_id: rootLoc.id, role:'resident'}).select().single();
+      await sb.from('rfid_cards').insert({uid:'NEW:'+Math.random().toString(16).slice(2,8).toUpperCase(), user_id: newUser ? newUser.id : null, location_id: rootLoc.id, status:'active'});
+    }
     closeModal();
+    await loadAll();
     renderRfid();
   }, 'Assign card');
 }
@@ -719,7 +779,7 @@ function openAssignCard(){
 function renderLoad(){
   const roots = locations.filter(l=>!l.parentId);
   document.getElementById('load-list').innerHTML = roots.map(r=>{
-    const under = chargers.filter(c=>rootOf(c.locationId).id===r.id);
+    const under = chargers.filter(c=>{ const root=rootOf(c.locationId); return root && root.id===r.id; });
     const used = under.filter(c=>c.status==='Charging').reduce((s,c)=>s+(c.currentKW||0),0);
     const cap = r.capacityKVA||1;
     const pct = Math.min(100, Math.round(used/cap*100));
@@ -751,7 +811,10 @@ function showModal(title, body, onConfirm, confirmLabel){
 }
 function closeModal(){ document.getElementById('modal-bg').classList.remove('open'); }
 
-renderDashboard();
+(async function init(){
+  await loadAll();
+  renderDashboard();
+})();
 </script>
 </body>
 </html>
