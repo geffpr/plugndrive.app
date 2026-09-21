@@ -160,6 +160,7 @@ tr.rowlink:hover td{background:var(--blue-light);}
     </div>
     <a class="navitem active" data-page="dashboard" onclick="showPage('dashboard')"><span class="ic">▦</span>Dashboard</a>
     <a class="navitem" data-page="sites" onclick="showPage('sites')"><span class="ic">◫</span>Sites</a>
+    <a class="navitem" data-page="addsite" onclick="showPage('addsite')"><span class="ic">+</span>Add site</a>
     <a class="navitem" data-page="chargers" onclick="showPage('chargers')"><span class="ic">⛽</span>Chargers</a>
     <a class="navitem" data-page="addcharger" onclick="showPage('addcharger')"><span class="ic">+</span>Add charger</a>
     <a class="navitem" data-page="sessions" onclick="showPage('sessions')"><span class="ic">◷</span>Sessions</a>
@@ -231,6 +232,48 @@ tr.rowlink:hover td{background:var(--blue-light);}
           <div style="font-size:12px;color:var(--text-muted);margin:4px 0 18px;" id="site-detail-meta"></div>
           <div class="section-title">Structure</div>
           <div id="site-tree"></div>
+        </div>
+      </div>
+
+      <!-- ADD SITE -->
+      <div class="page" id="page-addsite">
+        <div class="section-title">New site details</div>
+        <div class="card card-pad" style="max-width:520px;">
+          <div class="form-row">
+            <label>Site name</label>
+            <input type="text" id="new-site-name" placeholder="e.g. Tafelsee Residence">
+          </div>
+          <div class="form-row">
+            <label>Type</label>
+            <select id="new-site-type">
+              <option>Complex</option>
+              <option>Building</option>
+              <option>Parking</option>
+              <option>Parking spot</option>
+              <option>Standalone site</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label>Parent site (optional)</label>
+            <select id="new-site-parent"><option value="">None — top-level site</option></select>
+          </div>
+          <div class="form-row">
+            <label>City</label>
+            <input type="text" id="new-site-city" placeholder="e.g. Cape Town">
+          </div>
+          <div class="form-row">
+            <label>Capacity (kVA)</label>
+            <input type="number" id="new-site-capacity" placeholder="e.g. 80">
+          </div>
+          <div class="form-row">
+            <label>Currency</label>
+            <select id="new-site-currency">
+              <option value="ZAR">ZAR — South African Rand</option>
+              <option value="MZN">MZN — Mozambican Metical</option>
+            </select>
+          </div>
+          <button class="btn btn-primary btn-block" onclick="submitNewSite()">Create site</button>
+          <div id="new-site-error" style="color:var(--red, #c0392b);font-size:12px;margin-top:8px;"></div>
         </div>
       </div>
 
@@ -494,7 +537,7 @@ function showPage(id){
   document.getElementById('page-'+id).classList.add('active');
   document.querySelectorAll('.navitem').forEach(n=>n.classList.remove('active'));
   document.querySelector(`.navitem[data-page="${id}"]`).classList.add('active');
-  const titles={dashboard:'Dashboard',sites:'Sites',chargers:'Chargers',addcharger:'Add charger',sessions:'Sessions',rfid:'RFID cards',load:'Load management'};
+  const titles={dashboard:'Dashboard',sites:'Sites',addsite:'Add site',chargers:'Chargers',addcharger:'Add charger',sessions:'Sessions',rfid:'RFID cards',load:'Load management'};
   document.getElementById('topbar-title').textContent = titles[id];
   if(id==='sites') renderSites();
   if(id==='chargers') renderChargers();
@@ -502,6 +545,7 @@ function showPage(id){
   if(id==='rfid') renderRfid();
   if(id==='load') renderLoad();
   if(id==='addcharger') renderAddCharger();
+  if(id==='addsite') renderAddSite();
   if(id==='dashboard') renderDashboard();
 }
 
@@ -671,6 +715,35 @@ function openUnpair(){
 }
 function backToChargers(){ document.getElementById('chargers-list-view').style.display='block'; document.getElementById('charger-detail-view').style.display='none'; renderChargers(); }
 
+function renderAddSite(){
+  const sel = document.getElementById('new-site-parent');
+  sel.innerHTML = '<option value="">None — top-level site</option>' +
+    locations.map(l=>`<option value="${l.id}">${pathOf(l.id)}</option>`).join('');
+  document.getElementById('new-site-name').value = '';
+  document.getElementById('new-site-city').value = '';
+  document.getElementById('new-site-capacity').value = '';
+  document.getElementById('new-site-error').textContent = '';
+}
+async function submitNewSite(){
+  const name = document.getElementById('new-site-name').value.trim();
+  const errEl = document.getElementById('new-site-error');
+  if(!name){ errEl.textContent = 'Site name is required.'; return; }
+  const type = document.getElementById('new-site-type').value;
+  const parentId = document.getElementById('new-site-parent').value || null;
+  const city = document.getElementById('new-site-city').value.trim() || null;
+  const capacityRaw = document.getElementById('new-site-capacity').value;
+  const capacity = capacityRaw ? Number(capacityRaw) : null;
+  const currency = document.getElementById('new-site-currency').value;
+
+  const { error } = await sb.from('locations').insert({
+    name, type, parent_id: parentId, city, capacity_kva: capacity, currency
+  });
+  if(error){ errEl.textContent = error.message; return; }
+
+  await loadAll();
+  showPage('sites');
+}
+
 function renderAddCharger(){
   const sel = document.getElementById('new-charger-location');
   sel.innerHTML = locations.map(l=>`<option value="${l.id}">${pathOf(l.id)}</option>`).join('');
@@ -691,9 +764,10 @@ function generateCharger(){
     connector: document.getElementById('new-charger-connector').value,
     power_kw: Number(document.getElementById('new-charger-power').value),
     ocpp_version: document.getElementById('new-charger-ocpp').value,
+    ocpp_password: Math.random().toString(36).slice(2,10),
   };
   document.getElementById('gen-ws-url').textContent = `wss://ocpp.plugndrive.co.za/${id}`;
-  document.getElementById('gen-auth').textContent = Math.random().toString(36).slice(2,10);
+  document.getElementById('gen-auth').textContent = pendingNewCharger.ocpp_password;
   document.getElementById('test-conn-btn').disabled = false;
   document.getElementById('conn-steps').innerHTML = '';
 }
@@ -716,6 +790,7 @@ function runConnectionTest(){
           connector: pendingNewCharger.connector,
           power_kw: pendingNewCharger.power_kw,
           ocpp_version: pendingNewCharger.ocpp_version,
+          ocpp_password: pendingNewCharger.ocpp_password,
           status: 'Available',
           current_kw: 0
         });
