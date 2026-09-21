@@ -166,6 +166,7 @@ tr.rowlink:hover td{background:var(--blue-light);}
     <a class="navitem" data-page="sessions" onclick="showPage('sessions')"><span class="ic">◷</span>Sessions</a>
     <a class="navitem" data-page="rfid" onclick="showPage('rfid')"><span class="ic">▭</span>RFID cards</a>
     <a class="navitem" data-page="load" onclick="showPage('load')"><span class="ic">◔</span>Load management</a>
+    <a class="navitem" data-page="tariffs" onclick="showPage('tariffs')"><span class="ic">$</span>Tariffs</a>
   </div>
 
   <div class="main">
@@ -443,6 +444,81 @@ tr.rowlink:hover td{background:var(--blue-light);}
         <div id="load-list"></div>
       </div>
 
+      <!-- TARIFFS -->
+      <div class="page" id="page-tariffs">
+        <div id="tariffs-list-view">
+          <div class="section-title">Site tariffs</div>
+          <div class="card">
+            <table>
+              <thead><tr><th>Site</th><th>Currency</th><th>Day price</th><th>Night price</th><th>Monthly fee</th><th>Included kWh/mo</th></tr></thead>
+              <tbody id="site-tariffs-body"></tbody>
+            </table>
+          </div>
+          <div class="section-title" style="margin-top:24px;">Charger overrides</div>
+          <div class="card">
+            <table>
+              <thead><tr><th>Charger</th><th>Site</th><th>Override</th></tr></thead>
+              <tbody id="charger-tariffs-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="tariff-edit-view" style="display:none;">
+          <div class="back-link" onclick="backToTariffs()">← Back to tariffs</div>
+          <h2 id="tariff-edit-title"></h2>
+          <div class="card card-pad" style="max-width:560px;">
+            <div class="form-row">
+              <label>Currency</label>
+              <select id="tf-currency">
+                <option value="ZAR">ZAR — South African Rand</option>
+                <option value="MZN">MZN — Mozambican Metical</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label>Day price (per kWh)</label>
+              <input type="number" step="0.01" id="tf-price-day">
+            </div>
+            <div class="form-row">
+              <label>Night price (per kWh) — leave blank for no night rate</label>
+              <input type="number" step="0.01" id="tf-price-night">
+            </div>
+            <div class="form-row">
+              <label>Night start</label>
+              <input type="time" id="tf-night-start">
+            </div>
+            <div class="form-row">
+              <label>Night end</label>
+              <input type="time" id="tf-night-end">
+            </div>
+            <div class="form-row">
+              <label>Idle fee (per minute, once charge is done but vehicle stays plugged in)</label>
+              <input type="number" step="0.01" id="tf-idle-fee">
+            </div>
+            <div class="form-row">
+              <label>Idle grace period (minutes before idle fee starts)</label>
+              <input type="number" id="tf-idle-grace">
+            </div>
+            <div class="form-row">
+              <label>Monthly subscription fee</label>
+              <input type="number" step="0.01" id="tf-monthly-fee">
+            </div>
+            <div class="form-row">
+              <label>kWh included in subscription</label>
+              <input type="number" step="0.01" id="tf-monthly-kwh">
+            </div>
+            <div class="form-row">
+              <label>Overage price (per kWh beyond included volume)</label>
+              <input type="number" step="0.01" id="tf-overage-price">
+            </div>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-primary" onclick="saveTariff()">Save</button>
+              <button class="btn btn-danger" id="tf-remove-override-btn" onclick="removeChargerOverride()" style="display:none;">Remove override</button>
+            </div>
+            <div id="tariff-edit-error" style="color:var(--red, #c0392b);font-size:12px;margin-top:8px;"></div>
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 </div>
@@ -476,7 +552,7 @@ function mapCharger(c){ return {id:c.id, locationId:c.location_id, name:c.name, 
 function mapSession(s){ return {id:s.id, chargerId:s.charger_id, userId:s.user_id, rfidCardId:s.rfid_card_id, kwh:s.kwh, cost:s.cost, currency:s.currency, startedAt:s.started_at, endedAt:s.ended_at, paymentStatus:s.payment_status, payment:s.payment_method}; }
 function mapRfid(r){ return {id:r.id, uid:r.uid, userId:r.user_id, complexId:r.location_id, status:r.status}; }
 function mapUser(u){ return {id:u.id, name:u.name, unit:u.unit, locationId:u.location_id, role:u.role}; }
-function mapTariff(t){ return {id:t.id, locationId:t.location_id, pricePerKwh:t.price_per_kwh, monthlyFee:t.monthly_ocpp_fee, currency:t.currency}; }
+function mapTariff(t){ return {id:t.id, locationId:t.location_id, chargerId:t.charger_id, priceDay:t.price_day, priceNight:t.price_night, nightStart:t.night_start, nightEnd:t.night_end, idleFeePerMin:t.idle_fee_per_min, idleGraceMinutes:t.idle_grace_minutes, monthlyFee:t.monthly_ocpp_fee, monthlyKwhIncluded:t.monthly_kwh_included, overagePrice:t.overage_price, currency:t.currency}; }
 
 async function loadAll(){
   const [locRes, chgRes, sesRes, rfidRes, userRes, tarRes] = await Promise.all([
@@ -537,13 +613,14 @@ function showPage(id){
   document.getElementById('page-'+id).classList.add('active');
   document.querySelectorAll('.navitem').forEach(n=>n.classList.remove('active'));
   document.querySelector(`.navitem[data-page="${id}"]`).classList.add('active');
-  const titles={dashboard:'Dashboard',sites:'Sites',addsite:'Add site',chargers:'Chargers',addcharger:'Add charger',sessions:'Sessions',rfid:'RFID cards',load:'Load management'};
+  const titles={dashboard:'Dashboard',sites:'Sites',addsite:'Add site',chargers:'Chargers',addcharger:'Add charger',sessions:'Sessions',rfid:'RFID cards',load:'Load management',tariffs:'Tariffs'};
   document.getElementById('topbar-title').textContent = titles[id];
   if(id==='sites') renderSites();
   if(id==='chargers') renderChargers();
   if(id==='sessions') renderSessions();
   if(id==='rfid') renderRfid();
   if(id==='load') renderLoad();
+  if(id==='tariffs') renderTariffs();
   if(id==='addcharger') renderAddCharger();
   if(id==='addsite') renderAddSite();
   if(id==='dashboard') renderDashboard();
@@ -688,8 +765,8 @@ async function toggleRemote(){
       const startedMs = new Date(s.startedAt).getTime();
       const hours = Math.max((Date.now()-startedMs)/3600000, 0.02);
       const kwh = Math.round(hours * (c.currentKW || c.powerKW*0.7) * 10)/10;
-      const tariff = tariffs.find(t=>t.locationId === (rootOf(c.locationId)||{}).id);
-      const price = tariff ? tariff.pricePerKwh : 0;
+      const tariff = tariffs.find(t=>t.chargerId===c.id) || tariffs.find(t=>t.locationId === (rootOf(c.locationId)||{}).id);
+      const price = tariff ? (tariff.priceDay||0) : 0;
       const cost = Math.round(kwh*price*100)/100;
       await sb.from('sessions').update({ended_at:new Date().toISOString(), kwh, cost, payment_status:'paid'}).eq('id', s.id);
     }
@@ -872,6 +949,111 @@ function renderLoad(){
       </div>
     </div>`;
   }).join('');
+}
+
+function fmtTariffMoney(n, currency){ return n==null ? '-' : fmtMoney(n, currency); }
+
+function renderTariffs(){
+  document.getElementById('tariffs-list-view').style.display = 'block';
+  document.getElementById('tariff-edit-view').style.display = 'none';
+  const roots = locations.filter(l=>!l.parentId);
+  document.getElementById('site-tariffs-body').innerHTML = roots.map(r=>{
+    const t = tariffs.find(x=>x.locationId===r.id);
+    return `<tr class="rowlink" onclick="openTariffEdit('location','${r.id}')">
+      <td>${r.name}</td><td>${r.currency}</td>
+      <td>${t?fmtTariffMoney(t.priceDay,t.currency):'Not set'}</td>
+      <td>${t?fmtTariffMoney(t.priceNight,t.currency):'-'}</td>
+      <td>${t?fmtTariffMoney(t.monthlyFee,t.currency):'-'}</td>
+      <td>${t&&t.monthlyKwhIncluded!=null?t.monthlyKwhIncluded+' kWh':'-'}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('charger-tariffs-body').innerHTML = chargers.map(c=>{
+    const t = tariffs.find(x=>x.chargerId===c.id);
+    return `<tr class="rowlink" onclick="openTariffEdit('charger','${c.id}')">
+      <td>${c.name}</td><td class="path">${pathOf(c.locationId)}</td>
+      <td>${t?'Custom tariff':'Uses site tariff'}</td>
+    </tr>`;
+  }).join('');
+}
+
+let tariffEditTarget = null; // { kind: 'location'|'charger', id }
+function openTariffEdit(kind, id){
+  tariffEditTarget = { kind, id };
+  document.getElementById('tariffs-list-view').style.display = 'none';
+  document.getElementById('tariff-edit-view').style.display = 'block';
+  document.getElementById('tariff-edit-error').textContent = '';
+
+  const existing = kind === 'location'
+    ? tariffs.find(t=>t.locationId===id)
+    : tariffs.find(t=>t.chargerId===id);
+
+  const site = kind === 'location' ? locations.find(l=>l.id===id) : rootOf(chargers.find(c=>c.id===id).locationId);
+  const label = kind === 'location' ? locations.find(l=>l.id===id).name : chargers.find(c=>c.id===id).name;
+  document.getElementById('tariff-edit-title').textContent = `Tariff — ${label}`;
+
+  document.getElementById('tf-currency').value = existing ? existing.currency : (site ? site.currency : 'ZAR');
+  document.getElementById('tf-price-day').value = existing?.priceDay ?? '';
+  document.getElementById('tf-price-night').value = existing?.priceNight ?? '';
+  document.getElementById('tf-night-start').value = existing?.nightStart ?? '';
+  document.getElementById('tf-night-end').value = existing?.nightEnd ?? '';
+  document.getElementById('tf-idle-fee').value = existing?.idleFeePerMin ?? '';
+  document.getElementById('tf-idle-grace').value = existing?.idleGraceMinutes ?? '';
+  document.getElementById('tf-monthly-fee').value = existing?.monthlyFee ?? '';
+  document.getElementById('tf-monthly-kwh').value = existing?.monthlyKwhIncluded ?? '';
+  document.getElementById('tf-overage-price').value = existing?.overagePrice ?? '';
+
+  // Currency only makes sense to edit at site level — a charger inherits its site's currency.
+  document.getElementById('tf-currency').disabled = (kind === 'charger');
+  document.getElementById('tf-remove-override-btn').style.display = (kind === 'charger' && existing) ? 'inline-block' : 'none';
+}
+function backToTariffs(){
+  document.getElementById('tariffs-list-view').style.display = 'block';
+  document.getElementById('tariff-edit-view').style.display = 'none';
+}
+
+async function saveTariff(){
+  const errEl = document.getElementById('tariff-edit-error');
+  const priceDay = document.getElementById('tf-price-day').value;
+  if(priceDay === ''){ errEl.textContent = 'Day price is required.'; return; }
+
+  const payload = {
+    currency: document.getElementById('tf-currency').value,
+    price_day: Number(priceDay),
+    price_night: document.getElementById('tf-price-night').value ? Number(document.getElementById('tf-price-night').value) : null,
+    night_start: document.getElementById('tf-night-start').value || null,
+    night_end: document.getElementById('tf-night-end').value || null,
+    idle_fee_per_min: document.getElementById('tf-idle-fee').value ? Number(document.getElementById('tf-idle-fee').value) : null,
+    idle_grace_minutes: document.getElementById('tf-idle-grace').value ? Number(document.getElementById('tf-idle-grace').value) : null,
+    monthly_ocpp_fee: document.getElementById('tf-monthly-fee').value ? Number(document.getElementById('tf-monthly-fee').value) : null,
+    monthly_kwh_included: document.getElementById('tf-monthly-kwh').value ? Number(document.getElementById('tf-monthly-kwh').value) : null,
+    overage_price: document.getElementById('tf-overage-price').value ? Number(document.getElementById('tf-overage-price').value) : null,
+    price_per_kwh: Number(priceDay), // kept in sync for backward compatibility with older reads
+  };
+  if(tariffEditTarget.kind === 'location') payload.location_id = tariffEditTarget.id;
+  else payload.charger_id = tariffEditTarget.id;
+
+  const existing = tariffEditTarget.kind === 'location'
+    ? tariffs.find(t=>t.locationId===tariffEditTarget.id)
+    : tariffs.find(t=>t.chargerId===tariffEditTarget.id);
+
+  const { error } = existing
+    ? await sb.from('tariffs').update(payload).eq('id', existing.id)
+    : await sb.from('tariffs').insert(payload);
+
+  if(error){ errEl.textContent = error.message; return; }
+  await loadAll();
+  backToTariffs();
+  renderTariffs();
+}
+
+async function removeChargerOverride(){
+  const existing = tariffs.find(t=>t.chargerId===tariffEditTarget.id);
+  if(!existing) return;
+  await sb.from('tariffs').delete().eq('id', existing.id);
+  await loadAll();
+  backToTariffs();
+  renderTariffs();
 }
 
 let modalConfirmCb = null;
