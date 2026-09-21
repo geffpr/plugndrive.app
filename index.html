@@ -608,13 +608,34 @@ function residentFor(chargerId){
   return u ? {name:u.name, unit:u.unit} : {name:'Remote start', unit:'-'};
 }
 
-function showPage(id){
+const ROUTES = {
+  dashboard: () => '/dashboard',
+  sites: () => '/sites',
+  siteDetail: (id) => `/sites/${id}`,
+  addsite: () => '/addsite',
+  chargers: () => '/chargers',
+  chargerDetail: (id) => `/chargers/${id}`,
+  addcharger: () => '/addcharger',
+  sessions: () => '/sessions',
+  rfid: () => '/rfid',
+  load: () => '/load',
+  tariffs: () => '/tariffs',
+  tariffSite: (id) => `/tariffs/site/${id}`,
+  tariffCharger: (id) => `/tariffs/charger/${id}`,
+};
+function navigate(path){
+  if(location.pathname !== path) history.pushState({}, '', path);
+}
+
+function showPage(id, opts){
+  opts = opts || {};
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('page-'+id).classList.add('active');
   document.querySelectorAll('.navitem').forEach(n=>n.classList.remove('active'));
   document.querySelector(`.navitem[data-page="${id}"]`).classList.add('active');
   const titles={dashboard:'Dashboard',sites:'Sites',addsite:'Add site',chargers:'Chargers',addcharger:'Add charger',sessions:'Sessions',rfid:'RFID cards',load:'Load management',tariffs:'Tariffs'};
   document.getElementById('topbar-title').textContent = titles[id];
+  if(!opts.skipNav) navigate(ROUTES[id] ? ROUTES[id]() : '/'+id);
   if(id==='sites') renderSites();
   if(id==='chargers') renderChargers();
   if(id==='sessions') renderSessions();
@@ -625,6 +646,32 @@ function showPage(id){
   if(id==='addsite') renderAddSite();
   if(id==='dashboard') renderDashboard();
 }
+
+// Reads the current URL and shows the matching page/detail view.
+// Called on first load and whenever the user hits back/forward.
+function routeFromLocation(){
+  const parts = location.pathname.split('/').filter(Boolean); // e.g. ['sites','<id>']
+  const page = parts[0] || 'dashboard';
+  const knownPages = ['dashboard','sites','addsite','chargers','addcharger','sessions','rfid','load','tariffs'];
+  if(!knownPages.includes(page)){ showPage('dashboard'); return; }
+
+  showPage(page, {skipNav:true});
+
+  if(page==='sites' && parts[1]){
+    const loc = locations.find(l=>l.id===parts[1]);
+    if(loc) openSite(parts[1], {skipNav:true});
+  }
+  if(page==='chargers' && parts[1]){
+    const c = chargers.find(x=>x.id===parts[1]);
+    if(c) openCharger(parts[1], {skipNav:true});
+  }
+  if(page==='tariffs' && parts[1] && parts[2]){
+    const kind = parts[1]==='site' ? 'location' : 'charger';
+    const exists = kind==='location' ? locations.find(l=>l.id===parts[2]) : chargers.find(c=>c.id===parts[2]);
+    if(exists) openTariffEdit(kind, parts[2], {skipNav:true});
+  }
+}
+window.addEventListener('popstate', routeFromLocation);
 
 function renderDashboard(){
   document.getElementById('kpi-sites').textContent = locations.filter(l=>!l.parentId).length;
@@ -666,13 +713,15 @@ function renderSites(){
   }).join('');
 }
 
-function openSite(id){
+function openSite(id, opts){
+  opts = opts || {};
   document.getElementById('sites-list-view').style.display='none';
   document.getElementById('site-detail-view').style.display='block';
   const loc = locations.find(l=>l.id===id);
   document.getElementById('site-detail-name').textContent = loc.name;
   document.getElementById('site-detail-meta').textContent = `${loc.type} · ${loc.city||''} ${loc.capacityKVA?'· '+loc.capacityKVA+' kVA capacity':''} · ${loc.currency}`;
   document.getElementById('site-tree').innerHTML = renderTreeNode(id, 0);
+  if(!opts.skipNav) navigate(ROUTES.siteDetail(id));
 }
 function renderTreeNode(id, depth){
   const loc = locations.find(l=>l.id===id);
@@ -691,7 +740,7 @@ function renderTreeNode(id, depth){
   kids.forEach(k=>{ html += renderTreeNode(k.id, depth+1); });
   return html;
 }
-function backToSites(){ document.getElementById('sites-list-view').style.display='block'; document.getElementById('site-detail-view').style.display='none'; }
+function backToSites(){ document.getElementById('sites-list-view').style.display='block'; document.getElementById('site-detail-view').style.display='none'; navigate(ROUTES.sites()); }
 
 function populateComplexFilter(selectId, includeAll){
   const sel = document.getElementById(selectId);
@@ -721,11 +770,13 @@ function renderChargers(){
 }
 
 let currentChargerId = null;
-function openCharger(id){
+function openCharger(id, opts){
+  opts = opts || {};
   currentChargerId = id;
   document.getElementById('chargers-list-view').style.display='none';
   document.getElementById('charger-detail-view').style.display='block';
   renderChargerDetail();
+  if(!opts.skipNav) navigate(ROUTES.chargerDetail(id));
 }
 function renderChargerDetail(){
   const c = chargers.find(x=>x.id===currentChargerId);
@@ -790,7 +841,7 @@ function openUnpair(){
     backToChargers();
   }, 'Unpair');
 }
-function backToChargers(){ document.getElementById('chargers-list-view').style.display='block'; document.getElementById('charger-detail-view').style.display='none'; renderChargers(); }
+function backToChargers(){ document.getElementById('chargers-list-view').style.display='block'; document.getElementById('charger-detail-view').style.display='none'; renderChargers(); navigate(ROUTES.chargers()); }
 
 function renderAddSite(){
   const sel = document.getElementById('new-site-parent');
@@ -978,7 +1029,8 @@ function renderTariffs(){
 }
 
 let tariffEditTarget = null; // { kind: 'location'|'charger', id }
-function openTariffEdit(kind, id){
+function openTariffEdit(kind, id, opts){
+  opts = opts || {};
   tariffEditTarget = { kind, id };
   document.getElementById('tariffs-list-view').style.display = 'none';
   document.getElementById('tariff-edit-view').style.display = 'block';
@@ -1006,10 +1058,12 @@ function openTariffEdit(kind, id){
   // Currency only makes sense to edit at site level — a charger inherits its site's currency.
   document.getElementById('tf-currency').disabled = (kind === 'charger');
   document.getElementById('tf-remove-override-btn').style.display = (kind === 'charger' && existing) ? 'inline-block' : 'none';
+  if(!opts.skipNav) navigate(kind==='location' ? ROUTES.tariffSite(id) : ROUTES.tariffCharger(id));
 }
 function backToTariffs(){
   document.getElementById('tariffs-list-view').style.display = 'block';
   document.getElementById('tariff-edit-view').style.display = 'none';
+  navigate(ROUTES.tariffs());
 }
 
 async function saveTariff(){
@@ -1070,7 +1124,7 @@ function closeModal(){ document.getElementById('modal-bg').classList.remove('ope
 
 (async function init(){
   await loadAll();
-  renderDashboard();
+  routeFromLocation();
 })();
 </script>
 </body>
