@@ -860,7 +860,7 @@ function mapLocation(l){ return {id:l.id, name:l.name, type:l.type, parentId:l.p
 function mapCharger(c){ return {id:c.id, locationId:c.location_id, name:c.name, ocppId:c.ocpp_id, vendor:c.vendor, connector:c.connector, powerKW:c.power_kw, ocpp:c.ocpp_version, status:c.status, currentKW:c.current_kw}; }
 function mapSession(s){ return {id:s.id, chargerId:s.charger_id, userId:s.user_id, rfidCardId:s.rfid_card_id, kwh:s.kwh, cost:s.cost, currency:s.currency, startedAt:s.started_at, endedAt:s.ended_at, paymentStatus:s.payment_status, payment:s.payment_method}; }
 function mapRfid(r){ return {id:r.id, uid:r.uid, userId:r.user_id, complexId:r.location_id, status:r.status}; }
-function mapUser(u){ return {id:u.id, name:u.name, unit:u.unit, locationId:u.location_id, role:u.role}; }
+function mapUser(u){ return {id:u.id, name:u.name, unit:u.unit, locationId:u.location_id, role:u.role, phone:u.phone, email:u.email}; }
 function mapTariff(t){ return {id:t.id, locationId:t.location_id, chargerId:t.charger_id, priceDay:t.price_day, priceNight:t.price_night, nightStart:t.night_start, nightEnd:t.night_end, idleFeePerMin:t.idle_fee_per_min, idleGraceMinutes:t.idle_grace_minutes, monthlyFee:t.monthly_ocpp_fee, monthlyKwhIncluded:t.monthly_kwh_included, overagePrice:t.overage_price, currency:t.currency}; }
 function mapClient(c){ return {id:c.id, name:c.name, businessType:c.business_type, contactName:c.contact_name, contactPhone:c.contact_phone, contactEmail:c.contact_email, address:c.address, revShareInitial:c.revenue_share_initial, revShareAfter:c.revenue_share_after, contractStart:c.contract_start_date, transitionMonths:c.months_before_transition}; }
 
