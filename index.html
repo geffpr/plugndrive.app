@@ -405,12 +405,24 @@ tr.rowlink:hover td{background:var(--blue-light);}
               <tr><td style="color:var(--text-muted);">Revenue share</td><td id="cl-revshare" style="text-align:right;"></td></tr>
             </table>
           </div>
-          <div class="section-title">Sites</div>
+          <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">
+            <span>Sites</span>
+            <button class="btn btn-sm" onclick="openAssignSitesPanel()">+ Assign sites</button>
+          </div>
           <div class="card">
             <table>
               <thead><tr><th>Site</th><th>City</th><th>Chargers</th></tr></thead>
               <tbody id="client-sites-body"></tbody>
             </table>
+          </div>
+          <div id="assign-sites-panel" class="card card-pad" style="display:none;margin-top:12px;">
+            <div style="font-weight:600;margin-bottom:8px;">Assign existing sites to this client</div>
+            <div id="assign-sites-list" style="max-height:260px;overflow-y:auto;margin-bottom:12px;"></div>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-primary" onclick="assignSelectedSites()">Assign selected</button>
+              <button class="btn" onclick="closeAssignSitesPanel()">Cancel</button>
+            </div>
+            <div id="assign-sites-error" style="color:var(--red, #c0392b);font-size:12px;margin-top:8px;"></div>
           </div>
         </div>
       </div>
@@ -1297,10 +1309,13 @@ function renderClients(){
     </tr>`;
   }).join('');
 }
+let currentClientId = null;
 function openClient(id, opts){
   opts = opts || {};
+  currentClientId = id;
   document.getElementById('clients-list-view').style.display = 'none';
   document.getElementById('client-detail-view').style.display = 'block';
+  document.getElementById('assign-sites-panel').style.display = 'none';
   const cl = clients.find(x=>x.id===id);
   document.getElementById('client-detail-name').textContent = cl.name;
   document.getElementById('client-detail-meta').textContent = cl.businessType;
@@ -1319,6 +1334,30 @@ function openClient(id, opts){
   }).join('') || '<tr><td colspan="3" class="empty">No sites yet.</td></tr>';
 
   if(!opts.skipNav) navigate(ROUTES.clientDetail(id));
+}
+function openAssignSitesPanel(){
+  const unassigned = locations.filter(l=>!l.parentId && !l.clientId);
+  const listEl = document.getElementById('assign-sites-list');
+  listEl.innerHTML = unassigned.length
+    ? unassigned.map(l=>`<label style="display:flex;align-items:center;gap:8px;padding:6px 0;">
+        <input type="checkbox" value="${l.id}" class="assign-site-checkbox"> ${l.name} <span class="path">(${l.city||'no city'})</span>
+      </label>`).join('')
+    : '<div class="empty">No unassigned sites available.</div>';
+  document.getElementById('assign-sites-error').textContent = '';
+  document.getElementById('assign-sites-panel').style.display = 'block';
+}
+function closeAssignSitesPanel(){
+  document.getElementById('assign-sites-panel').style.display = 'none';
+}
+async function assignSelectedSites(){
+  const ids = [...document.querySelectorAll('.assign-site-checkbox:checked')].map(el=>el.value);
+  const errEl = document.getElementById('assign-sites-error');
+  if(!ids.length){ errEl.textContent = 'Select at least one site.'; return; }
+  const { error } = await sb.from('locations').update({ client_id: currentClientId }).in('id', ids);
+  if(error){ errEl.textContent = error.message; return; }
+  await loadAll();
+  closeAssignSitesPanel();
+  openClient(currentClientId, {skipNav:true});
 }
 function backToClients(){
   document.getElementById('clients-list-view').style.display = 'block';
