@@ -317,6 +317,10 @@ tr.rowlink:hover td{background:var(--blue-light);}
             <select id="new-site-currency">
               <option value="ZAR">ZAR — South African Rand</option>
               <option value="MZN">MZN — Mozambican Metical</option>
+              <option value="NAD">NAD — Namibian Dollar</option>
+              <option value="BWP">BWP — Botswana Pula</option>
+              <option value="USD">USD — US Dollar</option>
+              <option value="EUR">EUR — Euro</option>
             </select>
           </div>
           <button class="btn btn-primary btn-block" onclick="submitNewSite()">Create site</button>
@@ -360,6 +364,20 @@ tr.rowlink:hover td{background:var(--blue-light);}
           <div class="form-row">
             <label>Capacity (kVA)</label>
             <input type="number" id="ss-capacity">
+          </div>
+          <div class="form-row">
+            <label>Currency</label>
+            <select id="ss-currency">
+              <option value="ZAR">ZAR — South African Rand</option>
+              <option value="MZN">MZN — Mozambican Metical</option>
+              <option value="NAD">NAD — Namibian Dollar</option>
+              <option value="BWP">BWP — Botswana Pula</option>
+              <option value="USD">USD — US Dollar</option>
+              <option value="EUR">EUR — Euro</option>
+            </select>
+            <div id="ss-currency-locked-note" style="display:none;font-size:12px;color:var(--text-muted);margin-top:4px;">
+              This site already has tariffs or sessions recorded, so its currency can't be changed. Create a new site if you need a different currency.
+            </div>
           </div>
           <div class="form-row">
             <label>On-site contact name</label>
@@ -692,6 +710,10 @@ tr.rowlink:hover td{background:var(--blue-light);}
               <select id="tf-currency">
                 <option value="ZAR">ZAR — South African Rand</option>
                 <option value="MZN">MZN — Mozambican Metical</option>
+                <option value="NAD">NAD — Namibian Dollar</option>
+                <option value="BWP">BWP — Botswana Pula</option>
+                <option value="USD">USD — US Dollar</option>
+                <option value="EUR">EUR — Euro</option>
               </select>
             </div>
             <div class="form-row">
@@ -876,9 +898,11 @@ function statusBadge(status){
   return `<span class="badge ${map[status]}"><span class="badge-dot"></span>${status}</span>`;
 }
 function fmtMoney(n, currency){
-  const symbols = {ZAR:'R ', MZN:'MT '};
-  const sym = symbols[currency] || (currency ? currency+' ' : 'R ');
-  return sym + Number(n||0).toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const prefixSymbols = {ZAR:'R ', MZN:'MT ', NAD:'N$ ', BWP:'P ', USD:'$ '};
+  const amount = Number(n||0).toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2});
+  if(currency === 'EUR') return amount + ' €';
+  const sym = prefixSymbols[currency] || (currency ? currency+' ' : 'R ');
+  return sym + amount;
 }
 function sumByCurrency(rows, key){
   const totals = {};
@@ -1247,6 +1271,12 @@ async function submitNewSite(){
 
 // --- Site settings (per-site advanced fields) ---
 let siteSettingsTargetId = null;
+function siteHasFinancialData(id){
+  const chargerIds = chargers.filter(c=>rootOf(c.locationId)?.id===id).map(c=>c.id);
+  const hasTariff = tariffs.some(t=>t.locationId===id || chargerIds.includes(t.chargerId));
+  const hasSession = sessions.some(s=>chargerIds.includes(s.chargerId));
+  return hasTariff || hasSession;
+}
 function openSiteSettings(id){
   siteSettingsTargetId = id;
   const loc = locations.find(l=>l.id===id);
@@ -1268,6 +1298,12 @@ function openSiteSettings(id){
   document.getElementById('ss-contact-phone').value = loc.contactPhone || '';
   document.getElementById('ss-contact-email').value = loc.contactEmail || '';
   document.getElementById('site-settings-error').textContent = '';
+
+  const currencySel = document.getElementById('ss-currency');
+  currencySel.value = loc.currency || 'ZAR';
+  const locked = siteHasFinancialData(id);
+  currencySel.disabled = locked;
+  document.getElementById('ss-currency-locked-note').style.display = locked ? 'block' : 'none';
 
   const addrInput = document.getElementById('ss-address');
   addrInput.dataset.acAttached = ''; // allow re-attaching each time this page opens
@@ -1299,6 +1335,7 @@ async function saveSiteSettings(){
     contact_name: document.getElementById('ss-contact-name').value.trim() || null,
     contact_phone: document.getElementById('ss-contact-phone').value.trim() || null,
     contact_email: document.getElementById('ss-contact-email').value.trim() || null,
+    currency: document.getElementById('ss-currency').value,
   };
   const { error } = await sb.from('locations').update(payload).eq('id', siteSettingsTargetId);
   if(error){ errEl.textContent = error.message; return; }
