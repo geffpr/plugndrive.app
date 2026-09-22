@@ -148,7 +148,19 @@ tr.rowlink:hover td{background:var(--blue-light);}
 </head>
 <body>
 
-<div class="app">
+<div id="auth-screen" style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg,#f7f7f8);">
+  <div class="card card-pad" style="width:320px;">
+    <div style="font-weight:700;font-size:18px;margin-bottom:4px;">⚡ Plug n Drive</div>
+    <div style="color:var(--text-muted);font-size:13px;margin-bottom:16px;">Sign in to the OCPP console</div>
+    <div class="form-row"><label>Email</label><input type="email" id="auth-email" autocomplete="username"></div>
+    <div class="form-row"><label>Password</label><input type="password" id="auth-password" autocomplete="current-password"></div>
+    <button class="btn btn-primary btn-block" onclick="handleSignIn()">Sign in</button>
+    <button class="btn btn-block" style="margin-top:8px;" onclick="handleSignUp()">Create account</button>
+    <div id="auth-error" style="color:var(--red,#c0392b);font-size:12px;margin-top:8px;"></div>
+  </div>
+</div>
+
+<div class="app" id="app-root" style="display:none;">
 
   <div class="sidebar">
     <div class="brand">
@@ -174,6 +186,7 @@ tr.rowlink:hover td{background:var(--blue-light);}
       <div class="topbar-title" id="topbar-title">Dashboard</div>
       <div class="topbar-right">
         <div style="font-size:12px;color:var(--text-muted);">Amounts shown per site currency</div>
+        <a href="#" onclick="handleSignOut();return false;" style="font-size:12px;color:var(--text-muted);">Sign out</a>
         <div class="avatar">RB</div>
       </div>
     </div>
@@ -229,8 +242,13 @@ tr.rowlink:hover td{background:var(--blue-light);}
 
         <div id="site-detail-view" style="display:none;">
           <div class="back-link" onclick="backToSites()">← Back to all sites</div>
-          <h2 id="site-detail-name"></h2>
-          <div style="font-size:12px;color:var(--text-muted);margin:4px 0 18px;" id="site-detail-meta"></div>
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <div>
+              <h2 id="site-detail-name"></h2>
+              <div style="font-size:12px;color:var(--text-muted);margin:4px 0 18px;" id="site-detail-meta"></div>
+            </div>
+            <button class="btn btn-primary" onclick="addChargerToCurrentSite()">+ Add charger</button>
+          </div>
           <div class="section-title">Structure</div>
           <div id="site-tree"></div>
         </div>
@@ -540,6 +558,38 @@ const SUPABASE_URL = 'https://ozlnxhtguaoeuhjeejxq.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_91dDeI3PSGTwwz2wkFlqMg_Mct2dvKX';
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+async function handleSignIn(){
+  const email = document.getElementById('auth-email').value.trim();
+  const password = document.getElementById('auth-password').value;
+  const errEl = document.getElementById('auth-error');
+  errEl.textContent = '';
+  const { error } = await sb.auth.signInWithPassword({ email, password });
+  if(error){ errEl.textContent = error.message; return; }
+  await enterApp();
+}
+async function handleSignUp(){
+  const email = document.getElementById('auth-email').value.trim();
+  const password = document.getElementById('auth-password').value;
+  const errEl = document.getElementById('auth-error');
+  errEl.textContent = '';
+  if(!email || password.length < 6){ errEl.textContent = 'Enter an email and a password of at least 6 characters.'; return; }
+  const { error } = await sb.auth.signUp({ email, password });
+  if(error){ errEl.textContent = error.message; return; }
+  errEl.style.color = 'var(--text-muted)';
+  errEl.textContent = 'Account created. If email confirmation is required, check your inbox, then sign in.';
+}
+async function handleSignOut(){
+  await sb.auth.signOut();
+  document.getElementById('app-root').style.display = 'none';
+  document.getElementById('auth-screen').style.display = 'flex';
+}
+async function enterApp(){
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('app-root').style.display = 'block';
+  await loadAll();
+  routeFromLocation();
+}
+
 let locations = [];
 let chargers = [];
 let sessions = [];
@@ -713,8 +763,10 @@ function renderSites(){
   }).join('');
 }
 
+let currentSiteId = null;
 function openSite(id, opts){
   opts = opts || {};
+  currentSiteId = id;
   document.getElementById('sites-list-view').style.display='none';
   document.getElementById('site-detail-view').style.display='block';
   const loc = locations.find(l=>l.id===id);
@@ -722,6 +774,10 @@ function openSite(id, opts){
   document.getElementById('site-detail-meta').textContent = `${loc.type} · ${loc.city||''} ${loc.capacityKVA?'· '+loc.capacityKVA+' kVA capacity':''} · ${loc.currency}`;
   document.getElementById('site-tree').innerHTML = renderTreeNode(id, 0);
   if(!opts.skipNav) navigate(ROUTES.siteDetail(id));
+}
+function addChargerToCurrentSite(){
+  addChargerPresetLocation = currentSiteId;
+  showPage('addcharger');
 }
 function renderTreeNode(id, depth){
   const loc = locations.find(l=>l.id===id);
@@ -804,26 +860,32 @@ function renderChargerDetail(){
 async function toggleRemote(){
   const c = chargers.find(x=>x.id===currentChargerId);
   const btn = document.getElementById('cd-remote-btn');
+  const originalLabel = btn.textContent;
   btn.disabled = true;
-  if(c.status==='Available'){
-    const root = rootOf(c.locationId);
-    const newKW = Math.round(c.powerKW*0.7);
-    await sb.from('sessions').insert({charger_id:c.id, currency: root ? root.currency : 'ZAR', started_at: new Date().toISOString(), payment_status:'pending', payment_method:'Remote start'});
-    await sb.from('chargers').update({status:'Charging', current_kw:newKW}).eq('id', c.id);
-  } else if(c.status==='Charging'){
-    const s = activeSessionFor(c.id);
-    if(s){
-      const startedMs = new Date(s.startedAt).getTime();
-      const hours = Math.max((Date.now()-startedMs)/3600000, 0.02);
-      const kwh = Math.round(hours * (c.currentKW || c.powerKW*0.7) * 10)/10;
-      const tariff = tariffs.find(t=>t.chargerId===c.id) || tariffs.find(t=>t.locationId === (rootOf(c.locationId)||{}).id);
-      const price = tariff ? (tariff.priceDay||0) : 0;
-      const cost = Math.round(kwh*price*100)/100;
-      await sb.from('sessions').update({ended_at:new Date().toISOString(), kwh, cost, payment_status:'paid'}).eq('id', s.id);
-    }
-    await sb.from('chargers').update({status:'Available', current_kw:0}).eq('id', c.id);
+  const action = c.status === 'Available' ? 'start' : 'stop';
+  btn.textContent = 'Sending command…';
+
+  const { data, error } = await sb.functions.invoke('remote-control', {
+    body: { chargerId: c.id, action }
+  });
+
+  if(error || data?.error){
+    alert('Could not reach the charger: ' + (data?.error || error.message));
+    btn.textContent = originalLabel;
+    btn.disabled = false;
+    return;
   }
-  await loadAll();
+
+  // The command was sent to the live charger — the actual status/session
+  // change arrives asynchronously via its own OCPP messages once it
+  // processes the remote command. Poll briefly to pick that up.
+  btn.textContent = 'Waiting for charger…';
+  for(let i=0;i<5;i++){
+    await new Promise(r=>setTimeout(r, 1500));
+    await loadAll();
+    const updated = chargers.find(x=>x.id===currentChargerId);
+    if(updated.status !== c.status) break;
+  }
   renderChargerDetail();
 }
 
@@ -872,9 +934,11 @@ async function submitNewSite(){
   showPage('sites');
 }
 
+let addChargerPresetLocation = null;
 function renderAddCharger(){
   const sel = document.getElementById('new-charger-location');
   sel.innerHTML = locations.map(l=>`<option value="${l.id}">${pathOf(l.id)}</option>`).join('');
+  if(addChargerPresetLocation){ sel.value = addChargerPresetLocation; addChargerPresetLocation = null; }
   document.getElementById('gen-ws-url').textContent = 'Not generated yet';
   document.getElementById('gen-auth').textContent = '-';
   document.getElementById('test-conn-btn').disabled = true;
@@ -1123,8 +1187,8 @@ function showModal(title, body, onConfirm, confirmLabel){
 function closeModal(){ document.getElementById('modal-bg').classList.remove('open'); }
 
 (async function init(){
-  await loadAll();
-  routeFromLocation();
+  const { data: { session } } = await sb.auth.getSession();
+  if(session){ await enterApp(); }
 })();
 </script>
 </body>
