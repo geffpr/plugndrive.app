@@ -585,7 +585,7 @@ async function handleSignOut(){
 }
 async function enterApp(){
   document.getElementById('auth-screen').style.display = 'none';
-  document.getElementById('app-root').style.display = 'block';
+  document.getElementById('app-root').style.display = '';
   await loadAll();
   routeFromLocation();
 }
