@@ -394,8 +394,16 @@ tr.rowlink:hover td{background:var(--blue-light);}
         </div>
         <div id="client-detail-view" style="display:none;">
           <div class="back-link" onclick="backToClients()">← Back to all clients</div>
-          <h2 id="client-detail-name"></h2>
-          <div style="font-size:12px;color:var(--text-muted);margin:4px 0 18px;" id="client-detail-meta"></div>
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <div>
+              <h2 id="client-detail-name"></h2>
+              <div style="font-size:12px;color:var(--text-muted);margin:4px 0 18px;" id="client-detail-meta"></div>
+            </div>
+            <div style="display:flex;gap:8px;">
+              <button class="btn" onclick="editClient(currentClientId)">Edit</button>
+              <button class="btn btn-danger" onclick="openDeleteClient()">Delete</button>
+            </div>
+          </div>
           <div class="card card-pad" style="max-width:420px;margin-bottom:20px;">
             <table>
               <tr><td style="color:var(--text-muted);">Contact</td><td id="cl-contact" style="text-align:right;"></td></tr>
@@ -403,6 +411,8 @@ tr.rowlink:hover td{background:var(--blue-light);}
               <tr><td style="color:var(--text-muted);">Email</td><td id="cl-email" style="text-align:right;"></td></tr>
               <tr><td style="color:var(--text-muted);">Address</td><td id="cl-address" style="text-align:right;"></td></tr>
               <tr><td style="color:var(--text-muted);">Revenue share</td><td id="cl-revshare" style="text-align:right;"></td></tr>
+              <tr><td style="color:var(--text-muted);">Total sites</td><td id="cl-total-sites" style="text-align:right;"></td></tr>
+              <tr><td style="color:var(--text-muted);">Total chargers</td><td id="cl-total-chargers" style="text-align:right;"></td></tr>
             </table>
           </div>
           <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">
@@ -411,7 +421,7 @@ tr.rowlink:hover td{background:var(--blue-light);}
           </div>
           <div class="card">
             <table>
-              <thead><tr><th>Site</th><th>City</th><th>Chargers</th></tr></thead>
+              <thead><tr><th>Site</th><th>City</th><th>Chargers</th><th></th></tr></thead>
               <tbody id="client-sites-body"></tbody>
             </table>
           </div>
@@ -429,7 +439,7 @@ tr.rowlink:hover td{background:var(--blue-light);}
 
       <!-- ADD CLIENT -->
       <div class="page" id="page-addclient">
-        <div class="section-title">New client details</div>
+        <div class="section-title" id="addclient-title">New client details</div>
         <div class="card card-pad" style="max-width:520px;">
           <div class="form-row">
             <label>Company name</label>
@@ -478,7 +488,7 @@ tr.rowlink:hover td{background:var(--blue-light);}
             <label>Months before transition</label>
             <input type="number" id="new-client-transition-months" placeholder="e.g. 6">
           </div>
-          <button class="btn btn-primary btn-block" onclick="submitNewClient()">Create client</button>
+          <button class="btn btn-primary btn-block" id="addclient-submit-btn" onclick="submitNewClient()">Create client</button>
           <div id="new-client-error" style="color:var(--red, #c0392b);font-size:12px;margin-top:8px;"></div>
         </div>
       </div>
@@ -1328,12 +1338,37 @@ function openClient(id, opts){
   document.getElementById('cl-revshare').textContent = `${cl.revShareInitial}% → ${cl.revShareAfter}%${transitionInfo}`;
 
   const sites = locations.filter(l=>l.clientId===id);
+  const totalChargers = sites.reduce((sum, s) => sum + chargers.filter(c=>{ const root=rootOf(c.locationId); return root && root.id===s.id; }).length, 0);
+  document.getElementById('cl-total-sites').textContent = sites.length;
+  document.getElementById('cl-total-chargers').textContent = totalChargers;
+
   document.getElementById('client-sites-body').innerHTML = sites.map(s=>{
     const chargerCount = chargers.filter(c=>{ const root=rootOf(c.locationId); return root && root.id===s.id; }).length;
-    return `<tr class="rowlink" onclick="showPage('sites');openSite('${s.id}')"><td>${s.name}</td><td>${s.city||'-'}</td><td>${chargerCount}</td></tr>`;
-  }).join('') || '<tr><td colspan="3" class="empty">No sites yet.</td></tr>';
+    return `<tr>
+      <td class="rowlink" onclick="showPage('sites');openSite('${s.id}')">${s.name}</td>
+      <td class="rowlink" onclick="showPage('sites');openSite('${s.id}')">${s.city||'-'}</td>
+      <td class="rowlink" onclick="showPage('sites');openSite('${s.id}')">${chargerCount}</td>
+      <td><button class="btn btn-sm" onclick="event.stopPropagation();removeSiteFromClient('${s.id}')">Remove</button></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="4" class="empty">No sites yet.</td></tr>';
 
   if(!opts.skipNav) navigate(ROUTES.clientDetail(id));
+}
+async function removeSiteFromClient(siteId){
+  const { error } = await sb.from('locations').update({ client_id: null }).eq('id', siteId);
+  if(error){ alert(error.message); return; }
+  await loadAll();
+  openClient(currentClientId, {skipNav:true});
+}
+function openDeleteClient(){
+  const cl = clients.find(x=>x.id===currentClientId);
+  showModal('Delete client', `Delete "${cl.name}"? Its sites will not be deleted — they'll just become unassigned.`, async ()=>{
+    const { error } = await sb.from('clients').delete().eq('id', currentClientId);
+    closeModal();
+    if(error){ alert(error.message); return; }
+    await loadAll();
+    backToClients();
+  }, 'Delete');
 }
 function openAssignSitesPanel(){
   const unassigned = locations.filter(l=>!l.parentId && !l.clientId);
@@ -1364,11 +1399,25 @@ function backToClients(){
   document.getElementById('client-detail-view').style.display = 'none';
   navigate(ROUTES.clients());
 }
+let editingClientId = null;
+function editClient(id){
+  editingClientId = id;
+  showPage('addclient');
+}
 function renderAddClient(){
-  ['new-client-name','new-client-contact-name','new-client-contact-phone','new-client-contact-email','new-client-address','new-client-start-date','new-client-transition-months']
-    .forEach(id=>{ document.getElementById(id).value=''; });
-  document.getElementById('new-client-revshare-initial').value = 100;
-  document.getElementById('new-client-revshare-after').value = 100;
+  const cl = editingClientId ? clients.find(x=>x.id===editingClientId) : null;
+  document.getElementById('addclient-title').textContent = cl ? `Edit client — ${cl.name}` : 'New client details';
+  document.getElementById('addclient-submit-btn').textContent = cl ? 'Save changes' : 'Create client';
+  document.getElementById('new-client-name').value = cl ? cl.name : '';
+  document.getElementById('new-client-type').value = cl ? cl.businessType : 'Residential / Body Corporate';
+  document.getElementById('new-client-contact-name').value = cl ? (cl.contactName||'') : '';
+  document.getElementById('new-client-contact-phone').value = cl ? (cl.contactPhone||'') : '';
+  document.getElementById('new-client-contact-email').value = cl ? (cl.contactEmail||'') : '';
+  document.getElementById('new-client-address').value = cl ? (cl.address||'') : '';
+  document.getElementById('new-client-revshare-initial').value = cl ? cl.revShareInitial : 100;
+  document.getElementById('new-client-revshare-after').value = cl ? cl.revShareAfter : 100;
+  document.getElementById('new-client-start-date').value = cl ? (cl.contractStart||'') : '';
+  document.getElementById('new-client-transition-months').value = cl ? (cl.transitionMonths ?? '') : '';
   document.getElementById('new-client-error').textContent = '';
   const addrInput = document.getElementById('new-client-address');
   addrInput.dataset.acAttached = '';
@@ -1391,10 +1440,14 @@ async function submitNewClient(){
     months_before_transition: document.getElementById('new-client-transition-months').value
       ? Number(document.getElementById('new-client-transition-months').value) : null,
   };
-  const { error } = await sb.from('clients').insert(payload);
+  const { error } = editingClientId
+    ? await sb.from('clients').update(payload).eq('id', editingClientId)
+    : await sb.from('clients').insert(payload);
   if(error){ errEl.textContent = error.message; return; }
+  const wasEditing = editingClientId;
+  editingClientId = null;
   await loadAll();
-  showPage('clients');
+  if(wasEditing){ showPage('clients'); openClient(wasEditing); } else { showPage('clients'); }
 }
 
 let addChargerPresetLocation = null;
