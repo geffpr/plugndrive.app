@@ -148,6 +148,16 @@ tr.rowlink:hover td{background:var(--blue-light);}
 </head>
 <body>
 
+<div id="activate-screen" style="display:none;min-height:100vh;align-items:center;justify-content:center;background:var(--bg,#f7f7f8);">
+  <div class="card card-pad" style="width:320px;">
+    <div style="font-weight:700;font-size:18px;margin-bottom:4px;">⚡ Plug n Drive</div>
+    <div style="color:var(--text-muted);font-size:13px;margin-bottom:16px;">Activate your RFID card</div>
+    <div class="form-row"><label>Activation code (sent by SMS)</label><input type="text" id="activate-code" inputmode="numeric" placeholder="e.g. 482913"></div>
+    <button class="btn btn-primary btn-block" onclick="submitActivation()">Activate card</button>
+    <div id="activate-message" style="font-size:13px;margin-top:10px;"></div>
+  </div>
+</div>
+
 <div id="auth-screen" style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg,#f7f7f8);">
   <div class="card card-pad" style="width:320px;">
     <div style="font-weight:700;font-size:18px;margin-bottom:4px;">⚡ Plug n Drive</div>
@@ -662,11 +672,24 @@ tr.rowlink:hover td{background:var(--blue-light);}
           <select id="rfid-status-filter" onchange="renderRfid()">
             <option value="all">All statuses</option>
             <option value="active">Active</option>
+            <option value="pending">Pending activation</option>
             <option value="blocked">Blocked</option>
           </select>
           <div style="margin-left:auto;">
             <button class="btn btn-primary" onclick="openAssignCard()">+ Assign new card</button>
           </div>
+        </div>
+        <div id="assign-card-panel" class="card card-pad" style="display:none;max-width:420px;margin-bottom:16px;">
+          <div style="font-weight:600;margin-bottom:8px;">Assign a new RFID card</div>
+          <div class="form-row"><label>Card UID (printed on the card, or scanned via NFC reader)</label><input type="text" id="ac-uid" placeholder="e.g. A3:F2:19:0C"></div>
+          <div class="form-row"><label>Site</label><select id="ac-site"></select></div>
+          <div class="form-row"><label>Resident name</label><input type="text" id="ac-name"></div>
+          <div class="form-row"><label>Resident phone (for the activation SMS)</label><input type="text" id="ac-phone" placeholder="+27..."></div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-primary" onclick="submitAssignCard()">Send activation code</button>
+            <button class="btn" onclick="closeAssignCard()">Cancel</button>
+          </div>
+          <div id="assign-card-error" style="color:var(--red, #c0392b);font-size:12px;margin-top:8px;"></div>
         </div>
         <div class="card">
           <table>
@@ -1583,12 +1606,16 @@ function renderRfid(){
   let rows = rfidCards.slice();
   if(cf!=='all') rows = rows.filter(r=>r.complexId===cf);
   if(sf!=='all') rows = rows.filter(r=>r.status===sf);
+  const statusLabel = { active: 'Active', blocked: 'Blocked', pending: 'Pending activation' };
   document.getElementById('rfid-body').innerHTML = rows.map(r=>{
     const u = users.find(x=>x.id===r.userId);
     const complexName = (locations.find(l=>l.id===r.complexId)||{}).name || '-';
+    const actionBtn = r.status === 'pending'
+      ? `<button class="btn btn-sm" onclick="resendActivation('${r.id}')">Resend code</button>`
+      : `<button class="btn btn-sm" onclick="toggleCard('${r.uid}')">${r.status==='active'?'Block':'Unblock'}</button>`;
     return `<tr><td>${r.uid}</td><td>${u?u.name:'-'}</td><td>${u?u.unit:'-'}</td><td>${complexName}</td>
-      <td><span class="badge ${r.status}">${r.status==='active'?'Active':'Blocked'}</span></td>
-      <td><button class="btn btn-sm" onclick="toggleCard('${r.uid}')">${r.status==='active'?'Block':'Unblock'}</button></td></tr>`;
+      <td><span class="badge ${r.status}">${statusLabel[r.status] || r.status}</span></td>
+      <td>${actionBtn}</td></tr>`;
   }).join('');
 }
 async function toggleCard(uid){
@@ -1598,17 +1625,67 @@ async function toggleCard(uid){
   await loadAll();
   renderRfid();
 }
+function generateActivationCode(){
+  return String(Math.floor(100000 + Math.random()*900000));
+}
+async function sendActivationSms(phone, code){
+  return sb.functions.invoke('send-card-activation-sms', {
+    body: { phone, message: `Your Plug n Drive card activation code is ${code}. Valid for 15 minutes. Activate at app.plugndrive.co.za/activate` }
+  });
+}
 function openAssignCard(){
-  showModal('Assign new card', "In the live product this reads the UID from a USB NFC reader or the charger's learning mode, then links it to a resident. This mockup adds a sample card.", async ()=>{
-    const rootLoc = locations.find(l=>!l.parentId);
-    if(rootLoc){
-      const {data:newUser} = await sb.from('users').insert({name:'New resident', unit:'Unit —', location_id: rootLoc.id, role:'resident'}).select().single();
-      await sb.from('rfid_cards').insert({uid:'NEW:'+Math.random().toString(16).slice(2,8).toUpperCase(), user_id: newUser ? newUser.id : null, location_id: rootLoc.id, status:'active'});
-    }
-    closeModal();
-    await loadAll();
-    renderRfid();
-  }, 'Assign card');
+  const siteSel = document.getElementById('ac-site');
+  siteSel.innerHTML = locations.filter(l=>!l.parentId).map(l=>`<option value="${l.id}">${l.name}</option>`).join('');
+  document.getElementById('ac-uid').value = '';
+  document.getElementById('ac-name').value = '';
+  document.getElementById('ac-phone').value = '';
+  document.getElementById('assign-card-error').textContent = '';
+  document.getElementById('assign-card-panel').style.display = 'block';
+}
+function closeAssignCard(){
+  document.getElementById('assign-card-panel').style.display = 'none';
+}
+async function submitAssignCard(){
+  const errEl = document.getElementById('assign-card-error');
+  const uid = document.getElementById('ac-uid').value.trim();
+  const siteId = document.getElementById('ac-site').value;
+  const name = document.getElementById('ac-name').value.trim();
+  const phone = document.getElementById('ac-phone').value.trim();
+  if(!uid || !name || !phone){ errEl.textContent = 'UID, name and phone are all required.'; return; }
+
+  let { data: existingUser } = await sb.from('users').select('*').eq('phone', phone).maybeSingle();
+  let userId = existingUser?.id;
+  if(!userId){
+    const { data: newUser, error: userErr } = await sb.from('users').insert({ name, phone, location_id: siteId, role: 'resident' }).select().single();
+    if(userErr){ errEl.textContent = userErr.message; return; }
+    userId = newUser.id;
+  }
+
+  const code = generateActivationCode();
+  const expiresAt = new Date(Date.now() + 15*60*1000).toISOString();
+  const { error: cardErr } = await sb.from('rfid_cards').insert({
+    uid, user_id: userId, location_id: siteId, status: 'pending',
+    activation_code: code, activation_code_expires_at: expiresAt,
+  });
+  if(cardErr){ errEl.textContent = cardErr.message; return; }
+
+  const { error: smsError } = await sendActivationSms(phone, code);
+  if(smsError){ errEl.textContent = 'Card created, but the SMS failed to send: ' + smsError.message; }
+
+  await loadAll();
+  closeAssignCard();
+  renderRfid();
+}
+async function resendActivation(cardId){
+  const card = rfidCards.find(r=>r.id===cardId);
+  const u = users.find(x=>x.id===card.userId);
+  if(!u || !u.phone){ alert('No phone number on file for this card\'s resident.'); return; }
+  const code = generateActivationCode();
+  const expiresAt = new Date(Date.now() + 15*60*1000).toISOString();
+  await sb.from('rfid_cards').update({ activation_code: code, activation_code_expires_at: expiresAt }).eq('id', cardId);
+  const { error } = await sendActivationSms(u.phone, code);
+  if(error){ alert('Failed to send SMS: ' + error.message); return; }
+  alert('A new activation code has been sent.');
 }
 
 function renderLoad(){
@@ -1754,7 +1831,36 @@ function showModal(title, body, onConfirm, confirmLabel){
 }
 function closeModal(){ document.getElementById('modal-bg').classList.remove('open'); }
 
+async function submitActivation(){
+  const code = document.getElementById('activate-code').value.trim();
+  const msgEl = document.getElementById('activate-message');
+  msgEl.style.color = 'var(--text-muted)';
+  msgEl.textContent = 'Activating…';
+  try {
+    const resp = await fetch(`${SUPABASE_URL}/functions/v1/activate-card`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code }),
+    });
+    const data = await resp.json();
+    if(!resp.ok){
+      msgEl.style.color = 'var(--red, #c0392b)';
+      msgEl.textContent = data.error || 'Activation failed.';
+      return;
+    }
+    msgEl.style.color = 'var(--green, #1a7f37)';
+    msgEl.textContent = 'Your card is now active. You can use it at any charger.';
+  } catch (err) {
+    msgEl.style.color = 'var(--red, #c0392b)';
+    msgEl.textContent = 'Network error — please try again.';
+  }
+}
+
 (async function init(){
+  if(location.pathname.startsWith('/activate')){
+    document.getElementById('activate-screen').style.display = 'flex';
+    return;
+  }
   const { data: { session } } = await sb.auth.getSession();
   if(session){ await enterApp(); }
 })();
