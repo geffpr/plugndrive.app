@@ -153,7 +153,12 @@ tr.rowlink:hover td{background:var(--blue-light);}
     <div style="font-weight:700;font-size:18px;margin-bottom:4px;">⚡ Plug n Drive</div>
     <div style="color:var(--text-muted);font-size:13px;margin-bottom:16px;">Sign in to the OCPP console</div>
     <div class="form-row"><label>Email</label><input type="email" id="auth-email" autocomplete="username"></div>
-    <div class="form-row"><label>Password</label><input type="password" id="auth-password" autocomplete="current-password"></div>
+    <div class="form-row"><label>Password</label>
+      <div style="position:relative;">
+        <input type="password" id="auth-password" autocomplete="current-password" style="width:100%;padding-right:36px;">
+        <span onclick="togglePasswordVisibility()" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);cursor:pointer;user-select:none;font-size:14px;" id="auth-password-eye" title="Show password">👁</span>
+      </div>
+    </div>
     <button class="btn btn-primary btn-block" onclick="handleSignIn()">Sign in</button>
     <button class="btn btn-block" style="margin-top:8px;" onclick="handleSignUp()">Create account</button>
     <div id="auth-error" style="color:var(--red,#c0392b);font-size:12px;margin-top:8px;"></div>
@@ -172,11 +177,8 @@ tr.rowlink:hover td{background:var(--blue-light);}
     </div>
     <a class="navitem active" data-page="dashboard" onclick="showPage('dashboard')"><span class="ic">▦</span>Dashboard</a>
     <a class="navitem" data-page="clients" onclick="showPage('clients')"><span class="ic">▣</span>Clients</a>
-    <a class="navitem" data-page="addclient" onclick="showPage('addclient')"><span class="ic">+</span>Add client</a>
     <a class="navitem" data-page="sites" onclick="showPage('sites')"><span class="ic">◫</span>Sites</a>
-    <a class="navitem" data-page="addsite" onclick="showPage('addsite')"><span class="ic">+</span>Add site</a>
     <a class="navitem" data-page="chargers" onclick="showPage('chargers')"><span class="ic">⛽</span>Chargers</a>
-    <a class="navitem" data-page="addcharger" onclick="showPage('addcharger')"><span class="ic">+</span>Add charger</a>
     <a class="navitem" data-page="sessions" onclick="showPage('sessions')"><span class="ic">◷</span>Sessions</a>
     <a class="navitem" data-page="rfid" onclick="showPage('rfid')"><span class="ic">▭</span>RFID cards</a>
     <a class="navitem" data-page="load" onclick="showPage('load')"><span class="ic">◔</span>Load management</a>
@@ -224,15 +226,18 @@ tr.rowlink:hover td{background:var(--blue-light);}
       <!-- SITES -->
       <div class="page" id="page-sites">
         <div id="sites-list-view">
-          <div class="filters">
-            <select id="sites-type-filter" onchange="renderSites()">
-              <option value="all">All types</option>
-              <option value="Complex">Complex</option>
-              <option value="Building">Building</option>
-              <option value="Parking">Parking</option>
-              <option value="Standalone site">Standalone site</option>
-            </select>
-            <input class="search" type="text" id="sites-search" placeholder="Search sites..." oninput="renderSites()">
+          <div class="filters" style="justify-content:space-between;">
+            <div style="display:flex;gap:8px;">
+              <select id="sites-type-filter" onchange="renderSites()">
+                <option value="all">All types</option>
+                <option value="Complex">Complex</option>
+                <option value="Building">Building</option>
+                <option value="Parking">Parking</option>
+                <option value="Standalone site">Standalone site</option>
+              </select>
+              <input class="search" type="text" id="sites-search" placeholder="Search sites..." oninput="renderSites()">
+            </div>
+            <button class="btn btn-primary" onclick="showPage('addsite')">+ Add site</button>
           </div>
           <div class="card">
             <table>
@@ -376,7 +381,10 @@ tr.rowlink:hover td{background:var(--blue-light);}
       <!-- CLIENTS -->
       <div class="page" id="page-clients">
         <div id="clients-list-view">
-          <div class="section-title">All clients</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div class="section-title" style="margin:0;">All clients</div>
+            <button class="btn btn-primary" onclick="showPage('addclient')">+ Add client</button>
+          </div>
           <div class="card">
             <table>
               <thead><tr><th>Name</th><th>Type</th><th>Sites</th><th>Chargers</th></tr></thead>
@@ -466,16 +474,19 @@ tr.rowlink:hover td{background:var(--blue-light);}
       <!-- CHARGERS -->
       <div class="page" id="page-chargers">
         <div id="chargers-list-view">
-          <div class="filters">
-            <select id="chg-complex-filter" onchange="renderChargers()"></select>
-            <select id="chg-status-filter" onchange="renderChargers()">
-              <option value="all">All statuses</option>
-              <option value="Available">Available</option>
-              <option value="Charging">Charging</option>
-              <option value="Faulted">Faulted</option>
-              <option value="Offline">Offline</option>
-            </select>
-            <input class="search" type="text" id="chg-search" placeholder="Search chargers..." oninput="renderChargers()">
+          <div class="filters" style="justify-content:space-between;">
+            <div style="display:flex;gap:8px;">
+              <select id="chg-complex-filter" onchange="renderChargers()"></select>
+              <select id="chg-status-filter" onchange="renderChargers()">
+                <option value="all">All statuses</option>
+                <option value="Available">Available</option>
+                <option value="Charging">Charging</option>
+                <option value="Faulted">Faulted</option>
+                <option value="Offline">Offline</option>
+              </select>
+              <input class="search" type="text" id="chg-search" placeholder="Search chargers..." oninput="renderChargers()">
+            </div>
+            <button class="btn btn-primary" onclick="showPage('addcharger')">+ Add charger</button>
           </div>
           <div class="card">
             <table>
@@ -730,6 +741,14 @@ const SUPABASE_KEY = 'sb_publishable_91dDeI3PSGTwwz2wkFlqMg_Mct2dvKX';
 const GOOGLE_MAPS_API_KEY = 'AIzaSyCwYc0gYAxn29lpnte38It_HkozV24VXD0';
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+function togglePasswordVisibility(){
+  const input = document.getElementById('auth-password');
+  const eye = document.getElementById('auth-password-eye');
+  const showing = input.type === 'text';
+  input.type = showing ? 'password' : 'text';
+  eye.textContent = showing ? '👁' : '🙈';
+  eye.title = showing ? 'Show password' : 'Hide password';
+}
 async function handleSignIn(){
   const email = document.getElementById('auth-email').value.trim();
   const password = document.getElementById('auth-password').value;
@@ -881,7 +900,8 @@ function showPage(id, opts){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('page-'+id).classList.add('active');
   document.querySelectorAll('.navitem').forEach(n=>n.classList.remove('active'));
-  const navEl = document.querySelector(`.navitem[data-page="${id}"]`);
+  const parentNav = { addsite:'sites', addcharger:'chargers', addclient:'clients' };
+  const navEl = document.querySelector(`.navitem[data-page="${parentNav[id] || id}"]`);
   if(navEl) navEl.classList.add('active');
   const titles={dashboard:'Dashboard',sites:'Sites',addsite:'Add site',chargers:'Chargers',addcharger:'Add charger',sessions:'Sessions',rfid:'RFID cards',load:'Load management',tariffs:'Tariffs',clients:'Clients',addclient:'Add client'};
   document.getElementById('topbar-title').textContent = titles[id];
