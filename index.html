@@ -171,6 +171,8 @@ tr.rowlink:hover td{background:var(--blue-light);}
       </div>
     </div>
     <a class="navitem active" data-page="dashboard" onclick="showPage('dashboard')"><span class="ic">▦</span>Dashboard</a>
+    <a class="navitem" data-page="clients" onclick="showPage('clients')"><span class="ic">▣</span>Clients</a>
+    <a class="navitem" data-page="addclient" onclick="showPage('addclient')"><span class="ic">+</span>Add client</a>
     <a class="navitem" data-page="sites" onclick="showPage('sites')"><span class="ic">◫</span>Sites</a>
     <a class="navitem" data-page="addsite" onclick="showPage('addsite')"><span class="ic">+</span>Add site</a>
     <a class="navitem" data-page="chargers" onclick="showPage('chargers')"><span class="ic">⛽</span>Chargers</a>
@@ -249,7 +251,10 @@ tr.rowlink:hover td{background:var(--blue-light);}
               <div style="font-size:12px;" id="site-detail-address"></div>
             </div>
             <div id="site-detail-map" style="width:300px;height:180px;border-radius:10px;overflow:hidden;flex-shrink:0;"></div>
-            <button class="btn btn-primary" onclick="addChargerToCurrentSite()">+ Add charger</button>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <button class="btn btn-primary" onclick="addChargerToCurrentSite()">+ Add charger</button>
+              <button class="btn" onclick="openSiteSettings(currentSiteId)">⚙ Settings</button>
+            </div>
           </div>
           <div class="section-title">Structure</div>
           <div id="site-tree"></div>
@@ -263,6 +268,10 @@ tr.rowlink:hover td{background:var(--blue-light);}
           <div class="form-row">
             <label>Site name</label>
             <input type="text" id="new-site-name" placeholder="e.g. Tafelsee Residence">
+          </div>
+          <div class="form-row">
+            <label>Client</label>
+            <select id="new-site-client"><option value="">— No client assigned —</option></select>
           </div>
           <div class="form-row">
             <label>Type</label>
@@ -279,12 +288,20 @@ tr.rowlink:hover td{background:var(--blue-light);}
             <select id="new-site-parent"><option value="">None — top-level site</option></select>
           </div>
           <div class="form-row">
-            <label>City</label>
-            <input type="text" id="new-site-city" placeholder="e.g. Cape Town">
+            <label>Address (optional — start typing for suggestions)</label>
+            <input type="text" id="new-site-address" placeholder="e.g. 12 Main Rd, Cape Town, 8001">
           </div>
           <div class="form-row">
-            <label>Address (optional — used to show the site on a map)</label>
-            <input type="text" id="new-site-address" placeholder="e.g. 12 Main Rd, Cape Town, 8001">
+            <label>City</label>
+            <input type="text" id="new-site-city" placeholder="Auto-filled from address, or type your own">
+          </div>
+          <div class="form-row">
+            <label>Timezone</label>
+            <select id="new-site-timezone">
+              <option value="Africa/Johannesburg">Africa/Johannesburg (SAST, UTC+2)</option>
+              <option value="Africa/Maputo">Africa/Maputo (CAT, UTC+2)</option>
+              <option value="Europe/Paris">Europe/Paris (CET/CEST)</option>
+            </select>
           </div>
           <div class="form-row">
             <label>Capacity (kVA)</label>
@@ -299,6 +316,150 @@ tr.rowlink:hover td{background:var(--blue-light);}
           </div>
           <button class="btn btn-primary btn-block" onclick="submitNewSite()">Create site</button>
           <div id="new-site-error" style="color:var(--red, #c0392b);font-size:12px;margin-top:8px;"></div>
+        </div>
+      </div>
+
+      <!-- SITE SETTINGS -->
+      <div class="page" id="page-sitesettings">
+        <div class="back-link" onclick="cancelSiteSettings()">← Back to site</div>
+        <div class="section-title" id="site-settings-title">Site settings</div>
+        <div class="card card-pad" style="max-width:520px;">
+          <div class="form-row">
+            <label>Client</label>
+            <select id="ss-client"><option value="">— No client assigned —</option></select>
+          </div>
+          <div class="form-row">
+            <label>Status</label>
+            <select id="ss-status">
+              <option>Active</option>
+              <option>Pending install</option>
+              <option>Inactive</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label>Address (start typing for suggestions)</label>
+            <input type="text" id="ss-address">
+          </div>
+          <div class="form-row">
+            <label>City</label>
+            <input type="text" id="ss-city">
+          </div>
+          <div class="form-row">
+            <label>Timezone</label>
+            <select id="ss-timezone">
+              <option value="Africa/Johannesburg">Africa/Johannesburg (SAST, UTC+2)</option>
+              <option value="Africa/Maputo">Africa/Maputo (CAT, UTC+2)</option>
+              <option value="Europe/Paris">Europe/Paris (CET/CEST)</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label>Capacity (kVA)</label>
+            <input type="number" id="ss-capacity">
+          </div>
+          <div class="form-row">
+            <label>On-site contact name</label>
+            <input type="text" id="ss-contact-name">
+          </div>
+          <div class="form-row">
+            <label>On-site contact phone</label>
+            <input type="text" id="ss-contact-phone">
+          </div>
+          <div class="form-row">
+            <label>On-site contact email</label>
+            <input type="email" id="ss-contact-email">
+          </div>
+          <button class="btn btn-primary btn-block" onclick="saveSiteSettings()">Save settings</button>
+          <div id="site-settings-error" style="color:var(--red, #c0392b);font-size:12px;margin-top:8px;"></div>
+        </div>
+      </div>
+
+      <!-- CLIENTS -->
+      <div class="page" id="page-clients">
+        <div id="clients-list-view">
+          <div class="section-title">All clients</div>
+          <div class="card">
+            <table>
+              <thead><tr><th>Name</th><th>Type</th><th>Sites</th><th>Chargers</th></tr></thead>
+              <tbody id="clients-body"></tbody>
+            </table>
+          </div>
+        </div>
+        <div id="client-detail-view" style="display:none;">
+          <div class="back-link" onclick="backToClients()">← Back to all clients</div>
+          <h2 id="client-detail-name"></h2>
+          <div style="font-size:12px;color:var(--text-muted);margin:4px 0 18px;" id="client-detail-meta"></div>
+          <div class="card card-pad" style="max-width:420px;margin-bottom:20px;">
+            <table>
+              <tr><td style="color:var(--text-muted);">Contact</td><td id="cl-contact" style="text-align:right;"></td></tr>
+              <tr><td style="color:var(--text-muted);">Phone</td><td id="cl-phone" style="text-align:right;"></td></tr>
+              <tr><td style="color:var(--text-muted);">Email</td><td id="cl-email" style="text-align:right;"></td></tr>
+              <tr><td style="color:var(--text-muted);">Address</td><td id="cl-address" style="text-align:right;"></td></tr>
+              <tr><td style="color:var(--text-muted);">Revenue share</td><td id="cl-revshare" style="text-align:right;"></td></tr>
+            </table>
+          </div>
+          <div class="section-title">Sites</div>
+          <div class="card">
+            <table>
+              <thead><tr><th>Site</th><th>City</th><th>Chargers</th></tr></thead>
+              <tbody id="client-sites-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ADD CLIENT -->
+      <div class="page" id="page-addclient">
+        <div class="section-title">New client details</div>
+        <div class="card card-pad" style="max-width:520px;">
+          <div class="form-row">
+            <label>Company name</label>
+            <input type="text" id="new-client-name" placeholder="e.g. Tafelsee Body Corporate">
+          </div>
+          <div class="form-row">
+            <label>Business type</label>
+            <select id="new-client-type">
+              <option>Residential / Body Corporate</option>
+              <option>Retail</option>
+              <option>Hospitality</option>
+              <option>Fuel Station</option>
+              <option>Office / Commercial</option>
+              <option>Other</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label>Contact name</label>
+            <input type="text" id="new-client-contact-name">
+          </div>
+          <div class="form-row">
+            <label>Contact phone</label>
+            <input type="text" id="new-client-contact-phone">
+          </div>
+          <div class="form-row">
+            <label>Contact email</label>
+            <input type="email" id="new-client-contact-email">
+          </div>
+          <div class="form-row">
+            <label>Address (start typing for suggestions)</label>
+            <input type="text" id="new-client-address">
+          </div>
+          <div class="form-row">
+            <label>Revenue share — first period (%)</label>
+            <input type="number" id="new-client-revshare-initial" placeholder="e.g. 100" value="100">
+          </div>
+          <div class="form-row">
+            <label>Revenue share — after transition (%)</label>
+            <input type="number" id="new-client-revshare-after" placeholder="e.g. 80" value="100">
+          </div>
+          <div class="form-row">
+            <label>Contract start date</label>
+            <input type="date" id="new-client-start-date">
+          </div>
+          <div class="form-row">
+            <label>Months before transition</label>
+            <input type="number" id="new-client-transition-months" placeholder="e.g. 6">
+          </div>
+          <button class="btn btn-primary btn-block" onclick="submitNewClient()">Create client</button>
+          <div id="new-client-error" style="color:var(--red, #c0392b);font-size:12px;margin-top:8px;"></div>
         </div>
       </div>
 
@@ -561,6 +722,7 @@ tr.rowlink:hover td{background:var(--blue-light);}
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCwYc0gYAxn29lpnte38It_HkozV24VXD0&libraries=places" async defer></script>
 <script>
 const SUPABASE_URL = 'https://ozlnxhtguaoeuhjeejxq.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_91dDeI3PSGTwwz2wkFlqMg_Mct2dvKX';
@@ -606,22 +768,25 @@ let sessions = [];
 let rfidCards = [];
 let users = [];
 let tariffs = [];
+let clients = [];
 
-function mapLocation(l){ return {id:l.id, name:l.name, type:l.type, parentId:l.parent_id, city:l.city, address:l.address, capacityKVA:l.capacity_kva, currency:l.currency}; }
+function mapLocation(l){ return {id:l.id, name:l.name, type:l.type, parentId:l.parent_id, city:l.city, address:l.address, capacityKVA:l.capacity_kva, currency:l.currency, clientId:l.client_id, timezone:l.timezone, contactName:l.contact_name, contactPhone:l.contact_phone, contactEmail:l.contact_email, status:l.status}; }
 function mapCharger(c){ return {id:c.id, locationId:c.location_id, name:c.name, ocppId:c.ocpp_id, vendor:c.vendor, connector:c.connector, powerKW:c.power_kw, ocpp:c.ocpp_version, status:c.status, currentKW:c.current_kw}; }
 function mapSession(s){ return {id:s.id, chargerId:s.charger_id, userId:s.user_id, rfidCardId:s.rfid_card_id, kwh:s.kwh, cost:s.cost, currency:s.currency, startedAt:s.started_at, endedAt:s.ended_at, paymentStatus:s.payment_status, payment:s.payment_method}; }
 function mapRfid(r){ return {id:r.id, uid:r.uid, userId:r.user_id, complexId:r.location_id, status:r.status}; }
 function mapUser(u){ return {id:u.id, name:u.name, unit:u.unit, locationId:u.location_id, role:u.role}; }
 function mapTariff(t){ return {id:t.id, locationId:t.location_id, chargerId:t.charger_id, priceDay:t.price_day, priceNight:t.price_night, nightStart:t.night_start, nightEnd:t.night_end, idleFeePerMin:t.idle_fee_per_min, idleGraceMinutes:t.idle_grace_minutes, monthlyFee:t.monthly_ocpp_fee, monthlyKwhIncluded:t.monthly_kwh_included, overagePrice:t.overage_price, currency:t.currency}; }
+function mapClient(c){ return {id:c.id, name:c.name, businessType:c.business_type, contactName:c.contact_name, contactPhone:c.contact_phone, contactEmail:c.contact_email, address:c.address, revShareInitial:c.revenue_share_initial, revShareAfter:c.revenue_share_after, contractStart:c.contract_start_date, transitionMonths:c.months_before_transition}; }
 
 async function loadAll(){
-  const [locRes, chgRes, sesRes, rfidRes, userRes, tarRes] = await Promise.all([
+  const [locRes, chgRes, sesRes, rfidRes, userRes, tarRes, clientRes] = await Promise.all([
     sb.from('locations').select('*'),
     sb.from('chargers').select('*'),
     sb.from('sessions').select('*').order('started_at', {ascending:false}),
     sb.from('rfid_cards').select('*'),
     sb.from('users').select('*'),
     sb.from('tariffs').select('*'),
+    sb.from('clients').select('*'),
   ]);
   locations = (locRes.data||[]).map(mapLocation);
   chargers = (chgRes.data||[]).map(mapCharger);
@@ -629,6 +794,27 @@ async function loadAll(){
   rfidCards = (rfidRes.data||[]).map(mapRfid);
   users = (userRes.data||[]).map(mapUser);
   tariffs = (tarRes.data||[]).map(mapTariff);
+  clients = (clientRes.data||[]).map(mapClient);
+}
+
+// Attaches Google Places Autocomplete to an address input. Silently does
+// nothing if the Maps JS API hasn't finished loading yet (plain text input
+// still works fine as a fallback).
+function attachPlacesAutocomplete(inputEl, onSelect){
+  if(!inputEl || inputEl.dataset.acAttached) return;
+  if(!window.google || !google.maps || !google.maps.places) return;
+  inputEl.dataset.acAttached = '1';
+  const ac = new google.maps.places.Autocomplete(inputEl, { fields: ['formatted_address','address_components'] });
+  ac.addListener('place_changed', () => {
+    const place = ac.getPlace();
+    if(!place || !place.formatted_address) return;
+    let city = '';
+    (place.address_components||[]).forEach(c=>{
+      if(c.types.includes('locality')) city = c.long_name;
+      else if(!city && c.types.includes('administrative_area_level_2')) city = c.long_name;
+    });
+    onSelect({ address: place.formatted_address, city });
+  });
 }
 
 function rootOf(locId){
@@ -682,6 +868,9 @@ const ROUTES = {
   tariffs: () => '/tariffs',
   tariffSite: (id) => `/tariffs/site/${id}`,
   tariffCharger: (id) => `/tariffs/charger/${id}`,
+  clients: () => '/clients',
+  clientDetail: (id) => `/clients/${id}`,
+  addclient: () => '/addclient',
 };
 function navigate(path){
   if(location.pathname !== path) history.pushState({}, '', path);
@@ -692,8 +881,9 @@ function showPage(id, opts){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('page-'+id).classList.add('active');
   document.querySelectorAll('.navitem').forEach(n=>n.classList.remove('active'));
-  document.querySelector(`.navitem[data-page="${id}"]`).classList.add('active');
-  const titles={dashboard:'Dashboard',sites:'Sites',addsite:'Add site',chargers:'Chargers',addcharger:'Add charger',sessions:'Sessions',rfid:'RFID cards',load:'Load management',tariffs:'Tariffs'};
+  const navEl = document.querySelector(`.navitem[data-page="${id}"]`);
+  if(navEl) navEl.classList.add('active');
+  const titles={dashboard:'Dashboard',sites:'Sites',addsite:'Add site',chargers:'Chargers',addcharger:'Add charger',sessions:'Sessions',rfid:'RFID cards',load:'Load management',tariffs:'Tariffs',clients:'Clients',addclient:'Add client'};
   document.getElementById('topbar-title').textContent = titles[id];
   if(!opts.skipNav) navigate(ROUTES[id] ? ROUTES[id]() : '/'+id);
   if(id==='sites') renderSites();
@@ -705,6 +895,8 @@ function showPage(id, opts){
   if(id==='addcharger') renderAddCharger();
   if(id==='addsite') renderAddSite();
   if(id==='dashboard') renderDashboard();
+  if(id==='clients') renderClients();
+  if(id==='addclient') renderAddClient();
 }
 
 // Reads the current URL and shows the matching page/detail view.
@@ -712,7 +904,7 @@ function showPage(id, opts){
 function routeFromLocation(){
   const parts = location.pathname.split('/').filter(Boolean); // e.g. ['sites','<id>']
   const page = parts[0] || 'dashboard';
-  const knownPages = ['dashboard','sites','addsite','chargers','addcharger','sessions','rfid','load','tariffs'];
+  const knownPages = ['dashboard','sites','addsite','chargers','addcharger','sessions','rfid','load','tariffs','clients','addclient'];
   if(!knownPages.includes(page)){ showPage('dashboard'); return; }
 
   showPage(page, {skipNav:true});
@@ -729,6 +921,10 @@ function routeFromLocation(){
     const kind = parts[1]==='site' ? 'location' : 'charger';
     const exists = kind==='location' ? locations.find(l=>l.id===parts[2]) : chargers.find(c=>c.id===parts[2]);
     if(exists) openTariffEdit(kind, parts[2], {skipNav:true});
+  }
+  if(page==='clients' && parts[1]){
+    const cl = clients.find(x=>x.id===parts[1]);
+    if(cl) openClient(parts[1], {skipNav:true});
   }
 }
 window.addEventListener('popstate', routeFromLocation);
@@ -789,24 +985,13 @@ function openSite(id, opts){
 function renderSiteAddressAndMap(loc){
   const addrEl = document.getElementById('site-detail-address');
   const mapEl = document.getElementById('site-detail-map');
-  addrEl.innerHTML = loc.address
-    ? `${loc.address} <a href="#" onclick="promptSiteAddress('${loc.id}');return false;">(edit)</a>`
-    : `<a href="#" onclick="promptSiteAddress('${loc.id}');return false;">+ Add address</a>`;
+  addrEl.textContent = loc.address || 'No address set — see ⚙ Settings';
   if(loc.address && GOOGLE_MAPS_API_KEY){
     mapEl.innerHTML = `<iframe width="100%" height="100%" style="border:0;" loading="lazy"
       src="https://www.google.com/maps/embed/v1/place?key=${GOOGLE_MAPS_API_KEY}&q=${encodeURIComponent(loc.address)}"></iframe>`;
   } else {
     mapEl.innerHTML = '';
   }
-}
-async function promptSiteAddress(id){
-  const loc = locations.find(l=>l.id===id);
-  const address = prompt('Site address (used to show the site on a map):', loc.address || '');
-  if(address === null) return; // cancelled
-  const { error } = await sb.from('locations').update({ address: address.trim() || null }).eq('id', id);
-  if(error){ alert(error.message); return; }
-  await loadAll();
-  openSite(id, {skipNav:true});
 }
 function addChargerToCurrentSite(){
   addChargerPresetLocation = currentSiteId;
@@ -981,11 +1166,19 @@ function renderAddSite(){
   const sel = document.getElementById('new-site-parent');
   sel.innerHTML = '<option value="">None — top-level site</option>' +
     locations.map(l=>`<option value="${l.id}">${pathOf(l.id)}</option>`).join('');
+  const clientSel = document.getElementById('new-site-client');
+  clientSel.innerHTML = '<option value="">— No client assigned —</option>' +
+    clients.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
   document.getElementById('new-site-name').value = '';
   document.getElementById('new-site-city').value = '';
   document.getElementById('new-site-address').value = '';
   document.getElementById('new-site-capacity').value = '';
   document.getElementById('new-site-error').textContent = '';
+  const addrInput = document.getElementById('new-site-address');
+  attachPlacesAutocomplete(addrInput, ({address, city}) => {
+    addrInput.value = address;
+    if(city) document.getElementById('new-site-city').value = city;
+  });
 }
 async function submitNewSite(){
   const name = document.getElementById('new-site-name').value.trim();
@@ -993,19 +1186,156 @@ async function submitNewSite(){
   if(!name){ errEl.textContent = 'Site name is required.'; return; }
   const type = document.getElementById('new-site-type').value;
   const parentId = document.getElementById('new-site-parent').value || null;
+  const clientId = document.getElementById('new-site-client').value || null;
   const city = document.getElementById('new-site-city').value.trim() || null;
   const address = document.getElementById('new-site-address').value.trim() || null;
+  const timezone = document.getElementById('new-site-timezone').value;
   const capacityRaw = document.getElementById('new-site-capacity').value;
   const capacity = capacityRaw ? Number(capacityRaw) : null;
   const currency = document.getElementById('new-site-currency').value;
 
   const { error } = await sb.from('locations').insert({
-    name, type, parent_id: parentId, city, address, capacity_kva: capacity, currency
+    name, type, parent_id: parentId, client_id: clientId, city, address, timezone, capacity_kva: capacity, currency
   });
   if(error){ errEl.textContent = error.message; return; }
 
   await loadAll();
   showPage('sites');
+}
+
+// --- Site settings (per-site advanced fields) ---
+let siteSettingsTargetId = null;
+function openSiteSettings(id){
+  siteSettingsTargetId = id;
+  const loc = locations.find(l=>l.id===id);
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('page-sitesettings').classList.add('active');
+  document.getElementById('topbar-title').textContent = 'Site settings';
+  document.getElementById('site-settings-title').textContent = `Settings — ${loc.name}`;
+
+  const clientSel = document.getElementById('ss-client');
+  clientSel.innerHTML = '<option value="">— No client assigned —</option>' +
+    clients.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+  clientSel.value = loc.clientId || '';
+  document.getElementById('ss-status').value = loc.status || 'Active';
+  document.getElementById('ss-address').value = loc.address || '';
+  document.getElementById('ss-city').value = loc.city || '';
+  document.getElementById('ss-timezone').value = loc.timezone || 'Africa/Johannesburg';
+  document.getElementById('ss-capacity').value = loc.capacityKVA ?? '';
+  document.getElementById('ss-contact-name').value = loc.contactName || '';
+  document.getElementById('ss-contact-phone').value = loc.contactPhone || '';
+  document.getElementById('ss-contact-email').value = loc.contactEmail || '';
+  document.getElementById('site-settings-error').textContent = '';
+
+  const addrInput = document.getElementById('ss-address');
+  addrInput.dataset.acAttached = ''; // allow re-attaching each time this page opens
+  attachPlacesAutocomplete(addrInput, ({address, city}) => {
+    addrInput.value = address;
+    if(city) document.getElementById('ss-city').value = city;
+  });
+
+  navigate(`/sites/${id}/settings`);
+}
+function cancelSiteSettings(){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('page-chargers'); // no-op guard
+  openSite(siteSettingsTargetId, {skipNav:true});
+  navigate(ROUTES.siteDetail(siteSettingsTargetId));
+  document.querySelectorAll('.navitem').forEach(n=>n.classList.remove('active'));
+  document.querySelector(`.navitem[data-page="sites"]`).classList.add('active');
+  document.getElementById('topbar-title').textContent = 'Sites';
+}
+async function saveSiteSettings(){
+  const errEl = document.getElementById('site-settings-error');
+  const payload = {
+    client_id: document.getElementById('ss-client').value || null,
+    status: document.getElementById('ss-status').value,
+    address: document.getElementById('ss-address').value.trim() || null,
+    city: document.getElementById('ss-city').value.trim() || null,
+    timezone: document.getElementById('ss-timezone').value,
+    capacity_kva: document.getElementById('ss-capacity').value ? Number(document.getElementById('ss-capacity').value) : null,
+    contact_name: document.getElementById('ss-contact-name').value.trim() || null,
+    contact_phone: document.getElementById('ss-contact-phone').value.trim() || null,
+    contact_email: document.getElementById('ss-contact-email').value.trim() || null,
+  };
+  const { error } = await sb.from('locations').update(payload).eq('id', siteSettingsTargetId);
+  if(error){ errEl.textContent = error.message; return; }
+  await loadAll();
+  cancelSiteSettings();
+}
+
+// --- Clients ---
+function renderClients(){
+  document.getElementById('clients-list-view').style.display = 'block';
+  document.getElementById('client-detail-view').style.display = 'none';
+  document.getElementById('clients-body').innerHTML = clients.map(cl=>{
+    const sites = locations.filter(l=>l.clientId===cl.id);
+    const siteIds = sites.map(s=>s.id);
+    const chargerCount = chargers.filter(c=>{ const root=rootOf(c.locationId); return root && siteIds.includes(root.id); }).length;
+    return `<tr class="rowlink" onclick="openClient('${cl.id}')">
+      <td>${cl.name}</td><td>${cl.businessType}</td><td>${sites.length}</td><td>${chargerCount}</td>
+    </tr>`;
+  }).join('');
+}
+function openClient(id, opts){
+  opts = opts || {};
+  document.getElementById('clients-list-view').style.display = 'none';
+  document.getElementById('client-detail-view').style.display = 'block';
+  const cl = clients.find(x=>x.id===id);
+  document.getElementById('client-detail-name').textContent = cl.name;
+  document.getElementById('client-detail-meta').textContent = cl.businessType;
+  document.getElementById('cl-contact').textContent = cl.contactName || '-';
+  document.getElementById('cl-phone').textContent = cl.contactPhone || '-';
+  document.getElementById('cl-email').textContent = cl.contactEmail || '-';
+  document.getElementById('cl-address').textContent = cl.address || '-';
+  const transitionInfo = (cl.contractStart && cl.transitionMonths)
+    ? ` (transitions ${cl.transitionMonths}mo after ${cl.contractStart})` : '';
+  document.getElementById('cl-revshare').textContent = `${cl.revShareInitial}% → ${cl.revShareAfter}%${transitionInfo}`;
+
+  const sites = locations.filter(l=>l.clientId===id);
+  document.getElementById('client-sites-body').innerHTML = sites.map(s=>{
+    const chargerCount = chargers.filter(c=>{ const root=rootOf(c.locationId); return root && root.id===s.id; }).length;
+    return `<tr class="rowlink" onclick="showPage('sites');openSite('${s.id}')"><td>${s.name}</td><td>${s.city||'-'}</td><td>${chargerCount}</td></tr>`;
+  }).join('') || '<tr><td colspan="3" class="empty">No sites yet.</td></tr>';
+
+  if(!opts.skipNav) navigate(ROUTES.clientDetail(id));
+}
+function backToClients(){
+  document.getElementById('clients-list-view').style.display = 'block';
+  document.getElementById('client-detail-view').style.display = 'none';
+  navigate(ROUTES.clients());
+}
+function renderAddClient(){
+  ['new-client-name','new-client-contact-name','new-client-contact-phone','new-client-contact-email','new-client-address','new-client-start-date','new-client-transition-months']
+    .forEach(id=>{ document.getElementById(id).value=''; });
+  document.getElementById('new-client-revshare-initial').value = 100;
+  document.getElementById('new-client-revshare-after').value = 100;
+  document.getElementById('new-client-error').textContent = '';
+  const addrInput = document.getElementById('new-client-address');
+  addrInput.dataset.acAttached = '';
+  attachPlacesAutocomplete(addrInput, ({address}) => { addrInput.value = address; });
+}
+async function submitNewClient(){
+  const name = document.getElementById('new-client-name').value.trim();
+  const errEl = document.getElementById('new-client-error');
+  if(!name){ errEl.textContent = 'Company name is required.'; return; }
+  const payload = {
+    name,
+    business_type: document.getElementById('new-client-type').value,
+    contact_name: document.getElementById('new-client-contact-name').value.trim() || null,
+    contact_phone: document.getElementById('new-client-contact-phone').value.trim() || null,
+    contact_email: document.getElementById('new-client-contact-email').value.trim() || null,
+    address: document.getElementById('new-client-address').value.trim() || null,
+    revenue_share_initial: Number(document.getElementById('new-client-revshare-initial').value || 100),
+    revenue_share_after: Number(document.getElementById('new-client-revshare-after').value || 100),
+    contract_start_date: document.getElementById('new-client-start-date').value || null,
+    months_before_transition: document.getElementById('new-client-transition-months').value
+      ? Number(document.getElementById('new-client-transition-months').value) : null,
+  };
+  const { error } = await sb.from('clients').insert(payload);
+  if(error){ errEl.textContent = error.message; return; }
+  await loadAll();
+  showPage('clients');
 }
 
 let addChargerPresetLocation = null;
