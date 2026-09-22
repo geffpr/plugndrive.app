@@ -1509,18 +1509,33 @@ function runConnectionTest(){
   });
 }
 
+function fmtDuration(startedAt, endedAt){
+  if(!startedAt || !endedAt) return '-';
+  const mins = Math.round((new Date(endedAt) - new Date(startedAt)) / 60000);
+  if(mins < 60) return mins + 'm';
+  const h = Math.floor(mins/60), m = mins%60;
+  return h + 'h' + (m ? ' ' + m + 'm' : '');
+}
 function renderSessions(){
   populateComplexFilter('ses-complex-filter', true);
   const cf = document.getElementById('ses-complex-filter').value || 'all';
+  const period = document.getElementById('ses-period-filter').value || 'all';
   let rows = sessions.filter(s=>s.endedAt);
   if(cf!=='all') rows = rows.filter(s=>{ const c=chargers.find(x=>x.id===s.chargerId); const root=c?rootOf(c.locationId):null; return root && root.id===cf; });
+  if(period==='week'){
+    const cutoff = new Date(Date.now() - 7*24*60*60*1000);
+    rows = rows.filter(s=>new Date(s.startedAt) >= cutoff);
+  } else if(period==='month'){
+    const monthStart = new Date(); monthStart.setUTCDate(1); monthStart.setUTCHours(0,0,0,0);
+    rows = rows.filter(s=>new Date(s.startedAt) >= monthStart);
+  }
   document.getElementById('ses-count').textContent = rows.length;
   document.getElementById('ses-kwh').textContent = rows.reduce((s,r)=>s+(r.kwh||0),0).toFixed(1)+' kWh';
   document.getElementById('ses-revenue').textContent = sumByCurrency(rows, 'cost');
   document.getElementById('sessions-body').innerHTML = rows.map(s=>{
     const c = chargers.find(x=>x.id===s.chargerId);
     const u = users.find(x=>x.id===s.userId);
-    return `<tr><td>${(s.startedAt||'').slice(0,10)}</td><td>${c?c.name:'-'}</td><td>${u?u.name:'-'}</td><td>-</td><td>${s.kwh??'-'} kWh</td><td>${fmtMoney(s.cost, s.currency)}</td><td>${s.payment||'-'}</td></tr>`;
+    return `<tr><td>${(s.startedAt||'').slice(0,10)}</td><td>${c?c.name:'-'}</td><td>${u?u.name:'-'}</td><td>${fmtDuration(s.startedAt, s.endedAt)}</td><td>${s.kwh??'-'} kWh</td><td>${fmtMoney(s.cost, s.currency)}</td><td>${s.payment||'-'}</td></tr>`;
   }).join('');
 }
 
