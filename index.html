@@ -242,11 +242,13 @@ tr.rowlink:hover td{background:var(--blue-light);}
 
         <div id="site-detail-view" style="display:none;">
           <div class="back-link" onclick="backToSites()">← Back to all sites</div>
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-            <div>
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:20px;">
+            <div style="flex:1;">
               <h2 id="site-detail-name"></h2>
-              <div style="font-size:12px;color:var(--text-muted);margin:4px 0 18px;" id="site-detail-meta"></div>
+              <div style="font-size:12px;color:var(--text-muted);margin:4px 0 6px;" id="site-detail-meta"></div>
+              <div style="font-size:12px;" id="site-detail-address"></div>
             </div>
+            <div id="site-detail-map" style="width:300px;height:180px;border-radius:10px;overflow:hidden;flex-shrink:0;"></div>
             <button class="btn btn-primary" onclick="addChargerToCurrentSite()">+ Add charger</button>
           </div>
           <div class="section-title">Structure</div>
@@ -279,6 +281,10 @@ tr.rowlink:hover td{background:var(--blue-light);}
           <div class="form-row">
             <label>City</label>
             <input type="text" id="new-site-city" placeholder="e.g. Cape Town">
+          </div>
+          <div class="form-row">
+            <label>Address (optional — used to show the site on a map)</label>
+            <input type="text" id="new-site-address" placeholder="e.g. 12 Main Rd, Cape Town, 8001">
           </div>
           <div class="form-row">
             <label>Capacity (kVA)</label>
@@ -319,7 +325,7 @@ tr.rowlink:hover td{background:var(--blue-light);}
         </div>
 
         <div id="charger-detail-view" style="display:none;">
-          <div class="back-link" onclick="backToChargers()">← Back to all chargers</div>
+          <div class="back-link" id="cd-back-link" onclick="backToChargers()">← Back to all chargers</div>
           <div class="two-col">
             <div>
               <h2 id="cd-name"></h2>
@@ -343,6 +349,8 @@ tr.rowlink:hover td{background:var(--blue-light);}
               </div>
             </div>
             <div>
+              <div class="section-title">Location</div>
+              <div id="cd-map" style="width:100%;height:150px;border-radius:10px;overflow:hidden;margin-bottom:16px;"></div>
               <div class="section-title">Actions</div>
               <div class="card card-pad" style="display:flex;flex-direction:column;gap:8px;">
                 <button class="btn btn-primary btn-block" id="cd-remote-btn" onclick="toggleRemote()"></button>
@@ -556,6 +564,8 @@ tr.rowlink:hover td{background:var(--blue-light);}
 <script>
 const SUPABASE_URL = 'https://ozlnxhtguaoeuhjeejxq.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_91dDeI3PSGTwwz2wkFlqMg_Mct2dvKX';
+// TODO: replace with the final, domain-restricted Google Maps API key.
+const GOOGLE_MAPS_API_KEY = 'AIzaSyCwYc0gYAxn29lpnte38It_HkozV24VXD0';
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 async function handleSignIn(){
@@ -597,7 +607,7 @@ let rfidCards = [];
 let users = [];
 let tariffs = [];
 
-function mapLocation(l){ return {id:l.id, name:l.name, type:l.type, parentId:l.parent_id, city:l.city, capacityKVA:l.capacity_kva, currency:l.currency}; }
+function mapLocation(l){ return {id:l.id, name:l.name, type:l.type, parentId:l.parent_id, city:l.city, address:l.address, capacityKVA:l.capacity_kva, currency:l.currency}; }
 function mapCharger(c){ return {id:c.id, locationId:c.location_id, name:c.name, ocppId:c.ocpp_id, vendor:c.vendor, connector:c.connector, powerKW:c.power_kw, ocpp:c.ocpp_version, status:c.status, currentKW:c.current_kw}; }
 function mapSession(s){ return {id:s.id, chargerId:s.charger_id, userId:s.user_id, rfidCardId:s.rfid_card_id, kwh:s.kwh, cost:s.cost, currency:s.currency, startedAt:s.started_at, endedAt:s.ended_at, paymentStatus:s.payment_status, payment:s.payment_method}; }
 function mapRfid(r){ return {id:r.id, uid:r.uid, userId:r.user_id, complexId:r.location_id, status:r.status}; }
@@ -772,8 +782,31 @@ function openSite(id, opts){
   const loc = locations.find(l=>l.id===id);
   document.getElementById('site-detail-name').textContent = loc.name;
   document.getElementById('site-detail-meta').textContent = `${loc.type} · ${loc.city||''} ${loc.capacityKVA?'· '+loc.capacityKVA+' kVA capacity':''} · ${loc.currency}`;
+  renderSiteAddressAndMap(loc);
   document.getElementById('site-tree').innerHTML = renderTreeNode(id, 0);
   if(!opts.skipNav) navigate(ROUTES.siteDetail(id));
+}
+function renderSiteAddressAndMap(loc){
+  const addrEl = document.getElementById('site-detail-address');
+  const mapEl = document.getElementById('site-detail-map');
+  addrEl.innerHTML = loc.address
+    ? `${loc.address} <a href="#" onclick="promptSiteAddress('${loc.id}');return false;">(edit)</a>`
+    : `<a href="#" onclick="promptSiteAddress('${loc.id}');return false;">+ Add address</a>`;
+  if(loc.address && GOOGLE_MAPS_API_KEY){
+    mapEl.innerHTML = `<iframe width="100%" height="100%" style="border:0;" loading="lazy"
+      src="https://www.google.com/maps/embed/v1/place?key=${GOOGLE_MAPS_API_KEY}&q=${encodeURIComponent(loc.address)}"></iframe>`;
+  } else {
+    mapEl.innerHTML = '';
+  }
+}
+async function promptSiteAddress(id){
+  const loc = locations.find(l=>l.id===id);
+  const address = prompt('Site address (used to show the site on a map):', loc.address || '');
+  if(address === null) return; // cancelled
+  const { error } = await sb.from('locations').update({ address: address.trim() || null }).eq('id', id);
+  if(error){ alert(error.message); return; }
+  await loadAll();
+  openSite(id, {skipNav:true});
 }
 function addChargerToCurrentSite(){
   addChargerPresetLocation = currentSiteId;
@@ -788,7 +821,7 @@ function renderTreeNode(id, depth){
     <div class="tree-sub">${own.length} charger${own.length!==1?'s':''}</div>
   </div>`;
   own.forEach(c=>{
-    html += `<div class="tree-node rowlink" style="margin-left:${(depth+1)*18}px;" onclick="showPage('chargers');openCharger('${c.id}')">
+    html += `<div class="tree-node rowlink" style="margin-left:${(depth+1)*18}px;" onclick="openChargerFromSite('${c.id}')">
       <div class="left"><span class="ic" style="width:14px;">⚡</span><span class="tree-label">${c.name}</span></div>
       ${statusBadge(c.status)}
     </div>`;
@@ -826,16 +859,47 @@ function renderChargers(){
 }
 
 let currentChargerId = null;
+let chargerDetailOrigin = { type: 'chargers' };
 function openCharger(id, opts){
   opts = opts || {};
   currentChargerId = id;
+  chargerDetailOrigin = { type: 'chargers' };
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('page-chargers').classList.add('active');
+  document.querySelectorAll('.navitem').forEach(n=>n.classList.remove('active'));
+  document.querySelector(`.navitem[data-page="chargers"]`).classList.add('active');
+  document.getElementById('topbar-title').textContent = 'Chargers';
   document.getElementById('chargers-list-view').style.display='none';
   document.getElementById('charger-detail-view').style.display='block';
   renderChargerDetail();
   if(!opts.skipNav) navigate(ROUTES.chargerDetail(id));
 }
+// Opened by clicking a charger inside a site's Structure tree — keeps the
+// "Sites" nav item highlighted and returns to that site, not the charger list.
+function openChargerFromSite(id){
+  currentChargerId = id;
+  chargerDetailOrigin = { type: 'site', id: currentSiteId };
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('page-chargers').classList.add('active');
+  document.querySelectorAll('.navitem').forEach(n=>n.classList.remove('active'));
+  document.querySelector(`.navitem[data-page="sites"]`).classList.add('active');
+  document.getElementById('topbar-title').textContent = 'Sites';
+  document.getElementById('chargers-list-view').style.display='none';
+  document.getElementById('charger-detail-view').style.display='block';
+  renderChargerDetail();
+  navigate(ROUTES.chargerDetail(id));
+}
 function renderChargerDetail(){
   const c = chargers.find(x=>x.id===currentChargerId);
+  const backLink = document.getElementById('cd-back-link');
+  if(chargerDetailOrigin.type === 'site'){
+    const site = locations.find(l=>l.id===chargerDetailOrigin.id);
+    backLink.textContent = `← Back to ${site ? site.name : 'site'}`;
+    backLink.onclick = () => { document.getElementById('charger-detail-view').style.display='none'; openSite(chargerDetailOrigin.id); };
+  } else {
+    backLink.textContent = '← Back to all chargers';
+    backLink.onclick = backToChargers;
+  }
   document.getElementById('cd-name').textContent = c.name;
   document.getElementById('cd-path').textContent = pathOf(c.locationId);
   document.getElementById('cd-status').innerHTML = statusBadge(c.status);
@@ -844,6 +908,14 @@ function renderChargerDetail(){
   document.getElementById('cd-connector').textContent = c.connector;
   document.getElementById('cd-power').textContent = c.powerKW + ' kW';
   document.getElementById('cd-ws').textContent = `wss://ocpp.plugndrive.co.za/${c.ocppId}`;
+  const root = rootOf(c.locationId);
+  const mapEl = document.getElementById('cd-map');
+  if(root && root.address && GOOGLE_MAPS_API_KEY){
+    mapEl.innerHTML = `<iframe width="100%" height="100%" style="border:0;" loading="lazy"
+      src="https://www.google.com/maps/embed/v1/place?key=${GOOGLE_MAPS_API_KEY}&q=${encodeURIComponent(root.address)}"></iframe>`;
+  } else {
+    mapEl.innerHTML = `<div class="card card-pad" style="font-size:12px;color:var(--text-muted);height:100%;display:flex;align-items:center;">No address set for this site yet.</div>`;
+  }
   const btn = document.getElementById('cd-remote-btn');
   btn.disabled = false;
   if(c.status==='Charging'){ btn.textContent='Remote stop charging'; btn.className='btn btn-danger btn-block'; }
@@ -911,6 +983,7 @@ function renderAddSite(){
     locations.map(l=>`<option value="${l.id}">${pathOf(l.id)}</option>`).join('');
   document.getElementById('new-site-name').value = '';
   document.getElementById('new-site-city').value = '';
+  document.getElementById('new-site-address').value = '';
   document.getElementById('new-site-capacity').value = '';
   document.getElementById('new-site-error').textContent = '';
 }
@@ -921,12 +994,13 @@ async function submitNewSite(){
   const type = document.getElementById('new-site-type').value;
   const parentId = document.getElementById('new-site-parent').value || null;
   const city = document.getElementById('new-site-city').value.trim() || null;
+  const address = document.getElementById('new-site-address').value.trim() || null;
   const capacityRaw = document.getElementById('new-site-capacity').value;
   const capacity = capacityRaw ? Number(capacityRaw) : null;
   const currency = document.getElementById('new-site-currency').value;
 
   const { error } = await sb.from('locations').insert({
-    name, type, parent_id: parentId, city, capacity_kva: capacity, currency
+    name, type, parent_id: parentId, city, address, capacity_kva: capacity, currency
   });
   if(error){ errEl.textContent = error.message; return; }
 
