@@ -1693,10 +1693,16 @@ async function createClientAdminLogin(clientId){
   }
   renderClientAdminLoginPanel(clientId);
 }
+async function extractInvokeError(error){
+  if(error?.context){
+    try { return (await error.context.json()).error; } catch { /* not JSON */ }
+  }
+  return error?.message;
+}
 async function deleteClientAdminLogin(staffId, clientId){
   const { data, error } = await sb.functions.invoke('manage-operators', { body: { action: 'delete', staffId } });
   if(error || data?.error){
-    alert(data?.error || error?.message || 'Failed to remove login.');
+    alert(data?.error || await extractInvokeError(error) || 'Failed to remove login.');
     return;
   }
   renderClientAdminLoginPanel(clientId);
@@ -1802,7 +1808,7 @@ async function submitAddOperator(){
 async function deleteOperator(staffId){
   const { data, error } = await sb.functions.invoke('manage-operators', { body: { action: 'delete', staffId } });
   if(error || data?.error){
-    alert(data?.error || error?.message || 'Failed to remove operator.');
+    alert(data?.error || await extractInvokeError(error) || 'Failed to remove operator.');
     return;
   }
   renderMyOperators();
