@@ -203,6 +203,10 @@ tr.rowlink:hover td{background:var(--blue-light);}
     <a class="navitem" data-page="rfid" onclick="showPage('rfid')"><span class="ic">▭</span>RFID cards</a>
     <a class="navitem" data-page="load" onclick="showPage('load')"><span class="ic">◔</span>Load management</a>
     <a class="navitem" data-page="tariffs" onclick="showPage('tariffs')"><span class="ic">$</span>Tariffs</a>
+    <div style="margin-top:auto;padding-top:14px;border-top:1px solid rgba(255,255,255,.12);">
+      <div id="sidebar-identity" style="font-size:12px;color:rgba(255,255,255,.7);margin-bottom:8px;"></div>
+      <a href="#" onclick="handleSignOut();return false;" style="font-size:13px;color:#fff;display:flex;align-items:center;gap:6px;"><span class="ic">⏻</span>Sign out</a>
+    </div>
   </div>
 
   <div class="main">
@@ -210,7 +214,6 @@ tr.rowlink:hover td{background:var(--blue-light);}
       <div class="topbar-title" id="topbar-title">Dashboard</div>
       <div class="topbar-right">
         <div style="font-size:12px;color:var(--text-muted);">Amounts shown per site currency</div>
-        <a href="#" onclick="handleSignOut();return false;" style="font-size:12px;color:var(--text-muted);">Sign out</a>
         <div class="avatar">RB</div>
       </div>
     </div>
@@ -891,7 +894,18 @@ async function enterApp(){
   applyRoleBasedNav();
   document.getElementById('app-root').style.display = '';
   await loadAll();
+  updateSidebarIdentity();
   routeFromLocation();
+}
+function updateSidebarIdentity(){
+  const el = document.getElementById('sidebar-identity');
+  if(!el) return;
+  if(currentStaff && currentStaff.role === 'client_admin'){
+    const cl = clients.find(c=>c.id===currentStaff.client_id);
+    el.textContent = cl ? cl.name : 'Client account';
+  } else {
+    el.textContent = 'Plug n Drive Admin';
+  }
 }
 function applyRoleBasedNav(){
   const isClientAdmin = currentStaff && currentStaff.role === 'client_admin';
@@ -1816,7 +1830,9 @@ async function submitAssignCard(){
   let { data: existingUser } = await sb.from('users').select('*').eq('phone', phone).maybeSingle();
   let userId = existingUser?.id;
   if(!userId){
-    const { data: newUser, error: userErr } = await sb.from('users').insert({ name, phone, location_id: siteId, role: 'resident' }).select().single();
+    const site = locations.find(l=>l.id===siteId);
+    const clientId = site ? (site.clientId || (rootOf(siteId)||{}).clientId || null) : null;
+    const { data: newUser, error: userErr } = await sb.from('users').insert({ name, phone, location_id: siteId, role: 'resident', client_id: clientId }).select().single();
     if(userErr){ errEl.textContent = userErr.message; return; }
     userId = newUser.id;
   }
