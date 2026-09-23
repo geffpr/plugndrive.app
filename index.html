@@ -225,6 +225,7 @@ tr.rowlink:hover td{background:var(--blue-light);}
     <a class="navitem" data-page="rfid" onclick="showPage('rfid')"><span class="ic">▭</span>RFID cards</a>
     <a class="navitem" data-page="load" onclick="showPage('load')"><span class="ic">◔</span>Load management</a>
     <a class="navitem" data-page="tariffs" onclick="showPage('tariffs')"><span class="ic">$</span>Tariffs</a>
+    <a class="navitem" data-page="walletactivity" onclick="showPage('walletactivity')"><span class="ic">◐</span>Wallet activity</a>
     <div style="margin-top:auto;padding-top:14px;border-top:1px solid rgba(255,255,255,.12);">
       <div id="sidebar-identity" style="font-size:12px;color:rgba(255,255,255,.7);margin-bottom:8px;"></div>
       <a href="#" onclick="handleSignOut();return false;" style="font-size:13px;color:#fff;display:flex;align-items:center;gap:6px;"><span class="ic">⏻</span>Sign out</a>
@@ -438,6 +439,23 @@ tr.rowlink:hover td{background:var(--blue-light);}
           </div>
           <button class="btn btn-primary btn-block" onclick="saveSiteSettings()">Save settings</button>
           <div id="site-settings-error" style="color:var(--red, #c0392b);font-size:12px;margin-top:8px;"></div>
+        </div>
+      </div>
+
+      <!-- WALLET ACTIVITY -->
+      <div class="page" id="page-walletactivity">
+        <div class="filters" id="wa-filters">
+          <select id="wa-client-filter" style="display:none;" onchange="renderWalletActivity()"></select>
+        </div>
+        <div class="kpi-grid" style="grid-template-columns:repeat(2,1fr);">
+          <div class="kpi"><div class="kpi-label">Total credited</div><div class="kpi-value" id="wa-total-credit">-</div></div>
+          <div class="kpi"><div class="kpi-label">Total debited</div><div class="kpi-value" id="wa-total-debit">-</div></div>
+        </div>
+        <div class="card">
+          <table>
+            <thead><tr id="wa-thead"><th>Date</th><th>Cardholder</th><th>Site</th><th>Client</th><th>Type</th><th>Amount</th><th>Operator</th></tr></thead>
+            <tbody id="wa-body"></tbody>
+          </table>
         </div>
       </div>
 
@@ -1173,7 +1191,7 @@ function showPage(id, opts){
   const parentNav = { addsite:'sites', addcharger:'chargers', addclient:'clients' };
   const navEl = document.querySelector(`.navitem[data-page="${parentNav[id] || id}"]`);
   if(navEl) navEl.classList.add('active');
-  const titles={dashboard:'Dashboard',sites:'Sites',addsite:'Add site',chargers:'Chargers',addcharger:'Add charger',sessions:'Sessions',rfid:'RFID cards',load:'Load management',tariffs:'Tariffs',clients:'Clients',addclient:'Add client',myoperators:'My operators'};
+  const titles={dashboard:'Dashboard',sites:'Sites',addsite:'Add site',chargers:'Chargers',addcharger:'Add charger',sessions:'Sessions',rfid:'RFID cards',load:'Load management',tariffs:'Tariffs',clients:'Clients',addclient:'Add client',myoperators:'My operators',walletactivity:'Wallet activity'};
   document.getElementById('topbar-title').textContent = titles[id];
   if(!opts.skipNav) navigate(ROUTES[id] ? ROUTES[id]() : '/'+id);
   if(id==='sites') renderSites();
@@ -1188,6 +1206,7 @@ function showPage(id, opts){
   if(id==='clients') renderClients();
   if(id==='addclient') renderAddClient();
   if(id==='myoperators') renderMyOperators();
+  if(id==='walletactivity') renderWalletActivity();
 }
 
 // Reads the current URL and shows the matching page/detail view.
@@ -1195,7 +1214,7 @@ function showPage(id, opts){
 function routeFromLocation(){
   const parts = location.pathname.split('/').filter(Boolean); // e.g. ['sites','<id>']
   const page = parts[0] || 'dashboard';
-  const knownPages = ['dashboard','sites','addsite','chargers','addcharger','sessions','rfid','load','tariffs','clients','addclient','myoperators'];
+  const knownPages = ['dashboard','sites','addsite','chargers','addcharger','sessions','rfid','load','tariffs','clients','addclient','myoperators','walletactivity'];
   if(!knownPages.includes(page)){ showPage('dashboard'); return; }
 
   showPage(page, {skipNav:true});
@@ -1764,6 +1783,68 @@ async function submitNewClient(){
 }
 
 // --- My operators (client_admin only) ---
+async function renderWalletActivity(){
+  const isAdmin = currentStaff && currentStaff.role === 'plugndrive_admin';
+  const clientFilter = document.getElementById('wa-client-filter');
+  const theadRow = document.getElementById('wa-thead');
+
+  if(isAdmin){
+    clientFilter.style.display = '';
+    if(!clientFilter.dataset.populated){
+      clientFilter.innerHTML = '<option value="all">All clients</option>' + clients.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+      clientFilter.dataset.populated = '1';
+    }
+    theadRow.innerHTML = '<th>Date</th><th>Cardholder</th><th>Site</th><th>Client</th><th>Type</th><th>Amount</th><th>Operator</th>';
+  } else {
+    clientFilter.style.display = 'none';
+    theadRow.innerHTML = '<th>Date</th><th>Cardholder</th><th>Site</th><th>Type</th><th>Amount</th><th>Operator</th>';
+  }
+
+  const { data, error } = await sb.from('wallet_transactions')
+    .select('*, users(name, client_id, clients(name)), locations(name), staff(name)')
+    .order('created_at', {ascending:false});
+
+  if(error){
+    document.getElementById('wa-body').innerHTML = `<tr><td colspan="7" class="empty">${error.message}</td></tr>`;
+    return;
+  }
+
+  let rows = data || [];
+  if(isAdmin){
+    const cf = clientFilter.value || 'all';
+    if(cf !== 'all') rows = rows.filter(r => r.users?.client_id === cf);
+  }
+
+  const totals = { credit: {}, debit: {} };
+  rows.forEach(r=>{
+    const bucket = r.type === 'credit' ? totals.credit : (r.type === 'debit' || r.type === 'penalty') ? totals.debit : null;
+    if(bucket) bucket[r.currency] = (bucket[r.currency] || 0) + Number(r.amount);
+  });
+  const fmtTotals = (obj) => Object.keys(obj).length
+    ? Object.entries(obj).map(([cur,amt]) => fmtMoney(amt, cur)).join(' + ')
+    : '-';
+  document.getElementById('wa-total-credit').textContent = fmtTotals(totals.credit);
+  document.getElementById('wa-total-debit').textContent = fmtTotals(totals.debit);
+
+  document.getElementById('wa-body').innerHTML = rows.map(r=>{
+    const dateStr = (r.created_at || '').replace('T',' ').slice(0,16);
+    const typeLabel = r.type.charAt(0).toUpperCase() + r.type.slice(1);
+    const sign = r.type === 'credit' ? '+' : '-';
+    const cells = [
+      `<td>${dateStr}</td>`,
+      `<td>${r.users?.name || '-'}</td>`,
+      `<td>${r.locations?.name || '-'}</td>`,
+    ];
+    if(isAdmin) cells.push(`<td>${r.users?.clients?.name || '-'}</td>`);
+    cells.push(
+      `<td>${typeLabel}</td>`,
+      `<td>${sign}${fmtMoney(r.amount, r.currency)}</td>`,
+      `<td>${r.staff?.name || '-'}</td>`,
+    );
+    return `<tr>${cells.join('')}</tr>`;
+  }).join('') || `<tr><td colspan="${isAdmin?7:6}" class="empty">No wallet activity yet.</td></tr>`;
+}
+
 async function renderMyOperators(){
   const { data, error } = await sb.from('staff').select('*').eq('role', 'operator').order('created_at', {ascending:false});
   document.getElementById('add-operator-panel').style.display = 'none';
