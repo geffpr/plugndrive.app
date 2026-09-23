@@ -1629,9 +1629,16 @@ function generateActivationCode(){
   return String(Math.floor(100000 + Math.random()*900000));
 }
 async function sendActivationSms(phone, code){
-  return sb.functions.invoke('send-card-activation-sms', {
+  const result = await sb.functions.invoke('send-card-activation-sms', {
     body: { phone, message: `Your Plug n Drive card activation code is ${code}. Valid for 15 minutes. Activate at app.plugndrive.co.za/activate` }
   });
+  if(result.error && result.error.context){
+    try {
+      const detail = await result.error.context.json();
+      result.error.message = detail.error || result.error.message;
+    } catch { /* response body wasn't JSON — keep the generic message */ }
+  }
+  return result;
 }
 function openAssignCard(){
   const siteSel = document.getElementById('ac-site');
