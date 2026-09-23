@@ -175,11 +175,33 @@ tr.rowlink:hover td{background:var(--blue-light);}
   </div>
 </div>
 
-<div id="operator-placeholder-screen" style="display:none;min-height:100vh;align-items:center;justify-content:center;background:var(--bg,#f7f7f8);">
-  <div class="card card-pad" style="width:320px;text-align:center;">
-    <div style="font-weight:700;font-size:18px;margin-bottom:8px;">⚡ Plug n Drive</div>
-    <div style="color:var(--text-muted);font-size:13px;">The operator card-credit page is coming soon.</div>
-    <button class="btn" style="margin-top:16px;" onclick="handleSignOut()">Sign out</button>
+<div id="operator-placeholder-screen" style="display:none;min-height:100vh;align-items:center;justify-content:center;background:var(--bg,#f7f7f8);padding:20px;">
+  <div class="card card-pad" style="width:360px;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">
+      <div>
+        <div style="font-weight:700;font-size:18px;">⚡ Plug n Drive</div>
+        <div id="op-site-name" style="color:var(--text-muted);font-size:13px;"></div>
+      </div>
+      <a href="#" onclick="handleSignOut();return false;" style="font-size:12px;color:var(--text-muted);" id="op-signout-label">Sign out</a>
+    </div>
+
+    <div id="op-search-step">
+      <div class="form-row"><label id="op-uid-label">Card UID</label><input type="text" id="op-search-uid" autofocus></div>
+      <button class="btn btn-primary btn-block" id="op-search-btn" onclick="operatorSearchCard()">Search</button>
+    </div>
+
+    <div id="op-credit-step" style="display:none;">
+      <div style="background:var(--bg,#f7f7f8);border-radius:10px;padding:12px;margin-bottom:14px;">
+        <div style="font-weight:600;" id="op-card-name"></div>
+        <div style="font-size:12px;color:var(--text-muted);" id="op-card-balance"></div>
+      </div>
+      <div id="op-amount-buttons" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;"></div>
+      <div class="form-row"><label id="op-amount-label">Amount</label><input type="number" id="op-amount-input"></div>
+      <button class="btn btn-primary btn-block" id="op-confirm-btn" onclick="operatorConfirmCredit()">Confirm</button>
+      <button class="btn btn-block" style="margin-top:8px;" id="op-cancel-btn" onclick="operatorResetForm()">Cancel</button>
+    </div>
+
+    <div id="op-message" style="font-size:13px;margin-top:12px;"></div>
   </div>
 </div>
 
@@ -452,6 +474,7 @@ tr.rowlink:hover td{background:var(--blue-light);}
               <tr><td style="color:var(--text-muted);">Email</td><td id="cl-email" style="text-align:right;"></td></tr>
               <tr><td style="color:var(--text-muted);">Address</td><td id="cl-address" style="text-align:right;"></td></tr>
               <tr><td style="color:var(--text-muted);">Revenue share</td><td id="cl-revshare" style="text-align:right;"></td></tr>
+              <tr><td style="color:var(--text-muted);">Client since</td><td id="cl-since" style="text-align:right;"></td></tr>
               <tr><td style="color:var(--text-muted);">Total sites</td><td id="cl-total-sites" style="text-align:right;"></td></tr>
               <tr><td style="color:var(--text-muted);">Total chargers</td><td id="cl-total-chargers" style="text-align:right;"></td></tr>
             </table>
@@ -546,6 +569,7 @@ tr.rowlink:hover td{background:var(--blue-light);}
           <div class="form-row"><label>Name</label><input type="text" id="op-name"></div>
           <div class="form-row"><label>Email (used to sign in)</label><input type="email" id="op-email"></div>
           <div class="form-row"><label>Password</label><input type="text" id="op-password" placeholder="Set an initial password"></div>
+          <div class="form-row"><label>Site (fixes which currency this operator works in)</label><select id="op-site"></select></div>
           <div style="display:flex;gap:8px;">
             <button class="btn btn-primary" onclick="submitAddOperator()">Create operator</button>
             <button class="btn" onclick="closeAddOperator()">Cancel</button>
@@ -554,7 +578,7 @@ tr.rowlink:hover td{background:var(--blue-light);}
         </div>
         <div class="card">
           <table>
-            <thead><tr><th>Name</th><th>Email</th><th>Added</th><th></th></tr></thead>
+            <thead><tr><th>Name</th><th>Email</th><th>Site</th><th>Added</th><th></th></tr></thead>
             <tbody id="operators-body"></tbody>
           </table>
         </div>
@@ -877,6 +901,8 @@ async function handleSignUp(){
 }
 async function handleSignOut(){
   await sb.auth.signOut();
+  clearTimeout(opInactivityTimer);
+  ['click','keydown'].forEach(evt => document.removeEventListener(evt, resetOperatorInactivityTimer));
   currentStaff = null;
   document.getElementById('app-root').style.display = 'none';
   document.getElementById('operator-placeholder-screen').style.display = 'none';
@@ -892,6 +918,7 @@ async function enterApp(){
 
   if(currentStaff && currentStaff.role === 'operator'){
     document.getElementById('operator-placeholder-screen').style.display = 'flex';
+    await initOperatorScreen();
     return;
   }
 
@@ -901,6 +928,102 @@ async function enterApp(){
   updateSidebarIdentity();
   routeFromLocation();
 }
+
+// --- Operator screen (card credit) ---
+const OP_I18N = {
+  en: { site:s=>s, uid:'Card UID', search:'Search', amount:'Amount', confirm:'Confirm', cancel:'Cancel',
+    signout:'Sign out', notFound:'No card found with that UID.', wrongNetwork:'This card is not part of your network.',
+    enterAmount:'Enter an amount greater than zero.', creditFailed:'Failed to credit card: ',
+    success:(amt,cur,bal)=>`Credited ${fmtMoney(amt,cur)}. New balance: ${fmtMoney(bal,cur)}.`,
+    smsFailed:' (SMS confirmation failed to send)', balanceLabel:'Balance: ' },
+  pt: { site:s=>s, uid:'UID do cartão', search:'Pesquisar', amount:'Valor', confirm:'Confirmar', cancel:'Cancelar',
+    signout:'Sair', notFound:'Nenhum cartão encontrado com esse UID.', wrongNetwork:'Este cartão não pertence à sua rede.',
+    enterAmount:'Insira um valor maior que zero.', creditFailed:'Falha ao recarregar o cartão: ',
+    success:(amt,cur,bal)=>`Recarregado ${fmtMoney(amt,cur)}. Novo saldo: ${fmtMoney(bal,cur)}.`,
+    smsFailed:' (falha ao enviar SMS de confirmação)', balanceLabel:'Saldo: ' },
+};
+const OP_QUICK_AMOUNTS = {
+  ZAR: [50,100,200,500], MZN: [100,300,500,1000], NAD: [50,100,200,500],
+  BWP: [25,50,100,250], USD: [5,10,20,50], EUR: [5,10,20,50],
+};
+let opSite = null, opLang = 'en', opFoundCard = null, opInactivityTimer = null;
+
+async function initOperatorScreen(){
+  const { data: site } = await sb.from('locations').select('*').eq('id', currentStaff.location_id).maybeSingle();
+  opSite = site;
+  opLang = (site && site.currency === 'MZN') ? 'pt' : 'en';
+  const t = OP_I18N[opLang];
+
+  document.getElementById('op-site-name').textContent = site ? `${site.name} (${site.currency})` : 'No site assigned';
+  document.getElementById('op-signout-label').textContent = t.signout;
+  document.getElementById('op-uid-label').textContent = t.uid;
+  document.getElementById('op-search-btn').textContent = t.search;
+  document.getElementById('op-amount-label').textContent = t.amount;
+  document.getElementById('op-confirm-btn').textContent = t.confirm;
+  document.getElementById('op-cancel-btn').textContent = t.cancel;
+  operatorResetForm();
+  resetOperatorInactivityTimer();
+  ['click','keydown'].forEach(evt => document.addEventListener(evt, resetOperatorInactivityTimer));
+}
+function resetOperatorInactivityTimer(){
+  if(!currentStaff || currentStaff.role !== 'operator') return;
+  clearTimeout(opInactivityTimer);
+  opInactivityTimer = setTimeout(() => { handleSignOut(); }, 15*60*1000); // 15 minutes
+}
+async function operatorSearchCard(){
+  const t = OP_I18N[opLang];
+  const uid = document.getElementById('op-search-uid').value.trim();
+  const msgEl = document.getElementById('op-message');
+  msgEl.style.color = 'var(--text-muted)'; msgEl.textContent = '';
+  if(!uid) return;
+
+  const { data: card } = await sb.from('rfid_cards').select('*').eq('uid', uid).maybeSingle();
+  if(!card){ msgEl.style.color = 'var(--red,#c0392b)'; msgEl.textContent = t.notFound; return; }
+  const { data: cardUser } = await sb.from('users').select('*').eq('id', card.user_id).maybeSingle();
+  if(!cardUser || cardUser.client_id !== currentStaff.client_id){
+    msgEl.style.color = 'var(--red,#c0392b)'; msgEl.textContent = t.wrongNetwork; return;
+  }
+
+  opFoundCard = { uid: card.uid, user: cardUser };
+  document.getElementById('op-card-name').textContent = cardUser.name;
+  document.getElementById('op-card-balance').textContent = t.balanceLabel + fmtMoney(cardUser.balance || 0, opSite.currency);
+  const amounts = OP_QUICK_AMOUNTS[opSite.currency] || [50,100,200,500];
+  document.getElementById('op-amount-buttons').innerHTML = amounts.map(a =>
+    `<button class="btn" onclick="document.getElementById('op-amount-input').value=${a}">${fmtMoney(a, opSite.currency)}</button>`
+  ).join('');
+  document.getElementById('op-amount-input').value = '';
+  document.getElementById('op-search-step').style.display = 'none';
+  document.getElementById('op-credit-step').style.display = 'block';
+}
+async function operatorConfirmCredit(){
+  const t = OP_I18N[opLang];
+  const msgEl = document.getElementById('op-message');
+  const amount = Number(document.getElementById('op-amount-input').value);
+  if(!amount || amount <= 0){ msgEl.style.color = 'var(--red,#c0392b)'; msgEl.textContent = t.enterAmount; return; }
+
+  document.getElementById('op-confirm-btn').disabled = true;
+  const { data, error } = await sb.functions.invoke('credit-card', { body: { uid: opFoundCard.uid, amount } });
+  document.getElementById('op-confirm-btn').disabled = false;
+
+  if(error || data?.error){
+    let msg = data?.error;
+    if(!msg && error?.context){ try { msg = (await error.context.json()).error; } catch {} }
+    msgEl.style.color = 'var(--red,#c0392b)';
+    msgEl.textContent = t.creditFailed + (msg || error?.message || '?');
+    return;
+  }
+  msgEl.style.color = 'var(--green,#1a7f37)';
+  msgEl.textContent = t.success(amount, data.currency, data.new_balance) + (data.smsError ? t.smsFailed : '');
+  setTimeout(operatorResetForm, 2500);
+}
+function operatorResetForm(){
+  opFoundCard = null;
+  document.getElementById('op-search-uid').value = '';
+  document.getElementById('op-search-step').style.display = 'block';
+  document.getElementById('op-credit-step').style.display = 'none';
+  document.getElementById('op-message').textContent = '';
+}
+
 function updateSidebarIdentity(){
   const el = document.getElementById('sidebar-identity');
   if(!el) return;
@@ -1475,6 +1598,7 @@ function openClient(id, opts){
   const transitionInfo = (cl.contractStart && cl.transitionMonths)
     ? ` (transitions ${cl.transitionMonths}mo after ${cl.contractStart})` : '';
   document.getElementById('cl-revshare').textContent = `${cl.revShareInitial}% → ${cl.revShareAfter}%${transitionInfo}`;
+  document.getElementById('cl-since').textContent = cl.contractStart || '-';
   renderClientAdminLoginPanel(id);
 
   const sites = locations.filter(l=>l.clientId===id);
@@ -1638,18 +1762,20 @@ async function renderMyOperators(){
   const { data, error } = await sb.from('staff').select('*').eq('role', 'operator').order('created_at', {ascending:false});
   document.getElementById('add-operator-panel').style.display = 'none';
   if(error){
-    document.getElementById('operators-body').innerHTML = `<tr><td colspan="4" class="empty">${error.message}</td></tr>`;
+    document.getElementById('operators-body').innerHTML = `<tr><td colspan="5" class="empty">${error.message}</td></tr>`;
     return;
   }
-  document.getElementById('operators-body').innerHTML = (data||[]).map(o=>`
-    <tr><td>${o.name}</td><td>${o.email||'-'}</td><td>${(o.created_at||'').slice(0,10)}</td>
-      <td><button class="btn btn-sm" onclick="deleteOperator('${o.id}')">Remove</button></td></tr>
-  `).join('') || '<tr><td colspan="4" class="empty">No operators yet.</td></tr>';
+  document.getElementById('operators-body').innerHTML = (data||[]).map(o=>{
+    const site = locations.find(l=>l.id===o.location_id);
+    return `<tr><td>${o.name}</td><td>${o.email||'-'}</td><td>${site?site.name:'-'}</td><td>${(o.created_at||'').slice(0,10)}</td>
+      <td><button class="btn btn-sm" onclick="deleteOperator('${o.id}')">Remove</button></td></tr>`;
+  }).join('') || '<tr><td colspan="5" class="empty">No operators yet.</td></tr>';
 }
 function openAddOperator(){
   document.getElementById('op-name').value = '';
   document.getElementById('op-email').value = '';
   document.getElementById('op-password').value = '';
+  document.getElementById('op-site').innerHTML = locations.filter(l=>!l.parentId).map(l=>`<option value="${l.id}">${l.name} (${l.currency})</option>`).join('');
   document.getElementById('add-operator-error').textContent = '';
   document.getElementById('add-operator-panel').style.display = 'block';
 }
@@ -1661,8 +1787,9 @@ async function submitAddOperator(){
   const name = document.getElementById('op-name').value.trim();
   const email = document.getElementById('op-email').value.trim();
   const password = document.getElementById('op-password').value;
-  if(!name || !email || !password){ errEl.textContent = 'Name, email and password are all required.'; return; }
-  const { data, error } = await sb.functions.invoke('manage-operators', { body: { action: 'create', name, email, password } });
+  const locationId = document.getElementById('op-site').value;
+  if(!name || !email || !password || !locationId){ errEl.textContent = 'Name, email, password and site are all required.'; return; }
+  const { data, error } = await sb.functions.invoke('manage-operators', { body: { action: 'create', name, email, password, locationId } });
   if(error || data?.error){
     let msg = data?.error;
     if(!msg && error?.context){ try { msg = (await error.context.json()).error; } catch {} }
