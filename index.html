@@ -877,12 +877,15 @@ async function handleSignUp(){
 }
 async function handleSignOut(){
   await sb.auth.signOut();
+  currentStaff = null;
   document.getElementById('app-root').style.display = 'none';
+  document.getElementById('operator-placeholder-screen').style.display = 'none';
   document.getElementById('auth-screen').style.display = 'flex';
 }
 let currentStaff = null;
 async function enterApp(){
   document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('operator-placeholder-screen').style.display = 'none';
   const { data: { user } } = await sb.auth.getUser();
   const { data: staffRow } = await sb.from('staff').select('*').eq('auth_user_id', user.id).maybeSingle();
   currentStaff = staffRow;
