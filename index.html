@@ -194,6 +194,7 @@ tr.rowlink:hover td{background:var(--blue-light);}
       </div>
     </div>
     <a class="navitem active" data-page="dashboard" onclick="showPage('dashboard')"><span class="ic">▦</span>Dashboard</a>
+    <div class="nav-section-label" id="admin-section-label" style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:rgba(255,255,255,.45);padding:14px 10px 4px;">Admin</div>
     <a class="navitem" data-page="clients" onclick="showPage('clients')"><span class="ic">▣</span>Clients</a>
     <a class="navitem" data-page="myoperators" id="myoperators-nav" onclick="showPage('myoperators')" style="display:none;"><span class="ic">◉</span>My operators</a>
     <a class="navitem" data-page="sites" onclick="showPage('sites')"><span class="ic">◫</span>Sites</a>
@@ -452,6 +453,8 @@ tr.rowlink:hover td{background:var(--blue-light);}
               <tr><td style="color:var(--text-muted);">Total chargers</td><td id="cl-total-chargers" style="text-align:right;"></td></tr>
             </table>
           </div>
+          <div class="section-title">Admin login</div>
+          <div id="client-admin-login-panel" class="card card-pad" style="max-width:420px;margin-bottom:20px;"></div>
           <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">
             <span>Sites</span>
             <button class="btn btn-sm" onclick="openAssignSitesPanel()">+ Assign sites</button>
@@ -894,6 +897,8 @@ function applyRoleBasedNav(){
   const isClientAdmin = currentStaff && currentStaff.role === 'client_admin';
   const clientsNav = document.querySelector('.navitem[data-page="clients"]');
   if(clientsNav) clientsNav.style.display = isClientAdmin ? 'none' : '';
+  const adminLabel = document.getElementById('admin-section-label');
+  if(adminLabel) adminLabel.style.display = isClientAdmin ? 'none' : '';
   const opsNav = document.getElementById('myoperators-nav');
   if(opsNav) opsNav.style.display = isClientAdmin ? '' : 'none';
   const addSiteBtn = document.querySelector('#sites-list-view button.btn-primary');
@@ -1452,6 +1457,7 @@ function openClient(id, opts){
   const transitionInfo = (cl.contractStart && cl.transitionMonths)
     ? ` (transitions ${cl.transitionMonths}mo after ${cl.contractStart})` : '';
   document.getElementById('cl-revshare').textContent = `${cl.revShareInitial}% → ${cl.revShareAfter}%${transitionInfo}`;
+  renderClientAdminLoginPanel(id);
 
   const sites = locations.filter(l=>l.clientId===id);
   const totalChargers = sites.reduce((sum, s) => sum + chargers.filter(c=>{ const root=rootOf(c.locationId); return root && root.id===s.id; }).length, 0);
@@ -1509,6 +1515,49 @@ async function assignSelectedSites(){
   await loadAll();
   closeAssignSitesPanel();
   openClient(currentClientId, {skipNav:true});
+}
+async function renderClientAdminLoginPanel(clientId){
+  const panel = document.getElementById('client-admin-login-panel');
+  panel.innerHTML = 'Loading…';
+  const { data, error } = await sb.from('staff').select('*').eq('client_id', clientId).eq('role', 'client_admin').maybeSingle();
+  if(error){ panel.innerHTML = `<div style="color:var(--red,#c0392b);font-size:12px;">${error.message}</div>`; return; }
+  if(data){
+    panel.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div><div style="font-weight:600;">${data.name}</div><div style="font-size:12px;color:var(--text-muted);">${data.email}</div></div>
+        <button class="btn btn-sm" onclick="deleteClientAdminLogin('${data.id}','${clientId}')">Remove</button>
+      </div>`;
+    return;
+  }
+  panel.innerHTML = `
+    <div class="form-row"><label>Name</label><input type="text" id="ca-name"></div>
+    <div class="form-row"><label>Email (used to sign in)</label><input type="email" id="ca-email"></div>
+    <div class="form-row"><label>Password</label><input type="text" id="ca-password" placeholder="Set an initial password"></div>
+    <button class="btn btn-primary" onclick="createClientAdminLogin('${clientId}')">Create admin login</button>
+    <div id="ca-error" style="color:var(--red, #c0392b);font-size:12px;margin-top:8px;"></div>`;
+}
+async function createClientAdminLogin(clientId){
+  const name = document.getElementById('ca-name').value.trim();
+  const email = document.getElementById('ca-email').value.trim();
+  const password = document.getElementById('ca-password').value;
+  const errEl = document.getElementById('ca-error');
+  if(!name || !email || !password){ errEl.textContent = 'Name, email and password are all required.'; return; }
+  const { data, error } = await sb.functions.invoke('manage-operators', { body: { action: 'create', clientId, name, email, password } });
+  if(error || data?.error){
+    let msg = data?.error;
+    if(!msg && error?.context){ try { msg = (await error.context.json()).error; } catch {} }
+    errEl.textContent = msg || error?.message || 'Failed to create login.';
+    return;
+  }
+  renderClientAdminLoginPanel(clientId);
+}
+async function deleteClientAdminLogin(staffId, clientId){
+  const { data, error } = await sb.functions.invoke('manage-operators', { body: { action: 'delete', staffId } });
+  if(error || data?.error){
+    alert(data?.error || error?.message || 'Failed to remove login.');
+    return;
+  }
+  renderClientAdminLoginPanel(clientId);
 }
 function backToClients(){
   document.getElementById('clients-list-view').style.display = 'block';
