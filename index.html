@@ -175,6 +175,14 @@ tr.rowlink:hover td{background:var(--blue-light);}
   </div>
 </div>
 
+<div id="operator-placeholder-screen" style="display:none;min-height:100vh;align-items:center;justify-content:center;background:var(--bg,#f7f7f8);">
+  <div class="card card-pad" style="width:320px;text-align:center;">
+    <div style="font-weight:700;font-size:18px;margin-bottom:8px;">⚡ Plug n Drive</div>
+    <div style="color:var(--text-muted);font-size:13px;">The operator card-credit page is coming soon.</div>
+    <button class="btn" style="margin-top:16px;" onclick="handleSignOut()">Sign out</button>
+  </div>
+</div>
+
 <div class="app" id="app-root" style="display:none;">
 
   <div class="sidebar">
@@ -187,6 +195,7 @@ tr.rowlink:hover td{background:var(--blue-light);}
     </div>
     <a class="navitem active" data-page="dashboard" onclick="showPage('dashboard')"><span class="ic">▦</span>Dashboard</a>
     <a class="navitem" data-page="clients" onclick="showPage('clients')"><span class="ic">▣</span>Clients</a>
+    <a class="navitem" data-page="myoperators" id="myoperators-nav" onclick="showPage('myoperators')" style="display:none;"><span class="ic">◉</span>My operators</a>
     <a class="navitem" data-page="sites" onclick="showPage('sites')"><span class="ic">◫</span>Sites</a>
     <a class="navitem" data-page="chargers" onclick="showPage('chargers')"><span class="ic">⛽</span>Chargers</a>
     <a class="navitem" data-page="sessions" onclick="showPage('sessions')"><span class="ic">◷</span>Sessions</a>
@@ -521,6 +530,30 @@ tr.rowlink:hover td{background:var(--blue-light);}
         </div>
       </div>
 
+      <!-- MY OPERATORS (client_admin only) -->
+      <div class="page" id="page-myoperators">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div class="section-title" style="margin:0;">My operators</div>
+          <button class="btn btn-primary" onclick="openAddOperator()">+ Add operator</button>
+        </div>
+        <div id="add-operator-panel" class="card card-pad" style="display:none;max-width:420px;margin:12px 0;">
+          <div class="form-row"><label>Name</label><input type="text" id="op-name"></div>
+          <div class="form-row"><label>Email (used to sign in)</label><input type="email" id="op-email"></div>
+          <div class="form-row"><label>Password</label><input type="text" id="op-password" placeholder="Set an initial password"></div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-primary" onclick="submitAddOperator()">Create operator</button>
+            <button class="btn" onclick="closeAddOperator()">Cancel</button>
+          </div>
+          <div id="add-operator-error" style="color:var(--red, #c0392b);font-size:12px;margin-top:8px;"></div>
+        </div>
+        <div class="card">
+          <table>
+            <thead><tr><th>Name</th><th>Email</th><th>Added</th><th></th></tr></thead>
+            <tbody id="operators-body"></tbody>
+          </table>
+        </div>
+      </div>
+
       <!-- CHARGERS -->
       <div class="page" id="page-chargers">
         <div id="chargers-list-view">
@@ -841,11 +874,32 @@ async function handleSignOut(){
   document.getElementById('app-root').style.display = 'none';
   document.getElementById('auth-screen').style.display = 'flex';
 }
+let currentStaff = null;
 async function enterApp(){
   document.getElementById('auth-screen').style.display = 'none';
+  const { data: staffRow } = await sb.from('staff').select('*').maybeSingle();
+  currentStaff = staffRow;
+
+  if(currentStaff && currentStaff.role === 'operator'){
+    document.getElementById('operator-placeholder-screen').style.display = 'flex';
+    return;
+  }
+
+  applyRoleBasedNav();
   document.getElementById('app-root').style.display = '';
   await loadAll();
   routeFromLocation();
+}
+function applyRoleBasedNav(){
+  const isClientAdmin = currentStaff && currentStaff.role === 'client_admin';
+  const clientsNav = document.querySelector('.navitem[data-page="clients"]');
+  if(clientsNav) clientsNav.style.display = isClientAdmin ? 'none' : '';
+  const opsNav = document.getElementById('myoperators-nav');
+  if(opsNav) opsNav.style.display = isClientAdmin ? '' : 'none';
+  const addSiteBtn = document.querySelector('#sites-list-view button.btn-primary');
+  if(addSiteBtn) addSiteBtn.style.display = isClientAdmin ? 'none' : '';
+  const addChargerBtn = document.querySelector('#chargers-list-view button.btn-primary');
+  if(addChargerBtn) addChargerBtn.style.display = isClientAdmin ? 'none' : '';
 }
 
 let locations = [];
@@ -959,6 +1013,7 @@ const ROUTES = {
   clients: () => '/clients',
   clientDetail: (id) => `/clients/${id}`,
   addclient: () => '/addclient',
+  myoperators: () => '/myoperators',
 };
 function navigate(path){
   if(location.pathname !== path) history.pushState({}, '', path);
@@ -972,7 +1027,7 @@ function showPage(id, opts){
   const parentNav = { addsite:'sites', addcharger:'chargers', addclient:'clients' };
   const navEl = document.querySelector(`.navitem[data-page="${parentNav[id] || id}"]`);
   if(navEl) navEl.classList.add('active');
-  const titles={dashboard:'Dashboard',sites:'Sites',addsite:'Add site',chargers:'Chargers',addcharger:'Add charger',sessions:'Sessions',rfid:'RFID cards',load:'Load management',tariffs:'Tariffs',clients:'Clients',addclient:'Add client'};
+  const titles={dashboard:'Dashboard',sites:'Sites',addsite:'Add site',chargers:'Chargers',addcharger:'Add charger',sessions:'Sessions',rfid:'RFID cards',load:'Load management',tariffs:'Tariffs',clients:'Clients',addclient:'Add client',myoperators:'My operators'};
   document.getElementById('topbar-title').textContent = titles[id];
   if(!opts.skipNav) navigate(ROUTES[id] ? ROUTES[id]() : '/'+id);
   if(id==='sites') renderSites();
@@ -986,6 +1041,7 @@ function showPage(id, opts){
   if(id==='dashboard') renderDashboard();
   if(id==='clients') renderClients();
   if(id==='addclient') renderAddClient();
+  if(id==='myoperators') renderMyOperators();
 }
 
 // Reads the current URL and shows the matching page/detail view.
@@ -993,7 +1049,7 @@ function showPage(id, opts){
 function routeFromLocation(){
   const parts = location.pathname.split('/').filter(Boolean); // e.g. ['sites','<id>']
   const page = parts[0] || 'dashboard';
-  const knownPages = ['dashboard','sites','addsite','chargers','addcharger','sessions','rfid','load','tariffs','clients','addclient'];
+  const knownPages = ['dashboard','sites','addsite','chargers','addcharger','sessions','rfid','load','tariffs','clients','addclient','myoperators'];
   if(!knownPages.includes(page)){ showPage('dashboard'); return; }
 
   showPage(page, {skipNav:true});
@@ -1508,6 +1564,54 @@ async function submitNewClient(){
   editingClientId = null;
   await loadAll();
   if(wasEditing){ showPage('clients'); openClient(wasEditing); } else { showPage('clients'); }
+}
+
+// --- My operators (client_admin only) ---
+async function renderMyOperators(){
+  const { data, error } = await sb.from('staff').select('*').eq('role', 'operator').order('created_at', {ascending:false});
+  document.getElementById('add-operator-panel').style.display = 'none';
+  if(error){
+    document.getElementById('operators-body').innerHTML = `<tr><td colspan="4" class="empty">${error.message}</td></tr>`;
+    return;
+  }
+  document.getElementById('operators-body').innerHTML = (data||[]).map(o=>`
+    <tr><td>${o.name}</td><td>${o.email||'-'}</td><td>${(o.created_at||'').slice(0,10)}</td>
+      <td><button class="btn btn-sm" onclick="deleteOperator('${o.id}')">Remove</button></td></tr>
+  `).join('') || '<tr><td colspan="4" class="empty">No operators yet.</td></tr>';
+}
+function openAddOperator(){
+  document.getElementById('op-name').value = '';
+  document.getElementById('op-email').value = '';
+  document.getElementById('op-password').value = '';
+  document.getElementById('add-operator-error').textContent = '';
+  document.getElementById('add-operator-panel').style.display = 'block';
+}
+function closeAddOperator(){
+  document.getElementById('add-operator-panel').style.display = 'none';
+}
+async function submitAddOperator(){
+  const errEl = document.getElementById('add-operator-error');
+  const name = document.getElementById('op-name').value.trim();
+  const email = document.getElementById('op-email').value.trim();
+  const password = document.getElementById('op-password').value;
+  if(!name || !email || !password){ errEl.textContent = 'Name, email and password are all required.'; return; }
+  const { data, error } = await sb.functions.invoke('manage-operators', { body: { action: 'create', name, email, password } });
+  if(error || data?.error){
+    let msg = data?.error;
+    if(!msg && error?.context){ try { msg = (await error.context.json()).error; } catch {} }
+    errEl.textContent = msg || error?.message || 'Failed to create operator.';
+    return;
+  }
+  closeAddOperator();
+  renderMyOperators();
+}
+async function deleteOperator(staffId){
+  const { data, error } = await sb.functions.invoke('manage-operators', { body: { action: 'delete', staffId } });
+  if(error || data?.error){
+    alert(data?.error || error?.message || 'Failed to remove operator.');
+    return;
+  }
+  renderMyOperators();
 }
 
 let addChargerPresetLocation = null;
