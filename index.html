@@ -883,7 +883,8 @@ async function handleSignOut(){
 let currentStaff = null;
 async function enterApp(){
   document.getElementById('auth-screen').style.display = 'none';
-  const { data: staffRow } = await sb.from('staff').select('*').maybeSingle();
+  const { data: { user } } = await sb.auth.getUser();
+  const { data: staffRow } = await sb.from('staff').select('*').eq('auth_user_id', user.id).maybeSingle();
   currentStaff = staffRow;
 
   if(currentStaff && currentStaff.role === 'operator'){
