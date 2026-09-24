@@ -621,7 +621,7 @@ tr.rowlink:hover td{background:var(--blue-light);}
           </div>
           <div class="card">
             <table>
-              <thead><tr><th>Charger</th><th>Location</th><th>Status</th><th>Power</th><th>Current user</th></tr></thead>
+              <thead><tr><th>Charger</th><th>Location</th><th>Status</th><th>Live</th><th>Power</th><th>Current user</th></tr></thead>
               <tbody id="chargers-body"></tbody>
             </table>
           </div>
@@ -636,6 +636,9 @@ tr.rowlink:hover td{background:var(--blue-light);}
               <div class="card card-pad">
                 <table>
                   <tr><td style="color:var(--text-muted);">Status</td><td id="cd-status" style="text-align:right;"></td></tr>
+                  <tr><td style="color:var(--text-muted);">Live</td><td id="cd-live" style="text-align:right;"></td></tr>
+                  <tr><td style="color:var(--text-muted);">Raw OCPP status</td><td id="cd-ocpp-status" style="text-align:right;font-family:monospace;font-size:12px;"></td></tr>
+                  <tr><td style="color:var(--text-muted);">Last seen</td><td id="cd-last-seen" style="text-align:right;"></td></tr>
                   <tr><td style="color:var(--text-muted);">OCPP version</td><td id="cd-ocpp" style="text-align:right;"></td></tr>
                   <tr><td style="color:var(--text-muted);">Vendor / model</td><td id="cd-model" style="text-align:right;"></td></tr>
                   <tr><td style="color:var(--text-muted);">Connector</td><td id="cd-connector" style="text-align:right;"></td></tr>
@@ -928,6 +931,7 @@ async function handleSignUp(){
 async function handleSignOut(){
   await sb.auth.signOut();
   clearTimeout(opInactivityTimer);
+  stopChargerLivePolling();
   ['click','keydown'].forEach(evt => document.removeEventListener(evt, resetOperatorInactivityTimer));
   currentStaff = null;
   document.getElementById('app-root').style.display = 'none';
@@ -1083,7 +1087,7 @@ let tariffs = [];
 let clients = [];
 
 function mapLocation(l){ return {id:l.id, name:l.name, type:l.type, parentId:l.parent_id, city:l.city, address:l.address, capacityKVA:l.capacity_kva, currency:l.currency, clientId:l.client_id, timezone:l.timezone, contactName:l.contact_name, contactPhone:l.contact_phone, contactEmail:l.contact_email, status:l.status}; }
-function mapCharger(c){ return {id:c.id, locationId:c.location_id, name:c.name, ocppId:c.ocpp_id, vendor:c.vendor, connector:c.connector, powerKW:c.power_kw, ocpp:c.ocpp_version, status:c.status, currentKW:c.current_kw, ocppPassword:c.ocpp_password}; }
+function mapCharger(c){ return {id:c.id, locationId:c.location_id, name:c.name, ocppId:c.ocpp_id, vendor:c.vendor, connector:c.connector, powerKW:c.power_kw, ocpp:c.ocpp_version, status:c.status, currentKW:c.current_kw, ocppPassword:c.ocpp_password, lastSeenAt:c.last_seen_at, ocppStatus:c.ocpp_status}; }
 function mapSession(s){ return {id:s.id, chargerId:s.charger_id, userId:s.user_id, rfidCardId:s.rfid_card_id, kwh:s.kwh, cost:s.cost, currency:s.currency, startedAt:s.started_at, endedAt:s.ended_at, paymentStatus:s.payment_status, payment:s.payment_method}; }
 function mapRfid(r){ return {id:r.id, uid:r.uid, userId:r.user_id, complexId:r.location_id, status:r.status}; }
 function mapUser(u){ return {id:u.id, name:u.name, unit:u.unit, locationId:u.location_id, role:u.role, phone:u.phone, email:u.email}; }
@@ -1146,6 +1150,28 @@ function statusBadge(status){
   const map={Available:'avail',Charging:'charging',Faulted:'faulted',Offline:'offline'};
   return `<span class="badge ${map[status]}"><span class="badge-dot"></span>${status}</span>`;
 }
+// A charger is considered "silent" if we haven't heard from it in over
+// 3 minutes (a generous margin over the 120s heartbeat interval).
+const CHARGER_STALE_MS = 3 * 60 * 1000;
+function isChargerFresh(lastSeenAt){
+  if(!lastSeenAt) return false;
+  return (Date.now() - new Date(lastSeenAt).getTime()) < CHARGER_STALE_MS;
+}
+function fmtLastSeen(lastSeenAt){
+  if(!lastSeenAt) return 'Never';
+  const seconds = Math.floor((Date.now() - new Date(lastSeenAt).getTime()) / 1000);
+  if(seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds/60);
+  if(minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes/60);
+  if(hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours/24)}d ago`;
+}
+function livenessDot(lastSeenAt){
+  const fresh = isChargerFresh(lastSeenAt);
+  const color = fresh ? '#1a7f37' : '#c0392b';
+  return `<span title="${fresh?'Seen recently':'Silent for a while'}" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:5px;"></span>`;
+}
 function fmtMoney(n, currency){
   const prefixSymbols = {ZAR:'R ', MZN:'MT ', NAD:'N$ ', BWP:'P ', USD:'$ '};
   const amount = Number(n||0).toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -1193,6 +1219,7 @@ function navigate(path){
 
 function showPage(id, opts){
   opts = opts || {};
+  stopChargerLivePolling();
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('page-'+id).classList.add('active');
   document.querySelectorAll('.navitem').forEach(n=>n.classList.remove('active'));
@@ -1247,11 +1274,14 @@ function routeFromLocation(){
 }
 window.addEventListener('popstate', routeFromLocation);
 
+function chargerNeedsAttention(c){
+  return c.status === 'Faulted' || c.status === 'Offline' || !isChargerFresh(c.lastSeenAt);
+}
 function renderDashboard(){
   document.getElementById('kpi-sites').textContent = locations.filter(l=>!l.parentId).length;
   document.getElementById('kpi-chargers').textContent = chargers.length;
   document.getElementById('kpi-charging').textContent = chargers.filter(c=>c.status==='Charging').length;
-  document.getElementById('kpi-attention').textContent = chargers.filter(c=>c.status==='Faulted'||c.status==='Offline').length;
+  document.getElementById('kpi-attention').textContent = chargers.filter(chargerNeedsAttention).length;
 
   const roots = locations.filter(l=>!l.parentId);
   document.getElementById('dash-sites-body').innerHTML = roots.map(r=>{
@@ -1263,12 +1293,16 @@ function renderDashboard(){
       <td>${used} / ${cap} kW</td></tr>`;
   }).join('');
 
-  const alerts = chargers.filter(c=>c.status==='Faulted'||c.status==='Offline');
-  document.getElementById('dash-alerts').innerHTML = alerts.length ? alerts.map(c=>`
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);">
+  const alerts = chargers.filter(chargerNeedsAttention);
+  document.getElementById('dash-alerts').innerHTML = alerts.length ? alerts.map(c=>{
+    const reason = (c.status==='Faulted'||c.status==='Offline')
+      ? statusBadge(c.status)
+      : `<span style="font-size:12px;color:#c0392b;">${livenessDot(c.lastSeenAt)}Silent — last seen ${fmtLastSeen(c.lastSeenAt)}</span>`;
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);">
       <div><div style="font-weight:500;">${c.name}</div><div class="path">${pathOf(c.locationId)}</div></div>
-      ${statusBadge(c.status)}
-    </div>`).join('') : '<div class="empty">No alerts. All chargers healthy.</div>';
+      ${reason}
+    </div>`;
+  }).join('') : '<div class="empty">No alerts. All chargers healthy.</div>';
 }
 
 function renderSites(){
@@ -1355,7 +1389,9 @@ function renderChargers(){
     const res = residentFor(c.id);
     return `<tr class="rowlink" onclick="openCharger('${c.id}')">
       <td>${c.name}</td><td class="path">${pathOf(c.locationId)}</td>
-      <td>${statusBadge(c.status)}</td><td>${c.powerKW} kW</td>
+      <td>${statusBadge(c.status)}</td>
+      <td>${livenessDot(c.lastSeenAt)}${fmtLastSeen(c.lastSeenAt)}</td>
+      <td>${c.powerKW} kW</td>
       <td>${res?res.name+' · '+res.unit:'-'}</td>
     </tr>`;
   }).join('');
@@ -1400,7 +1436,7 @@ function renderChargerDetail(){
   if(chargerDetailOrigin.type === 'site'){
     const site = locations.find(l=>l.id===chargerDetailOrigin.id);
     backLink.textContent = `← Back to ${site ? site.name : 'site'}`;
-    backLink.onclick = () => { document.getElementById('charger-detail-view').style.display='none'; openSite(chargerDetailOrigin.id); };
+    backLink.onclick = () => { stopChargerLivePolling(); document.getElementById('charger-detail-view').style.display='none'; openSite(chargerDetailOrigin.id); };
   } else {
     backLink.textContent = '← Back to all chargers';
     backLink.onclick = backToChargers;
@@ -1408,6 +1444,11 @@ function renderChargerDetail(){
   document.getElementById('cd-name').textContent = c.name;
   document.getElementById('cd-path').textContent = pathOf(c.locationId);
   document.getElementById('cd-status').innerHTML = statusBadge(c.status);
+  document.getElementById('cd-ocpp-status').textContent = c.ocppStatus || '-';
+  document.getElementById('cd-last-seen').textContent = fmtLastSeen(c.lastSeenAt);
+  document.getElementById('cd-live').innerHTML = isChargerFresh(c.lastSeenAt)
+    ? '<span style="color:#1a7f37;">● Recently active</span>'
+    : '<span style="color:#c0392b;">● Silent</span>';
   document.getElementById('cd-ocpp').textContent = c.ocpp;
   document.getElementById('cd-model').textContent = c.vendor;
   document.getElementById('cd-connector').textContent = c.connector;
@@ -1433,6 +1474,27 @@ function renderChargerDetail(){
     return `<tr><td>${(s.startedAt||'').slice(0,10)}</td><td>${u?u.name:'-'}</td><td>${s.kwh??'-'} kWh</td><td>${fmtMoney(s.cost, s.currency)}</td></tr>`;
   }).join('')
     : '<tr><td colspan="4" class="empty">No sessions yet.</td></tr>';
+  startChargerLivePolling();
+}
+
+let chargerDetailPollInterval = null;
+function startChargerLivePolling(){
+  stopChargerLivePolling();
+  chargerDetailPollInterval = setInterval(async () => {
+    const c = chargers.find(x=>x.id===currentChargerId);
+    if(!c) return;
+    const { data, error } = await sb.functions.invoke('remote-control', { body: { chargerId: c.id, action: 'status' } });
+    if(!error && data && !data.error){
+      document.getElementById('cd-live').innerHTML = data.connected
+        ? '<span style="color:#1a7f37;">● Connected now</span>'
+        : '<span style="color:#c0392b;">● Not connected</span>';
+      if(data.ocpp_status) document.getElementById('cd-ocpp-status').textContent = data.ocpp_status;
+      if(data.last_seen_at) document.getElementById('cd-last-seen').textContent = fmtLastSeen(data.last_seen_at);
+    }
+  }, 20000);
+}
+function stopChargerLivePolling(){
+  if(chargerDetailPollInterval){ clearInterval(chargerDetailPollInterval); chargerDetailPollInterval = null; }
 }
 
 let chargerPasswordVisible = false;
@@ -1501,9 +1563,19 @@ async function toggleRemote(){
 }
 
 function testChargerConnection(){
-  showModal('Test connection', 'Sending a fresh BootNotification and Heartbeat request to this charger over its WebSocket link. This mockup simulates the exchange.', ()=>{
+  showModal('Test connection', 'Sends a live GetConfiguration request to the charger over its actual WebSocket link and waits for its real response.', async ()=>{
     closeModal();
-    alert('Connected — Heartbeat OK, last seen just now.');
+    const c = chargers.find(x=>x.id===currentChargerId);
+    const { data, error } = await sb.functions.invoke('remote-control', { body: { chargerId: c.id, action: 'ping' } });
+    if(error || data?.error){
+      alert('Test failed: ' + (data?.error || error?.message || 'unknown error'));
+      return;
+    }
+    if(data.connected){
+      alert(`Connected — charger responded in ${data.rttMs}ms.`);
+    } else {
+      alert('Not connected — the charger has no open connection to the server right now' + (data.error ? ` (${data.error})` : '.'));
+    }
   }, 'Run test');
 }
 function openUnpair(){
@@ -1514,7 +1586,7 @@ function openUnpair(){
     backToChargers();
   }, 'Unpair');
 }
-function backToChargers(){ document.getElementById('chargers-list-view').style.display='block'; document.getElementById('charger-detail-view').style.display='none'; renderChargers(); navigate(ROUTES.chargers()); }
+function backToChargers(){ stopChargerLivePolling(); document.getElementById('chargers-list-view').style.display='block'; document.getElementById('charger-detail-view').style.display='none'; renderChargers(); navigate(ROUTES.chargers()); }
 
 function renderAddSite(){
   const sel = document.getElementById('new-site-parent');
