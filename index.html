@@ -252,20 +252,20 @@ tr.rowlink:hover td{background:var(--blue-light);}
           <div class="kpi"><div class="kpi-label">Needs attention</div><div class="kpi-value red" id="kpi-attention">-</div></div>
         </div>
 
-        <div class="two-col">
-          <div>
-            <div class="section-title">All complexes</div>
-            <div class="card">
-              <table>
-                <thead><tr><th>Site</th><th>City</th><th>Chargers</th><th>Load</th></tr></thead>
-                <tbody id="dash-sites-body"></tbody>
-              </table>
-            </div>
-          </div>
-          <div>
-            <div class="section-title">Needs attention</div>
-            <div class="card card-pad" id="dash-alerts"></div>
-          </div>
+        <div class="section-title">All complexes</div>
+        <div class="card">
+          <table>
+            <thead><tr><th>Site</th><th>City</th><th>Chargers</th><th>Load</th></tr></thead>
+            <tbody id="dash-sites-body"></tbody>
+          </table>
+        </div>
+
+        <div class="section-title" style="margin-top:20px;">All chargers</div>
+        <div class="card">
+          <table>
+            <thead><tr><th>Charger</th><th>Site</th><th>Client</th><th>Status</th><th>Live</th><th>Power</th><th>Cardholder</th><th>Session</th></tr></thead>
+            <tbody id="dash-chargers-body"></tbody>
+          </table>
         </div>
       </div>
 
@@ -1293,16 +1293,28 @@ function renderDashboard(){
       <td>${used} / ${cap} kW</td></tr>`;
   }).join('');
 
-  const alerts = chargers.filter(chargerNeedsAttention);
-  document.getElementById('dash-alerts').innerHTML = alerts.length ? alerts.map(c=>{
-    const reason = (c.status==='Faulted'||c.status==='Offline')
-      ? statusBadge(c.status)
-      : `<span style="font-size:12px;color:#c0392b;">${livenessDot(c.lastSeenAt)}Silent — last seen ${fmtLastSeen(c.lastSeenAt)}</span>`;
-    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);">
-      <div><div style="font-weight:500;">${c.name}</div><div class="path">${pathOf(c.locationId)}</div></div>
-      ${reason}
-    </div>`;
-  }).join('') : '<div class="empty">No alerts. All chargers healthy.</div>';
+  // Problem chargers first, then charging, then everything else — so
+  // what needs a look is always at the top, no scrolling required.
+  const priority = c => chargerNeedsAttention(c) ? 0 : (c.status === 'Charging' ? 1 : 2);
+  const sortedChargers = chargers.slice().sort((a,b) => priority(a) - priority(b));
+
+  document.getElementById('dash-chargers-body').innerHTML = sortedChargers.length ? sortedChargers.map(c=>{
+    const root = rootOf(c.locationId);
+    const client = root && root.clientId ? clients.find(cl=>cl.id===root.clientId) : null;
+    const problem = chargerNeedsAttention(c);
+    const activeSession = c.status === 'Charging' ? sessions.find(s=>s.chargerId===c.id && !s.endedAt) : null;
+    const cardholder = activeSession ? users.find(u=>u.id===activeSession.userId) : null;
+    return `<tr class="rowlink" style="${problem ? 'background:#fdecea;' : ''}" onclick="openCharger('${c.id}')">
+      <td>${c.name}</td>
+      <td class="path">${pathOf(c.locationId)}</td>
+      <td>${client ? client.name : '-'}</td>
+      <td>${statusBadge(c.status)}</td>
+      <td>${livenessDot(c.lastSeenAt)}${fmtLastSeen(c.lastSeenAt)}</td>
+      <td>${c.status==='Charging' ? (c.currentKW||0)+' kW' : '-'}</td>
+      <td>${cardholder ? cardholder.name : '-'}</td>
+      <td>${activeSession ? 'In progress' : '-'}</td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="8" class="empty">No chargers yet.</td></tr>';
 }
 
 function renderSites(){
