@@ -641,7 +641,15 @@ tr.rowlink:hover td{background:var(--blue-light);}
                   <tr><td style="color:var(--text-muted);">Connector</td><td id="cd-connector" style="text-align:right;"></td></tr>
                   <tr><td style="color:var(--text-muted);">Max power</td><td id="cd-power" style="text-align:right;"></td></tr>
                   <tr><td style="color:var(--text-muted);">WebSocket URL</td><td id="cd-ws" style="text-align:right;font-size:11px;color:var(--blue-dark);"></td></tr>
+                  <tr><td style="color:var(--text-muted);">Auth password</td><td style="text-align:right;">
+                    <span id="cd-password" style="font-family:monospace;"></span>
+                    <a href="#" onclick="toggleChargerPasswordVisibility();return false;" id="cd-password-eye" style="margin-left:6px;">👁</a>
+                  </td></tr>
                 </table>
+              </div>
+              <div class="card card-pad" style="margin-top:10px;display:flex;gap:8px;">
+                <button class="btn btn-sm" onclick="clearChargerPassword()">Clear password (for browser testing)</button>
+                <button class="btn btn-sm" onclick="regenerateChargerPassword()">Regenerate password</button>
               </div>
               <div class="section-title">Recent sessions</div>
               <div class="card">
@@ -1075,7 +1083,7 @@ let tariffs = [];
 let clients = [];
 
 function mapLocation(l){ return {id:l.id, name:l.name, type:l.type, parentId:l.parent_id, city:l.city, address:l.address, capacityKVA:l.capacity_kva, currency:l.currency, clientId:l.client_id, timezone:l.timezone, contactName:l.contact_name, contactPhone:l.contact_phone, contactEmail:l.contact_email, status:l.status}; }
-function mapCharger(c){ return {id:c.id, locationId:c.location_id, name:c.name, ocppId:c.ocpp_id, vendor:c.vendor, connector:c.connector, powerKW:c.power_kw, ocpp:c.ocpp_version, status:c.status, currentKW:c.current_kw}; }
+function mapCharger(c){ return {id:c.id, locationId:c.location_id, name:c.name, ocppId:c.ocpp_id, vendor:c.vendor, connector:c.connector, powerKW:c.power_kw, ocpp:c.ocpp_version, status:c.status, currentKW:c.current_kw, ocppPassword:c.ocpp_password}; }
 function mapSession(s){ return {id:s.id, chargerId:s.charger_id, userId:s.user_id, rfidCardId:s.rfid_card_id, kwh:s.kwh, cost:s.cost, currency:s.currency, startedAt:s.started_at, endedAt:s.ended_at, paymentStatus:s.payment_status, payment:s.payment_method}; }
 function mapRfid(r){ return {id:r.id, uid:r.uid, userId:r.user_id, complexId:r.location_id, status:r.status}; }
 function mapUser(u){ return {id:u.id, name:u.name, unit:u.unit, locationId:u.location_id, role:u.role, phone:u.phone, email:u.email}; }
@@ -1358,6 +1366,7 @@ let chargerDetailOrigin = { type: 'chargers' };
 function openCharger(id, opts){
   opts = opts || {};
   currentChargerId = id;
+  chargerPasswordVisible = false;
   chargerDetailOrigin = { type: 'chargers' };
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('page-chargers').classList.add('active');
@@ -1373,6 +1382,7 @@ function openCharger(id, opts){
 // "Sites" nav item highlighted and returns to that site, not the charger list.
 function openChargerFromSite(id){
   currentChargerId = id;
+  chargerPasswordVisible = false;
   chargerDetailOrigin = { type: 'site', id: currentSiteId };
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('page-chargers').classList.add('active');
@@ -1403,6 +1413,7 @@ function renderChargerDetail(){
   document.getElementById('cd-connector').textContent = c.connector;
   document.getElementById('cd-power').textContent = c.powerKW + ' kW';
   document.getElementById('cd-ws').textContent = `wss://ocpp.plugndrive.co.za/${c.ocppId}`;
+  renderChargerPasswordDisplay(c);
   const root = rootOf(c.locationId);
   const mapEl = document.getElementById('cd-map');
   if(root && root.address && GOOGLE_MAPS_API_KEY){
@@ -1422,6 +1433,39 @@ function renderChargerDetail(){
     return `<tr><td>${(s.startedAt||'').slice(0,10)}</td><td>${u?u.name:'-'}</td><td>${s.kwh??'-'} kWh</td><td>${fmtMoney(s.cost, s.currency)}</td></tr>`;
   }).join('')
     : '<tr><td colspan="4" class="empty">No sessions yet.</td></tr>';
+}
+
+let chargerPasswordVisible = false;
+function renderChargerPasswordDisplay(c){
+  const el = document.getElementById('cd-password');
+  const eye = document.getElementById('cd-password-eye');
+  if(!c.ocppPassword){
+    el.textContent = 'None (open — any charger can connect without auth)';
+    eye.style.display = 'none';
+    return;
+  }
+  eye.style.display = '';
+  el.textContent = chargerPasswordVisible ? c.ocppPassword : '••••••••';
+  eye.textContent = chargerPasswordVisible ? '🙈' : '👁';
+}
+function toggleChargerPasswordVisibility(){
+  chargerPasswordVisible = !chargerPasswordVisible;
+  const c = chargers.find(x=>x.id===currentChargerId);
+  renderChargerPasswordDisplay(c);
+}
+async function clearChargerPassword(){
+  const c = chargers.find(x=>x.id===currentChargerId);
+  await sb.from('chargers').update({ ocpp_password: null }).eq('id', c.id);
+  await loadAll();
+  renderChargerDetail();
+}
+async function regenerateChargerPassword(){
+  const c = chargers.find(x=>x.id===currentChargerId);
+  const newPassword = Math.random().toString(36).slice(2,10);
+  await sb.from('chargers').update({ ocpp_password: newPassword }).eq('id', c.id);
+  await loadAll();
+  chargerPasswordVisible = true;
+  renderChargerDetail();
 }
 
 async function toggleRemote(){
