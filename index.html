@@ -1086,7 +1086,7 @@ let users = [];
 let tariffs = [];
 let clients = [];
 
-function mapLocation(l){ return {id:l.id, name:l.name, type:l.type, parentId:l.parent_id, city:l.city, address:l.address, capacityKVA:l.capacity_kva, currency:l.currency, clientId:l.client_id, timezone:l.timezone, contactName:l.contact_name, contactPhone:l.contact_phone, contactEmail:l.contact_email, status:l.status}; }
+function mapLocation(l){ return {id:l.id, name:l.name, type:l.type, parentId:l.parent_id, city:l.city, address:l.address, capacityKVA:l.capacity_kva, currency:l.currency, clientId:l.client_id, timezone:l.timezone, contactName:l.contact_name, contactPhone:l.contact_phone, contactEmail:l.contact_email, status:l.status, loadManagementEnabled:l.load_management_enabled}; }
 function mapCharger(c){ return {id:c.id, locationId:c.location_id, name:c.name, ocppId:c.ocpp_id, vendor:c.vendor, connector:c.connector, powerKW:c.power_kw, ocpp:c.ocpp_version, status:c.status, currentKW:c.current_kw, ocppPassword:c.ocpp_password, lastSeenAt:c.last_seen_at, ocppStatus:c.ocpp_status}; }
 function mapSession(s){ return {id:s.id, chargerId:s.charger_id, userId:s.user_id, rfidCardId:s.rfid_card_id, kwh:s.kwh, cost:s.cost, currency:s.currency, startedAt:s.started_at, endedAt:s.ended_at, paymentStatus:s.payment_status, payment:s.payment_method}; }
 function mapRfid(r){ return {id:r.id, uid:r.uid, userId:r.user_id, complexId:r.location_id, status:r.status}; }
@@ -2221,16 +2221,23 @@ function renderLoad(){
     return `<div class="card card-pad" style="margin-bottom:12px;">
       <div style="display:flex;justify-content:space-between;align-items:center;">
         <div><div style="font-weight:600;">${r.name}</div><div class="path">${r.city||''} · ${under.length} chargers</div></div>
-        <select style="border:1px solid var(--border);border-radius:8px;padding:6px 10px;">
-          <option>Equal split</option><option>Priority order</option><option>Off-peak scheduling</option>
-        </select>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+          <input type="checkbox" ${r.loadManagementEnabled ? 'checked' : ''} onchange="toggleLoadManagement('${r.id}', this.checked)">
+          Enforce capacity (first-come, first-served)
+        </label>
       </div>
       <div class="gauge-wrap">
         <div class="gauge-bar"><div class="gauge-fill ${fillClass}" style="width:${pct}%;"></div></div>
         <div class="gauge-labels"><span>${used} kW used</span><span>${cap} kVA capacity</span></div>
       </div>
+      ${r.loadManagementEnabled ? '<div style="font-size:12px;color:var(--text-muted);margin-top:6px;">A new charging session that would exceed this site\'s capacity is refused (not power-shared) until room frees up.</div>' : ''}
     </div>`;
   }).join('');
+}
+async function toggleLoadManagement(locationId, enabled){
+  await sb.from('locations').update({ load_management_enabled: enabled }).eq('id', locationId);
+  await loadAll();
+  renderLoad();
 }
 
 function fmtTariffMoney(n, currency){ return n==null ? '-' : fmtMoney(n, currency); }
