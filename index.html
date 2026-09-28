@@ -127,7 +127,13 @@ tr.rowlink:hover td{background:var(--blue-light);}
 .step.done{color:var(--text);}
 .step.done .dot{background:var(--blue);border-color:var(--blue);color:#fff;}
 .step.active{color:var(--navy);font-weight:500;}
-.step.active .dot{border-color:var(--blue);}
+.step.active .dot{border-color:var(--blue);animation:stepPulse 1.2s ease-in-out infinite;}
+.step.warn{color:var(--text);}
+.step.warn .dot{background:#fdf3e0;border-color:#e0a030;color:#b7791f;font-weight:700;}
+@keyframes stepPulse{0%,100%{box-shadow:0 0 0 0 rgba(47,149,214,.35);}50%{box-shadow:0 0 0 5px rgba(47,149,214,0);}}
+.conn-result{margin-top:14px;font-size:13px;line-height:1.5;color:var(--text-secondary);}
+.conn-result.ok{color:var(--green,#1a7f37);}
+.conn-result .btn{margin-top:10px;}
 
 .detail-panel{margin-top:16px;}
 .empty{padding:40px;text-align:center;color:var(--text-muted);font-size:13px;}
@@ -739,8 +745,9 @@ tr.rowlink:hover td{background:var(--blue-light);}
                 <label>Auth password (OCPP 1.6J basic auth)</label>
                 <div class="url-box"><code id="gen-auth">-</code></div>
               </div>
-              <button class="btn btn-block" id="test-conn-btn" onclick="runConnectionTest()" disabled>Test connection</button>
+              <button class="btn btn-block" id="test-conn-btn" onclick="runConnectionTest()" disabled>Save and test connection</button>
               <div class="steps" id="conn-steps"></div>
+              <div class="conn-result" id="conn-result"></div>
             </div>
           </div>
         </div>
@@ -1489,7 +1496,7 @@ function renderChargerDetail(){
     ? '<span style="color:#1a7f37;">● Recently active</span>'
     : '<span style="color:#c0392b;">● Silent</span>';
   document.getElementById('cd-ocpp').textContent = c.ocpp;
-  document.getElementById('cd-model').textContent = c.vendor;
+  document.getElementById('cd-model').textContent = c.vendor || 'Not reported yet';
   document.getElementById('cd-connector').textContent = c.connector;
   document.getElementById('cd-power').textContent = c.powerKW + ' kW';
   document.getElementById('cd-ws').textContent = `wss://ocpp.plugndrive.co.za/${c.ocppId}`;
@@ -2058,10 +2065,24 @@ function renderAddCharger(){
   document.getElementById('gen-ws-url').textContent = 'Not generated yet';
   document.getElementById('gen-auth').textContent = '-';
   document.getElementById('test-conn-btn').disabled = true;
-  document.getElementById('conn-steps').innerHTML = '';
+  createdChargerId = null;
+  pendingNewCharger = null;
+  resetConnTest();
 }
 function slug(s){ return s.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,''); }
 let pendingNewCharger = null;
+let createdChargerId = null;   // set once the record exists, so "Test again" never inserts a second one
+let connRunId = 0;             // bumping this cancels any connection test still running in the background
+const CONN_TEST = { pollMs: 3000, timeoutMs: 90000 };
+function connSleep(ms){ return new Promise(r=>setTimeout(r, ms)); }
+function resetConnTest(){
+  connRunId++;
+  document.getElementById('conn-steps').innerHTML = '';
+  const res = document.getElementById('conn-result');
+  res.className = 'conn-result';
+  res.textContent = '';
+  document.getElementById('test-conn-btn').textContent = 'Save and test connection';
+}
 function generateCharger(){
   const name = document.getElementById('new-charger-name').value || 'new-charger';
   const id = slug(name) + '-' + Math.floor(Math.random()*900+100);
@@ -2077,36 +2098,111 @@ function generateCharger(){
   document.getElementById('gen-ws-url').textContent = `wss://ocpp.plugndrive.co.za/${id}`;
   document.getElementById('gen-auth').textContent = pendingNewCharger.ocpp_password;
   document.getElementById('test-conn-btn').disabled = false;
-  document.getElementById('conn-steps').innerHTML = '';
+  createdChargerId = null;   // generating again means adding another charger
+  resetConnTest();
 }
-function runConnectionTest(){
-  const steps = ['Opening WebSocket connection','Waiting for BootNotification','Heartbeat received','Charger registered'];
-  const el = document.getElementById('conn-steps');
-  el.innerHTML = steps.map((s,i)=>`<div class="step" id="step-${i}"><div class="dot"></div>${s}</div>`).join('');
-  steps.forEach((s,i)=>{
-    setTimeout(async ()=>{
-      const stepEl = document.getElementById('step-'+i);
-      stepEl.classList.add(i===steps.length-1?'done':'active');
-      if(i>0) document.getElementById('step-'+(i-1)).className='step done';
-      document.getElementById('step-'+i).querySelector('.dot').textContent = (i===steps.length-1)?'✓':'';
-      if(i===steps.length-1 && pendingNewCharger){
-        await sb.from('chargers').insert({
-          location_id: pendingNewCharger.location_id,
-          name: pendingNewCharger.name,
-          ocpp_id: pendingNewCharger.ocpp_id,
-          vendor: 'Ovrod',
-          connector: pendingNewCharger.connector,
-          power_kw: pendingNewCharger.power_kw,
-          ocpp_version: pendingNewCharger.ocpp_version,
-          ocpp_password: pendingNewCharger.ocpp_password,
-          status: 'Available',
-          current_kw: 0
-        });
-        pendingNewCharger = null;
-        await loadAll();
+async function runConnectionTest(){
+  if(!pendingNewCharger && !createdChargerId) return;
+  const runId = ++connRunId;
+  const live = () => runId === connRunId;   // false once the page was reset or new details were generated
+  const btn = document.getElementById('test-conn-btn');
+  const resultEl = document.getElementById('conn-result');
+  btn.disabled = true;
+  resultEl.className = 'conn-result';
+  resultEl.textContent = '';
+  const labels = ['Saving the charger', 'Waiting for the charger to connect', 'Checking that the charger answers'];
+  document.getElementById('conn-steps').innerHTML = labels.map((s,i)=>`<div class="step" id="step-${i}"><div class="dot"></div><span>${s}</span></div>`).join('');
+  const mark = (i, state, text) => {
+    const el = document.getElementById('step-'+i);
+    if(!el) return;
+    el.className = 'step ' + state;
+    el.querySelector('.dot').textContent = state==='done' ? '✓' : state==='warn' ? '!' : '';
+    if(text) el.querySelector('span').textContent = text;
+  };
+  const finish = (message, ok, withViewButton) => {
+    resultEl.className = 'conn-result' + (ok ? ' ok' : '');
+    resultEl.textContent = message;
+    if(withViewButton && createdChargerId){
+      const b = document.createElement('button');
+      b.className = 'btn btn-sm';
+      b.textContent = 'View charger';
+      b.onclick = () => openCharger(createdChargerId);
+      resultEl.appendChild(document.createElement('br'));
+      resultEl.appendChild(b);
+    }
+  };
+  try {
+    // 1. The record has to exist BEFORE the charger connects: the server rejects unknown chargers.
+    //    It starts as Offline; the server flips it to Available when the charger really boots.
+    mark(0,'active');
+    if(!createdChargerId){
+      const p = pendingNewCharger;
+      const { data, error } = await sb.from('chargers').insert({
+        location_id: p.location_id,
+        name: p.name,
+        ocpp_id: p.ocpp_id,
+        vendor: null,                    // the charger reports its real vendor itself
+        connector: p.connector,
+        power_kw: p.power_kw,
+        ocpp_version: p.ocpp_version,
+        ocpp_password: p.ocpp_password,
+        status: 'Offline',
+        current_kw: 0
+      }).select().single();
+      if(!live()) return;
+      if(error || !data){ mark(0,'warn','Could not save the charger'); finish(error?.message || 'Unknown error', false); return; }
+      createdChargerId = data.id;
+      pendingNewCharger = null;
+      await loadAll();
+      if(!live()) return;
+    }
+    mark(0,'done','Charger saved, Offline until it connects');
+
+    // 2. Wait for a REAL connection (checked on the OCPP server), never a timer.
+    mark(1,'active');
+    const deadline = Date.now() + CONN_TEST.timeoutMs;
+    let connected = false, answered = false, lastError = '';
+    while(true){
+      const { data, error } = await sb.functions.invoke('remote-control', { body: { chargerId: createdChargerId, action: 'status' } });
+      if(!live()) return;
+      if(!error && data && !data.error){
+        answered = true;
+        if(data.connected){ connected = true; break; }
+      } else {
+        lastError = data?.error || await extractInvokeError(error) || 'No response';
       }
-    }, (i+1)*700);
-  });
+      if(Date.now() >= deadline) break;
+      await connSleep(CONN_TEST.pollMs);
+      if(!live()) return;
+    }
+    if(!connected){
+      mark(1,'warn', answered ? 'No connection yet' : 'Could not check the connection');
+      finish(answered
+        ? 'The charger has not connected yet. It is saved as Offline and will switch to Available by itself as soon as it connects. Make sure it is configured with the URL and password above, then test again.'
+        : `The connection check could not run (${lastError}). The charger is saved. Try the test again in a moment.`, false, true);
+      return;
+    }
+    mark(1,'done','Charger connected');
+
+    // 3. A live round trip: the charger must actually answer a fresh request.
+    mark(2,'active');
+    const { data: ping, error: pingError } = await sb.functions.invoke('remote-control', { body: { chargerId: createdChargerId, action: 'ping' } });
+    if(!live()) return;
+    if(pingError || ping?.error || !ping?.connected){
+      mark(2,'warn','Connected, but it did not answer');
+      finish('The charger opened a connection but did not answer a live request. Try the test again in a moment.', false, true);
+      return;
+    }
+    mark(2,'done',`The charger answered in ${ping.rttMs} ms`);
+    finish('The charger is online and answering. It appears on the Dashboard with its live status.', true, true);
+  } catch (err) {
+    if(live()) finish(err?.message || 'Something went wrong.', false, !!createdChargerId);
+  } finally {
+    if(live()){
+      btn.disabled = false;
+      btn.textContent = createdChargerId ? 'Test again' : 'Save and test connection';
+    }
+  }
 }
 
 function fmtDuration(startedAt, endedAt){
