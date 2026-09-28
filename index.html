@@ -122,6 +122,7 @@ tr.rowlink:hover td{background:var(--blue-light);}
 .form-row .check-row{display:flex;align-items:flex-start;gap:10px;margin-bottom:0;font-size:13px;color:var(--text);cursor:pointer;}
 .form-row .check-row input[type=checkbox]{width:16px;height:16px;padding:0;margin:1px 0 0;flex-shrink:0;accent-color:var(--blue);}
 .check-hint{font-size:12px;color:var(--text-muted);margin:4px 0 0 26px;line-height:1.45;}
+.field-hint{font-size:12px;color:var(--text-muted);margin:4px 0 0;line-height:1.45;}
 .url-box{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 10px;}
 .url-box code{flex:1;font-size:12px;color:var(--blue-dark);overflow-x:auto;white-space:nowrap;}
 
@@ -664,7 +665,16 @@ tr.rowlink:hover td{background:var(--blue-light);}
                   <tr><td style="color:var(--text-muted);">OCPP version</td><td id="cd-ocpp" style="text-align:right;"></td></tr>
                   <tr><td style="color:var(--text-muted);">Vendor / model</td><td id="cd-model" style="text-align:right;"></td></tr>
                   <tr><td style="color:var(--text-muted);">Connector</td><td id="cd-connector" style="text-align:right;"></td></tr>
-                  <tr><td style="color:var(--text-muted);">Max power</td><td id="cd-power" style="text-align:right;"></td></tr>
+                  <tr><td style="color:var(--text-muted);">Max power</td><td style="text-align:right;">
+                    <span id="cd-power"></span>
+                    <a href="#" id="cd-power-edit" onclick="startEditPower();return false;" style="margin-left:6px;display:none;">Edit</a>
+                    <span id="cd-power-editor" style="display:none;">
+                      <input type="text" id="cd-power-input" inputmode="decimal" list="power-suggestions" autocomplete="off" style="width:84px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;"> kW
+                      <a href="#" onclick="savePower();return false;" style="margin-left:6px;">Save</a>
+                      <a href="#" onclick="cancelEditPower();return false;" style="margin-left:6px;">Cancel</a>
+                    </span>
+                    <div id="cd-power-note" style="font-size:11px;margin-top:3px;"></div>
+                  </td></tr>
                   <tr><td style="color:var(--text-muted);">WebSocket URL</td><td id="cd-ws" style="text-align:right;font-size:11px;color:var(--blue-dark);"></td></tr>
                   <tr><td style="color:var(--text-muted);">Auth password</td><td style="text-align:right;">
                     <span id="cd-password" style="font-family:monospace;"></span>
@@ -732,11 +742,13 @@ tr.rowlink:hover td{background:var(--blue-light);}
               </div>
               <div class="form-row">
                 <label>Max power (kW)</label>
-                <select id="new-charger-power">
-                  <option>7</option>
-                  <option selected>11</option>
-                  <option>22</option>
-                </select>
+                <input type="text" id="new-charger-power" inputmode="decimal" list="power-suggestions" value="11" autocomplete="off" oninput="document.getElementById('new-charger-power-error').textContent=''">
+                <datalist id="power-suggestions">
+                  <option value="7.4"></option><option value="11"></option><option value="22"></option><option value="50"></option>
+                  <option value="60"></option><option value="120"></option><option value="150"></option><option value="180"></option><option value="350"></option>
+                </datalist>
+                <div class="field-hint">Used for the site capacity check and for the upfront amount on the public payment page (50 kW and above count as fast chargers).</div>
+                <div id="new-charger-power-error" style="color:var(--red,#c0392b);font-size:12px;margin-top:4px;"></div>
               </div>
               <div class="form-row">
                 <label>OCPP version</label>
@@ -1524,6 +1536,7 @@ function renderChargerDetail(){
   document.getElementById('cd-ws').textContent = `wss://ocpp.plugndrive.co.za/${c.ocppId}`;
   renderChargerPasswordDisplay(c);
   renderChargerPublicInfo(c);
+  renderChargerPowerEdit(c);
   const root = rootOf(c.locationId);
   const mapEl = document.getElementById('cd-map');
   if(root && root.address && GOOGLE_MAPS_API_KEY){
@@ -1568,6 +1581,44 @@ function stopChargerLivePolling(){
 
 // Public visibility: a hidden charger is left out of search and lists on the public site,
 // but its own link / QR code still opens it (useful for demos).
+// Editing the rated power (Plug n Drive admins only). The OCPP server reads a charger's row once,
+// when the charger connects, so the site capacity check picks a new value up at its next reconnection.
+function renderChargerPowerEdit(c){
+  const isAdmin = currentStaff && currentStaff.role === 'plugndrive_admin';
+  document.getElementById('cd-power-edit').style.display = isAdmin ? '' : 'none';
+  document.getElementById('cd-power-editor').style.display = 'none';
+  document.getElementById('cd-power').style.display = '';
+  document.getElementById('cd-power-note').textContent = '';
+}
+function startEditPower(){
+  const c = chargers.find(x=>x.id===currentChargerId);
+  if(!c) return;
+  document.getElementById('cd-power-input').value = c.powerKW ?? '';
+  document.getElementById('cd-power-edit').style.display = 'none';
+  document.getElementById('cd-power').style.display = 'none';   // the field replaces the value while editing
+  document.getElementById('cd-power-editor').style.display = 'inline';
+  document.getElementById('cd-power-note').textContent = '';
+  document.getElementById('cd-power-input').focus();
+}
+function cancelEditPower(){
+  const c = chargers.find(x=>x.id===currentChargerId);
+  if(c) renderChargerPowerEdit(c);
+}
+async function savePower(){
+  const c = chargers.find(x=>x.id===currentChargerId);
+  if(!c) return;
+  const note = document.getElementById('cd-power-note');
+  note.style.color = 'var(--red,#c0392b)';
+  const power = parsePowerKw(document.getElementById('cd-power-input').value);
+  if(power === null){ note.textContent = POWER_ERROR_TEXT; return; }
+  const { data, error } = await sb.from('chargers').update({ power_kw: power }).eq('id', c.id).select();
+  if(error || !data || !data.length){ note.textContent = error?.message || 'Could not save the power.'; return; }
+  await loadAll();
+  renderChargerDetail();   // shows what is really saved
+  const after = document.getElementById('cd-power-note');
+  after.style.color = 'var(--text-muted)';
+  after.textContent = 'Saved. If this charger is connected, the site capacity check uses the new value after its next reconnection.';
+}
 const PUBLIC_SITE_BASE = 'https://charge.plugndrive.co.za';
 function renderChargerPublicInfo(c){
   const isAdmin = currentStaff && currentStaff.role === 'plugndrive_admin';
@@ -2119,6 +2170,8 @@ function renderAddCharger(){
   document.getElementById('gen-auth').textContent = '-';
   document.getElementById('test-conn-btn').disabled = true;
   document.getElementById('new-charger-public').checked = false;
+  document.getElementById('new-charger-power').value = '11';
+  document.getElementById('new-charger-power-error').textContent = '';
   createdChargerId = null;
   pendingNewCharger = null;
   resetConnTest();
@@ -2138,7 +2191,21 @@ function resetConnTest(){
   res.textContent = '';
   document.getElementById('test-conn-btn').textContent = 'Save and test connection';
 }
+// Any real charger power: 3.7 kW wallbox up to megawatt-class. Accepts "7.4" or "7,4".
+const POWER_MIN_KW = 1, POWER_MAX_KW = 1000;
+const POWER_ERROR_TEXT = `Enter a power between ${POWER_MIN_KW} and ${POWER_MAX_KW} kW (for example 7.4).`;
+function parsePowerKw(raw){
+  const s = String(raw ?? '').trim();
+  if(!/^\d{1,4}([.,]\d{1,2})?$/.test(s)) return null;
+  const n = Number(s.replace(',', '.'));
+  if(!isFinite(n) || n < POWER_MIN_KW || n > POWER_MAX_KW) return null;
+  return Math.round(n * 10) / 10;
+}
 function generateCharger(){
+  const power = parsePowerKw(document.getElementById('new-charger-power').value);
+  const powerErr = document.getElementById('new-charger-power-error');
+  if(power === null){ powerErr.textContent = POWER_ERROR_TEXT; return; }
+  powerErr.textContent = '';
   const name = document.getElementById('new-charger-name').value || 'new-charger';
   const id = slug(name) + '-' + Math.floor(Math.random()*900+100);
   pendingNewCharger = {
@@ -2146,7 +2213,7 @@ function generateCharger(){
     name: name,
     ocpp_id: id,
     connector: document.getElementById('new-charger-connector').value,
-    power_kw: Number(document.getElementById('new-charger-power').value),
+    power_kw: power,
     ocpp_version: document.getElementById('new-charger-ocpp').value,
     ocpp_password: Math.random().toString(36).slice(2,10),
   };
