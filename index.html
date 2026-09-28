@@ -118,6 +118,10 @@ tr.rowlink:hover td{background:var(--blue-light);}
 .form-row{margin-bottom:14px;}
 .form-row label{display:block;font-size:12px;color:var(--text-secondary);margin-bottom:5px;}
 .form-row input,.form-row select{width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 10px;background:#fff;color:var(--text);}
+/* Checkboxes must not inherit the full-width text-field look */
+.form-row .check-row{display:flex;align-items:flex-start;gap:10px;margin-bottom:0;font-size:13px;color:var(--text);cursor:pointer;}
+.form-row .check-row input[type=checkbox]{width:16px;height:16px;padding:0;margin:1px 0 0;flex-shrink:0;accent-color:var(--blue);}
+.check-hint{font-size:12px;color:var(--text-muted);margin:4px 0 0 26px;line-height:1.45;}
 .url-box{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 10px;}
 .url-box code{flex:1;font-size:12px;color:var(--blue-dark);overflow-x:auto;white-space:nowrap;}
 
@@ -742,11 +746,11 @@ tr.rowlink:hover td{background:var(--blue-light);}
                 </select>
               </div>
               <div class="form-row">
-                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                <label class="check-row">
                   <input type="checkbox" id="new-charger-public">
-                  Show on the public site (charge.plugndrive.co.za)
+                  <span>Show on the public site (charge.plugndrive.co.za)</span>
                 </label>
-                <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">Off by default. A hidden charger stays reachable through its own QR code or link, handy for demos.</div>
+                <div class="check-hint">Off by default. A hidden charger stays reachable through its own QR code or link, handy for demos.</div>
               </div>
               <button class="btn btn-primary btn-block" onclick="generateCharger()">Generate connection details</button>
             </div>
