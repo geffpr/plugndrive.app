@@ -839,6 +839,20 @@ tr.rowlink:hover td{background:var(--blue-light);}
                 <button class="btn btn-block" onclick="testChargerConnection()">Test connection</button>
                 <button class="btn btn-danger btn-block" id="cd-unpair-btn" onclick="openUnpair()">Unpair charger</button>
               </div>
+              <div id="remote-start-panel" class="card card-pad" style="display:none;margin-top:10px;">
+                <div style="font-weight:600;margin-bottom:8px;">Start a charge for a cardholder</div>
+                <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">Works for any active Plug n Drive card, from any client or site — enter the UID printed on the card.</div>
+                <div style="display:flex;gap:6px;margin-bottom:10px;">
+                  <input type="text" id="rsp-uid" placeholder="Card UID" style="flex:1;border:1px solid var(--border);border-radius:8px;padding:8px 10px;" onkeydown="if(event.key==='Enter'){event.preventDefault();findCardForRemoteStart();}">
+                  <button class="btn btn-sm" onclick="findCardForRemoteStart()">Find card</button>
+                </div>
+                <div id="rsp-card-info" style="font-size:13px;line-height:1.6;margin-bottom:10px;"></div>
+                <div style="display:flex;gap:8px;">
+                  <button class="btn btn-primary" id="rsp-start-btn" onclick="confirmRemoteStart()" disabled>Start charging</button>
+                  <button class="btn" onclick="closeRemoteStartPicker()">Cancel</button>
+                </div>
+                <div id="rsp-error" style="color:var(--red, #c0392b);font-size:12px;margin-top:8px;"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -1974,6 +1988,7 @@ function renderChargerDetail(){
   renderChargerPublicInfo(c);
   renderChargerPowerEdit(c);
   renderChargerAdminOnlySections();
+  closeRemoteStartPicker();
   const root = rootOf(c.locationId);
   const mapEl = document.getElementById('cd-map');
   if(root && root.address && GOOGLE_MAPS_API_KEY){
@@ -2139,14 +2154,19 @@ async function regenerateChargerPassword(){
 
 async function toggleRemote(){
   const c = chargers.find(x=>x.id===currentChargerId);
+  if(c.status === 'Available'){
+    // Starting needs to know WHO is charging (a real cardholder's UID),
+    // so we ask for it instead of sending an anonymous command.
+    openRemoteStartPicker();
+    return;
+  }
   const btn = document.getElementById('cd-remote-btn');
   const originalLabel = btn.textContent;
   btn.disabled = true;
-  const action = c.status === 'Available' ? 'start' : 'stop';
   btn.textContent = 'Sending command…';
 
   const { data, error } = await sb.functions.invoke('remote-control', {
-    body: { chargerId: c.id, action }
+    body: { chargerId: c.id, action: 'stop' }
   });
 
   if(error || data?.error){
@@ -2160,6 +2180,96 @@ async function toggleRemote(){
   // change arrives asynchronously via its own OCPP messages once it
   // processes the remote command. Poll briefly to pick that up.
   btn.textContent = 'Waiting for charger…';
+  for(let i=0;i<5;i++){
+    await new Promise(r=>setTimeout(r, 1500));
+    await loadAll();
+    const updated = chargers.find(x=>x.id===currentChargerId);
+    if(updated.status !== c.status) break;
+  }
+  renderChargerDetail();
+}
+
+// ---------------- Remote start: find a card, anywhere on the network ----------------
+// Deliberately NOT scoped to this charger's site or client: a cardholder can
+// be a legitimate Plug n Drive user at a different client's site (e.g. an
+// Autobas customer stuck at a WowBox charger), and any support desk should
+// be able to look their card up and start it for them, wherever they are.
+let rspFoundCard = null;
+function openRemoteStartPicker(){
+  rspFoundCard = null;
+  document.getElementById('rsp-uid').value = '';
+  document.getElementById('rsp-card-info').innerHTML = '';
+  document.getElementById('rsp-error').textContent = '';
+  document.getElementById('rsp-start-btn').disabled = true;
+  document.getElementById('rsp-start-btn').textContent = 'Start charging';
+  document.getElementById('remote-start-panel').style.display = 'block';
+}
+function closeRemoteStartPicker(){
+  document.getElementById('remote-start-panel').style.display = 'none';
+  rspFoundCard = null;
+}
+async function findCardForRemoteStart(){
+  const uid = document.getElementById('rsp-uid').value.trim();
+  const errEl = document.getElementById('rsp-error');
+  const infoEl = document.getElementById('rsp-card-info');
+  errEl.textContent = ''; infoEl.innerHTML = ''; rspFoundCard = null;
+  document.getElementById('rsp-start-btn').disabled = true;
+  if(!uid){ errEl.textContent = 'Enter a card UID.'; return; }
+
+  const { data: card } = await sb.from('rfid_cards').select('*').eq('uid', uid).maybeSingle();
+  if(!card){ errEl.textContent = 'No card found with that UID.'; return; }
+  const { data: user } = await sb.from('users').select('*').eq('id', card.user_id).maybeSingle();
+  if(!user){ errEl.textContent = 'This card has no cardholder on file.'; return; }
+
+  let allow = true;
+  const lines = [`<div style="font-weight:600;">${user.name}</div>`];
+
+  if(card.status === 'pending'){
+    lines.push('<div style="color:var(--red, #c0392b);">This card has not been activated yet.</div>');
+    allow = false;
+  } else if(card.status === 'blocked'){
+    lines.push('<div style="color:var(--red, #c0392b);">This card is blocked.</div>');
+    allow = false;
+  } else if(user.role === 'web_customer'){
+    // Their normal path is pay-per-charge via the public app, upfront.
+    // Starting them here skips that entirely — say so plainly.
+    lines.push('<div style="color:#8a5a12;">This is a web account (pay-per-charge). Starting it here will not collect any payment — this charge will be free.</div>');
+  } else if(user.balance_currency){
+    lines.push(`<div>Balance: ${fmtMoney(user.balance||0, user.balance_currency)}</div>`);
+    if(Number(user.balance||0) <= 0){
+      lines.push('<div style="color:var(--red, #c0392b);">This card has no balance left.</div>');
+      allow = false;
+    }
+  } else {
+    lines.push('<div style="color:var(--text-muted);">No wallet set up — this card charges for free.</div>');
+  }
+
+  infoEl.innerHTML = lines.join('');
+  rspFoundCard = { uid: card.uid };
+  document.getElementById('rsp-start-btn').disabled = !allow;
+}
+async function confirmRemoteStart(){
+  if(!rspFoundCard) return;
+  const c = chargers.find(x=>x.id===currentChargerId);
+  const btn = document.getElementById('rsp-start-btn');
+  const errEl = document.getElementById('rsp-error');
+  btn.disabled = true;
+  btn.textContent = 'Starting…';
+
+  const { data, error } = await sb.functions.invoke('remote-control', {
+    body: { chargerId: c.id, action: 'start', idTag: rspFoundCard.uid }
+  });
+  if(error || data?.error){
+    errEl.textContent = 'Could not reach the charger: ' + (data?.error || error.message);
+    btn.disabled = false;
+    btn.textContent = 'Start charging';
+    return;
+  }
+  closeRemoteStartPicker();
+
+  const remoteBtn = document.getElementById('cd-remote-btn');
+  remoteBtn.disabled = true;
+  remoteBtn.textContent = 'Waiting for charger…';
   for(let i=0;i<5;i++){
     await new Promise(r=>setTimeout(r, 1500));
     await loadAll();
