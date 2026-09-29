@@ -784,9 +784,9 @@ tr.rowlink:hover td{background:var(--blue-light);}
               <div style="font-size:12px;color:var(--text-muted);margin:4px 0 18px;" id="cd-path"></div>
               <div class="card card-pad">
                 <table>
-                  <tr><td style="color:var(--text-muted);">Status</td><td id="cd-status" style="text-align:right;"></td></tr>
+                  <tr><td style="color:var(--text-muted);" title="Plug n Drive own summary (Available, Charging, Offline...). Refreshed live, same as Raw OCPP status below.">Status</td><td id="cd-status" style="text-align:right;"></td></tr>
                   <tr><td style="color:var(--text-muted);">Live</td><td id="cd-live" style="text-align:right;"></td></tr>
-                  <tr><td style="color:var(--text-muted);">Raw OCPP status</td><td id="cd-ocpp-status" style="text-align:right;font-family:monospace;font-size:12px;"></td></tr>
+                  <tr><td style="color:var(--text-muted);" title="The exact word the charger itself sent (Preparing, Charging, Finishing...), unedited.">Raw OCPP status</td><td id="cd-ocpp-status" style="text-align:right;font-family:monospace;font-size:12px;"></td></tr>
                   <tr><td style="color:var(--text-muted);">Last seen</td><td id="cd-last-seen" style="text-align:right;"></td></tr>
                   <tr><td style="color:var(--text-muted);">OCPP version</td><td id="cd-ocpp" style="text-align:right;"></td></tr>
                   <tr><td style="color:var(--text-muted);">Vendor / model</td><td id="cd-model" style="text-align:right;"></td></tr>
@@ -1813,7 +1813,7 @@ function renderDashboard(){
       <td>${client ? client.name : '-'}</td>
       <td>${statusBadge(c.status)}</td>
       <td>${livenessDot(c.lastSeenAt)}${fmtLastSeen(c.lastSeenAt)}</td>
-      <td>${c.status==='Charging' ? (c.currentKW||0)+' kW' : '-'}</td>
+      <td>${c.status==='Charging' && c.currentKW != null ? c.currentKW+' kW' : '-'}</td>
       <td>${cardholder ? cardholder.name : '-'}</td>
       <td>${activeSession ? 'In progress' : '-'}</td>
     </tr>`;
@@ -1963,7 +1963,7 @@ function renderChargerDetail(){
   document.getElementById('cd-ocpp-status').textContent = c.ocppStatus || '-';
   document.getElementById('cd-last-seen').textContent = fmtLastSeen(c.lastSeenAt);
   document.getElementById('cd-live').innerHTML = isChargerFresh(c.lastSeenAt)
-    ? '<span style="color:#1a7f37;">● Recently active</span>'
+    ? '<span style="color:#1a7f37;">● Connected now</span>'
     : '<span style="color:#c0392b;">● Silent</span>';
   document.getElementById('cd-ocpp').textContent = c.ocpp;
   document.getElementById('cd-model').textContent = c.vendor || 'Not reported yet';
@@ -2008,6 +2008,14 @@ function startChargerLivePolling(){
         : '<span style="color:#c0392b;">● Not connected</span>';
       if(data.ocpp_status) document.getElementById('cd-ocpp-status').textContent = data.ocpp_status;
       if(data.last_seen_at) document.getElementById('cd-last-seen').textContent = fmtLastSeen(data.last_seen_at);
+      // The status badge used to only be set once, when the page first opened,
+      // so it could keep showing a stale value (e.g. "Charging") long after
+      // the charger had actually finished. This keeps it in sync too.
+      if(data.status){
+        document.getElementById('cd-status').innerHTML = statusBadge(data.status);
+        const c = chargers.find(x=>x.id===currentChargerId);
+        if(c) c.status = data.status;
+      }
     }
   }, 20000);
 }
