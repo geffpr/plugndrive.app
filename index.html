@@ -937,30 +937,7 @@ tr.rowlink:hover td{background:var(--blue-light);}
 
       <!-- RFID -->
       <div class="page" id="page-rfid">
-        <div class="filters">
-          <select id="rfid-complex-filter" onchange="renderRfid()"></select>
-          <select id="rfid-status-filter" onchange="renderRfid()">
-            <option value="all">All statuses</option>
-            <option value="active">Active</option>
-            <option value="pending">Pending activation</option>
-            <option value="blocked">Blocked</option>
-          </select>
-          <div style="margin-left:auto;">
-            <button class="btn btn-primary" onclick="openAssignCard()">+ Assign new card</button>
-          </div>
-        </div>
-        <div id="assign-card-panel" class="card card-pad" style="display:none;max-width:420px;margin-bottom:16px;">
-          <div style="font-weight:600;margin-bottom:8px;">Assign a new RFID card</div>
-          <div class="form-row"><label>Card UID (printed on the card, or scanned via NFC reader)</label><input type="text" id="ac-uid" placeholder="e.g. A3:F2:19:0C"></div>
-          <div class="form-row"><label>Site</label><select id="ac-site"></select></div>
-          <div class="form-row"><label>Resident name</label><input type="text" id="ac-name"></div>
-          <div class="form-row"><label>Resident phone (for the activation SMS)</label><input type="text" id="ac-phone" placeholder="+27..."></div>
-          <div style="display:flex;gap:8px;">
-            <button class="btn btn-primary" onclick="submitAssignCard()">Send activation code</button>
-            <button class="btn" onclick="closeAssignCard()">Cancel</button>
-          </div>
-          <div id="assign-card-error" style="color:var(--red, #c0392b);font-size:12px;margin-top:8px;"></div>
-        </div>
+        <!-- Shared with the card detail view below, so "Credit" works from either place -->
         <div id="admin-credit-panel" class="card card-pad" style="display:none;max-width:420px;margin-bottom:16px;">
           <div style="font-weight:600;margin-bottom:4px;">Credit <span id="acr-name"></span>'s card</div>
           <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">Current balance: <span id="acr-balance"></span></div>
@@ -972,11 +949,72 @@ tr.rowlink:hover td{background:var(--blue-light);}
           </div>
           <div id="admin-credit-error" style="color:var(--red, #c0392b);font-size:12px;margin-top:8px;"></div>
         </div>
-        <div class="card">
-          <table>
-            <thead><tr><th>Card UID</th><th>Resident</th><th>Unit</th><th>Complex</th><th>Status</th><th></th></tr></thead>
-            <tbody id="rfid-body"></tbody>
-          </table>
+
+        <div id="rfid-list-view">
+          <div class="filters">
+            <select id="rfid-complex-filter" onchange="renderRfid()"></select>
+            <select id="rfid-status-filter" onchange="renderRfid()">
+              <option value="all">All statuses</option>
+              <option value="active">Active</option>
+              <option value="pending">Pending activation</option>
+              <option value="blocked">Blocked</option>
+            </select>
+            <div style="margin-left:auto;">
+              <button class="btn btn-primary" onclick="openAssignCard()">+ Assign new card</button>
+            </div>
+          </div>
+          <div id="assign-card-panel" class="card card-pad" style="display:none;max-width:420px;margin-bottom:16px;">
+            <div style="font-weight:600;margin-bottom:8px;">Assign a new RFID card</div>
+            <div class="form-row"><label>Card UID (printed on the card, or scanned via NFC reader)</label><input type="text" id="ac-uid" placeholder="e.g. A3:F2:19:0C"></div>
+            <div class="form-row"><label>Site</label><select id="ac-site"></select></div>
+            <div class="form-row"><label>Resident name</label><input type="text" id="ac-name"></div>
+            <div class="form-row"><label>Resident phone (for the activation SMS)</label><input type="text" id="ac-phone" placeholder="+27..."></div>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-primary" onclick="submitAssignCard()">Send activation code</button>
+              <button class="btn" onclick="closeAssignCard()">Cancel</button>
+            </div>
+            <div id="assign-card-error" style="color:var(--red, #c0392b);font-size:12px;margin-top:8px;"></div>
+          </div>
+          <div class="card">
+            <table>
+              <thead><tr><th>Card UID</th><th>Resident</th><th>Unit</th><th>Complex</th><th>Status</th><th>Balance</th></tr></thead>
+              <tbody id="rfid-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="card-detail-view" style="display:none;">
+          <div class="back-link" onclick="backToRfid()">← Back to all cards</div>
+          <div class="two-col">
+            <div>
+              <h2 id="cad-uid"></h2>
+              <div style="font-size:12px;color:var(--text-muted);margin:4px 0 18px;" id="cad-sub"></div>
+              <div class="card card-pad">
+                <table>
+                  <tr><td style="color:var(--text-muted);">Status</td><td id="cad-status" style="text-align:right;"></td></tr>
+                  <tr><td style="color:var(--text-muted);">Complex</td><td id="cad-complex" style="text-align:right;"></td></tr>
+                  <tr><td style="color:var(--text-muted);">Unit</td><td id="cad-unit" style="text-align:right;"></td></tr>
+                  <tr><td style="color:var(--text-muted);">Phone</td><td id="cad-phone" style="text-align:right;"></td></tr>
+                  <tr><td style="color:var(--text-muted);">Balance</td><td id="cad-balance" style="text-align:right;font-weight:700;"></td></tr>
+                </table>
+              </div>
+              <div class="section-title">Wallet history</div>
+              <div class="card">
+                <table>
+                  <thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>New balance</th><th>Note</th><th>By</th></tr></thead>
+                  <tbody id="cad-history"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
+                </table>
+              </div>
+            </div>
+            <div>
+              <div class="section-title">Actions</div>
+              <div class="card card-pad" style="display:flex;flex-direction:column;gap:8px;">
+                <button class="btn btn-block" id="cad-toggle-btn" onclick="toggleCardFromDetail()"></button>
+                <button class="btn btn-block" id="cad-resend-btn" onclick="resendActivationFromDetail()" style="display:none;">Resend code</button>
+                <button class="btn btn-primary btn-block" id="cad-credit-btn" onclick="openAdminCredit(currentCardUid)" style="display:none;">Credit card</button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -2758,27 +2796,102 @@ function renderSessions(){
   }).join('');
 }
 
+const RFID_STATUS_LABEL = { active: 'Active', blocked: 'Blocked', pending: 'Pending activation' };
+// A card with no wallet currency is untracked — it charges for free today
+// (see cardBalanceLabel's own note). Shown plainly so it's never mistaken
+// for a real zero balance.
+function cardBalanceLabel(u){
+  if(!u) return '-';
+  if(!u.balanceCurrency) return '<span style="color:var(--text-muted);" title="No wallet set up yet — this card currently charges for free">Free</span>';
+  return fmtMoney(u.balance||0, u.balanceCurrency);
+}
 function renderRfid(){
+  document.getElementById('rfid-list-view').style.display = 'block';
+  document.getElementById('card-detail-view').style.display = 'none';
   populateComplexFilter('rfid-complex-filter', true);
   const cf = document.getElementById('rfid-complex-filter').value || 'all';
   const sf = document.getElementById('rfid-status-filter').value;
   let rows = rfidCards.slice();
   if(cf!=='all') rows = rows.filter(r=>r.complexId===cf);
   if(sf!=='all') rows = rows.filter(r=>r.status===sf);
-  const statusLabel = { active: 'Active', blocked: 'Blocked', pending: 'Pending activation' };
   document.getElementById('rfid-body').innerHTML = rows.map(r=>{
     const u = users.find(x=>x.id===r.userId);
     const complexName = (locations.find(l=>l.id===r.complexId)||{}).name || '-';
-    const actionBtn = r.status === 'pending'
-      ? `<button class="btn btn-sm" onclick="resendActivation('${r.id}')">Resend code</button>`
-      : `<button class="btn btn-sm" onclick="toggleCard('${r.uid}')">${r.status==='active'?'Block':'Unblock'}</button>`;
-    // Only a Plug n Drive admin can credit a card directly (an operator has
-    // their own separate "credit a cardholder" screen, tied to their site).
-    const creditBtn = (currentStaff && currentStaff.role === 'plugndrive_admin')
-      ? `<button class="btn btn-sm" onclick="openAdminCredit('${r.uid}')" style="margin-left:6px;">Credit</button>` : '';
-    return `<tr><td>${r.uid}</td><td>${u?u.name:'-'}</td><td>${u?u.unit:'-'}</td><td>${complexName}</td>
-      <td><span class="badge ${r.status}">${statusLabel[r.status] || r.status}</span></td>
-      <td>${actionBtn}${creditBtn}</td></tr>`;
+    return `<tr class="rowlink" onclick="openCardDetail('${r.uid}')"><td>${r.uid}</td><td>${u?u.name:'-'}</td><td>${u?u.unit:'-'}</td><td>${complexName}</td>
+      <td><span class="badge ${r.status}">${RFID_STATUS_LABEL[r.status] || r.status}</span></td>
+      <td>${cardBalanceLabel(u)}</td></tr>`;
+  }).join('');
+}
+
+// ---------------- Card detail (click a row in the RFID list) ----------------
+let currentCardUid = null;
+function openCardDetail(uid){
+  const card = rfidCards.find(r=>r.uid===uid);
+  const user = card ? users.find(u=>u.id===card.userId) : null;
+  const site = card ? locations.find(l=>l.id===card.complexId) : null;
+  if(!card){ return; }
+  currentCardUid = uid;
+
+  document.getElementById('rfid-list-view').style.display = 'none';
+  document.getElementById('card-detail-view').style.display = 'block';
+
+  document.getElementById('cad-uid').textContent = card.uid;
+  document.getElementById('cad-sub').textContent = `${user?user.name:'No cardholder'}${site?' · '+site.name:''}`;
+  document.getElementById('cad-status').innerHTML = `<span class="badge ${card.status}">${RFID_STATUS_LABEL[card.status] || card.status}</span>`;
+  document.getElementById('cad-complex').textContent = site ? site.name : '-';
+  document.getElementById('cad-unit').textContent = (user && user.unit) || '-';
+  document.getElementById('cad-phone').textContent = (user && user.phone) || '-';
+  document.getElementById('cad-balance').innerHTML = cardBalanceLabel(user);
+
+  const toggleBtn = document.getElementById('cad-toggle-btn');
+  const resendBtn = document.getElementById('cad-resend-btn');
+  if(card.status === 'pending'){
+    toggleBtn.style.display = 'none';
+    resendBtn.style.display = '';
+  } else {
+    toggleBtn.style.display = '';
+    resendBtn.style.display = 'none';
+    toggleBtn.textContent = card.status === 'active' ? 'Block' : 'Unblock';
+    toggleBtn.className = card.status === 'active' ? 'btn btn-danger btn-block' : 'btn btn-block';
+  }
+  // Only a Plug n Drive admin can credit a card directly (an operator has
+  // their own separate "credit a cardholder" screen, tied to their site).
+  document.getElementById('cad-credit-btn').style.display = (currentStaff && currentStaff.role === 'plugndrive_admin') ? '' : 'none';
+
+  loadCardHistory(card.userId);
+}
+function backToRfid(){
+  currentCardUid = null;
+  document.getElementById('card-detail-view').style.display = 'none';
+  document.getElementById('rfid-list-view').style.display = 'block';
+}
+async function toggleCardFromDetail(){
+  if(!currentCardUid) return;
+  await toggleCard(currentCardUid);
+  openCardDetail(currentCardUid);
+}
+async function resendActivationFromDetail(){
+  const card = rfidCards.find(r=>r.uid===currentCardUid);
+  if(!card) return;
+  await resendActivation(card.id);
+}
+async function loadCardHistory(userId){
+  const body = document.getElementById('cad-history');
+  if(!userId){ body.innerHTML = '<tr><td colspan="6" class="empty">No cardholder on file.</td></tr>'; return; }
+  const { data, error } = await sb.from('wallet_transactions')
+    .select('*, staff(name)')
+    .eq('user_id', userId)
+    .order('created_at', {ascending:false});
+  if(error){ body.innerHTML = `<tr><td colspan="6" class="empty">${error.message}</td></tr>`; return; }
+  if(!data || !data.length){ body.innerHTML = '<tr><td colspan="6" class="empty">No wallet activity yet.</td></tr>'; return; }
+  body.innerHTML = data.map(r=>{
+    const dateStr = (r.created_at||'').replace('T',' ').slice(0,16);
+    const sign = r.type === 'credit' ? '+' : '-';
+    const typeLabel = r.type.charAt(0).toUpperCase()+r.type.slice(1);
+    // Recorded going forward only — a movement made before this feature
+    // existed has no known balance-after, shown as "-" rather than guessed.
+    const afterStr = r.balance_after != null ? fmtMoney(r.balance_after, r.currency) : '-';
+    return `<tr><td>${dateStr}</td><td>${typeLabel}</td><td>${sign}${fmtMoney(r.amount, r.currency)}</td><td>${afterStr}</td><td>${r.note||'-'}</td><td>${r.staff?.name||'-'}</td></tr>`;
   }).join('');
 }
 let acrCard = null, acrUser = null, acrSite = null;
@@ -2835,7 +2948,10 @@ async function submitAdminCredit(){
   errEl.style.color = 'var(--green, #1a7f37)';
   errEl.textContent = `Credited. New balance: ${fmtMoney(data.new_balance, data.currency)}.`;
   await loadAll();
-  setTimeout(() => { closeAdminCredit(); renderRfid(); }, 1200);
+  setTimeout(() => {
+    closeAdminCredit();
+    if(currentCardUid) openCardDetail(currentCardUid); else renderRfid();
+  }, 1200);
 }
 async function toggleCard(uid){
   const c = rfidCards.find(r=>r.uid===uid);
