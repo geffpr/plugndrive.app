@@ -961,6 +961,17 @@ tr.rowlink:hover td{background:var(--blue-light);}
           </div>
           <div id="assign-card-error" style="color:var(--red, #c0392b);font-size:12px;margin-top:8px;"></div>
         </div>
+        <div id="admin-credit-panel" class="card card-pad" style="display:none;max-width:420px;margin-bottom:16px;">
+          <div style="font-weight:600;margin-bottom:4px;">Credit <span id="acr-name"></span>'s card</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">Current balance: <span id="acr-balance"></span></div>
+          <div id="acr-amount-buttons" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;"></div>
+          <div class="form-row"><label>Amount</label><input type="text" id="acr-amount" inputmode="decimal"></div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-primary" id="acr-confirm-btn" onclick="submitAdminCredit()">Credit card</button>
+            <button class="btn" onclick="closeAdminCredit()">Cancel</button>
+          </div>
+          <div id="admin-credit-error" style="color:var(--red, #c0392b);font-size:12px;margin-top:8px;"></div>
+        </div>
         <div class="card">
           <table>
             <thead><tr><th>Card UID</th><th>Resident</th><th>Unit</th><th>Complex</th><th>Status</th><th></th></tr></thead>
@@ -1543,7 +1554,7 @@ function mapLocation(l){ return {id:l.id, name:l.name, type:l.type, parentId:l.p
 function mapCharger(c){ return {id:c.id, locationId:c.location_id, name:c.name, ocppId:c.ocpp_id, vendor:c.vendor, connector:c.connector, powerKW:c.power_kw, ocpp:c.ocpp_version, status:c.status, currentKW:c.current_kw, ocppPassword:c.ocpp_password, lastSeenAt:c.last_seen_at, ocppStatus:c.ocpp_status, listedPublicly:c.listed_publicly}; }
 function mapSession(s){ return {id:s.id, chargerId:s.charger_id, userId:s.user_id, rfidCardId:s.rfid_card_id, kwh:s.kwh, cost:s.cost, currency:s.currency, startedAt:s.started_at, endedAt:s.ended_at, paymentStatus:s.payment_status, payment:s.payment_method}; }
 function mapRfid(r){ return {id:r.id, uid:r.uid, userId:r.user_id, complexId:r.location_id, status:r.status}; }
-function mapUser(u){ return {id:u.id, name:u.name, unit:u.unit, locationId:u.location_id, role:u.role, phone:u.phone, email:u.email}; }
+function mapUser(u){ return {id:u.id, name:u.name, unit:u.unit, locationId:u.location_id, role:u.role, phone:u.phone, email:u.email, balance:u.balance, balanceCurrency:u.balance_currency}; }
 function mapTariff(t){ return {id:t.id, locationId:t.location_id, chargerId:t.charger_id, priceDay:t.price_day, priceNight:t.price_night, nightStart:t.night_start, nightEnd:t.night_end, idleFeePerMin:t.idle_fee_per_min, idleGraceMinutes:t.idle_grace_minutes, monthlyFee:t.monthly_ocpp_fee, monthlyKwhIncluded:t.monthly_kwh_included, overagePrice:t.overage_price, currency:t.currency}; }
 function mapClient(c){ return {id:c.id, name:c.name, businessType:c.business_type, contactName:c.contact_name, contactPhone:c.contact_phone, contactEmail:c.contact_email, address:c.address, revShareInitial:c.revenue_share_initial, revShareAfter:c.revenue_share_after, contractStart:c.contract_start_date, transitionMonths:c.months_before_transition}; }
 
@@ -2761,10 +2772,70 @@ function renderRfid(){
     const actionBtn = r.status === 'pending'
       ? `<button class="btn btn-sm" onclick="resendActivation('${r.id}')">Resend code</button>`
       : `<button class="btn btn-sm" onclick="toggleCard('${r.uid}')">${r.status==='active'?'Block':'Unblock'}</button>`;
+    // Only a Plug n Drive admin can credit a card directly (an operator has
+    // their own separate "credit a cardholder" screen, tied to their site).
+    const creditBtn = (currentStaff && currentStaff.role === 'plugndrive_admin')
+      ? `<button class="btn btn-sm" onclick="openAdminCredit('${r.uid}')" style="margin-left:6px;">Credit</button>` : '';
     return `<tr><td>${r.uid}</td><td>${u?u.name:'-'}</td><td>${u?u.unit:'-'}</td><td>${complexName}</td>
       <td><span class="badge ${r.status}">${statusLabel[r.status] || r.status}</span></td>
-      <td>${actionBtn}</td></tr>`;
+      <td>${actionBtn}${creditBtn}</td></tr>`;
   }).join('');
+}
+let acrCard = null, acrUser = null, acrSite = null;
+function openAdminCredit(uid){
+  const card = rfidCards.find(r=>r.uid===uid);
+  const user = card ? users.find(u=>u.id===card.userId) : null;
+  const site = card ? locations.find(l=>l.id===card.complexId) : null;
+  if(!card || !user){ alert('Could not find this card\'s cardholder.'); return; }
+  acrCard = card; acrUser = user; acrSite = site;
+
+  document.getElementById('acr-name').textContent = user.name;
+  const balanceEl = document.getElementById('acr-balance');
+  if(user.balanceCurrency){
+    balanceEl.textContent = fmtMoney(user.balance||0, user.balanceCurrency);
+  } else {
+    // Honest about the current state: an untracked card charges for free —
+    // crediting it now is what sets up a real wallet, in the card's site currency.
+    balanceEl.textContent = `No wallet yet — this card currently charges for free. Crediting it will set up a wallet in ${site ? site.currency : 'the site\'s currency'}.`;
+  }
+  const currency = (user.balanceCurrency) || (site ? site.currency : null);
+  const amounts = OP_QUICK_AMOUNTS[currency] || [50,100,200,500];
+  document.getElementById('acr-amount-buttons').innerHTML = amounts.map(a =>
+    `<button class="btn btn-sm" onclick="document.getElementById('acr-amount').value=${a}">${currency ? fmtMoney(a, currency) : a}</button>`
+  ).join('');
+  document.getElementById('acr-amount').value = '';
+  document.getElementById('admin-credit-error').textContent = '';
+  document.getElementById('admin-credit-error').style.color = '';
+  document.getElementById('admin-credit-panel').style.display = 'block';
+}
+function closeAdminCredit(){
+  document.getElementById('admin-credit-panel').style.display = 'none';
+}
+async function submitAdminCredit(){
+  const errEl = document.getElementById('admin-credit-error');
+  errEl.style.color = 'var(--red, #c0392b)';
+  const amount = Number(document.getElementById('acr-amount').value);
+  if(!amount || amount <= 0){ errEl.textContent = 'Enter an amount greater than zero.'; return; }
+  if(!acrCard || !acrCard.complexId){ errEl.textContent = 'This card has no site on file, so a currency cannot be determined.'; return; }
+
+  const btn = document.getElementById('acr-confirm-btn');
+  btn.disabled = true;
+  const { data, error } = await sb.functions.invoke('credit-card', {
+    body: { uid: acrCard.uid, amount, locationId: acrCard.complexId }
+  });
+  btn.disabled = false;
+
+  if(error || data?.error){
+    let msg = data?.error;
+    if(!msg && error?.context){ try { msg = (await error.context.json()).error; } catch { /* not JSON */ } }
+    errEl.textContent = msg || error?.message || 'Could not credit this card.';
+    return;
+  }
+
+  errEl.style.color = 'var(--green, #1a7f37)';
+  errEl.textContent = `Credited. New balance: ${fmtMoney(data.new_balance, data.currency)}.`;
+  await loadAll();
+  setTimeout(() => { closeAdminCredit(); renderRfid(); }, 1200);
 }
 async function toggleCard(uid){
   const c = rfidCards.find(r=>r.uid===uid);
@@ -2813,7 +2884,11 @@ async function submitAssignCard(){
   if(!userId){
     const site = locations.find(l=>l.id===siteId);
     const clientId = site ? (site.clientId || (rootOf(siteId)||{}).clientId || null) : null;
-    const { data: newUser, error: userErr } = await sb.from('users').insert({ name, phone, location_id: siteId, role: 'resident', client_id: clientId }).select().single();
+    // A wallet is set up from the start, in the site's currency, at a zero
+    // balance. That means the card is Blocked (not free/unlimited) until
+    // someone credits it — the OCPP server refuses to start a session for a
+    // wallet-tracked cardholder with no balance.
+    const { data: newUser, error: userErr } = await sb.from('users').insert({ name, phone, location_id: siteId, role: 'resident', client_id: clientId, balance: 0, balance_currency: site ? site.currency : null }).select().single();
     if(userErr){ errEl.textContent = userErr.message; return; }
     userId = newUser.id;
   }
