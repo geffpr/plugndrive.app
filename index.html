@@ -368,6 +368,7 @@ tr.rowlink:hover td{background:var(--blue-light);}
     <div class="nav-section-label" id="admin-section-label" style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:rgba(255,255,255,.45);padding:14px 10px 4px;">Admin</div>
     <a class="navitem" data-page="clients" onclick="showPage('clients')"><span class="ic">▣</span>Clients</a>
     <a class="navitem" data-page="myoperators" id="myoperators-nav" onclick="showPage('myoperators')" style="display:none;"><span class="ic">◉</span>My operators</a>
+    <a class="navitem" data-page="settings" id="settings-nav" onclick="showPage('settings')" style="display:none;"><span class="ic">⚙</span>Settings</a>
     <a class="navitem" data-page="sites" onclick="showPage('sites')"><span class="ic">◫</span>Sites</a>
     <a class="navitem" data-page="chargers" onclick="showPage('chargers')"><span class="ic">⛽</span>Chargers</a>
     <a class="navitem" data-page="sessions" onclick="showPage('sessions')"><span class="ic">◷</span>Sessions</a>
@@ -748,6 +749,44 @@ tr.rowlink:hover td{background:var(--blue-light);}
             <thead><tr><th>Name</th><th>Email</th><th>Site</th><th>Added</th><th></th></tr></thead>
             <tbody id="operators-body"></tbody>
           </table>
+        </div>
+      </div>
+
+      <!-- SETTINGS (client_admin only): read-only company profile + Paystack payout connection -->
+      <div class="page" id="page-settings">
+        <div class="section-title" style="margin:0 0 14px;">Company profile</div>
+        <div class="card card-pad" style="max-width:520px;margin-bottom:24px;">
+          <table>
+            <tr><td style="color:var(--text-muted);">Company name</td><td id="stg-name" style="text-align:right;"></td></tr>
+            <tr><td style="color:var(--text-muted);">Business type</td><td id="stg-type" style="text-align:right;"></td></tr>
+            <tr><td style="color:var(--text-muted);">Contact</td><td id="stg-contact" style="text-align:right;"></td></tr>
+            <tr><td style="color:var(--text-muted);">Phone</td><td id="stg-phone" style="text-align:right;"></td></tr>
+            <tr><td style="color:var(--text-muted);">Email</td><td id="stg-email" style="text-align:right;"></td></tr>
+            <tr><td style="color:var(--text-muted);">Address</td><td id="stg-address" style="text-align:right;"></td></tr>
+            <tr><td style="color:var(--text-muted);">Client since</td><td id="stg-since" style="text-align:right;"></td></tr>
+            <tr><td style="color:var(--text-muted);">Total sites</td><td id="stg-sites" style="text-align:right;"></td></tr>
+            <tr><td style="color:var(--text-muted);">Total chargers</td><td id="stg-chargers" style="text-align:right;"></td></tr>
+            <tr><td style="color:var(--text-muted);">Plug n Drive commission</td><td id="stg-commission" style="text-align:right;"></td></tr>
+          </table>
+        </div>
+
+        <div class="section-title" style="margin:0 0 14px;">Payouts (Paystack)</div>
+        <div class="card card-pad" style="max-width:420px;">
+          <div id="stg-connected-view" style="display:none;">
+            <p style="font-size:13px;color:var(--text-muted);margin:0 0 4px;">Payouts are sent to:</p>
+            <div style="font-weight:600;" id="stg-connected-name"></div>
+            <div style="font-size:13px;color:var(--text-muted);" id="stg-connected-bank"></div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:6px;" id="stg-connected-date"></div>
+            <button class="btn btn-sm" style="margin-top:14px;" onclick="showPayoutForm()">Change bank details</button>
+          </div>
+          <div id="stg-connect-form">
+            <p style="font-size:13px;color:var(--text-muted);margin:0 0 14px;">Your payout will be sent to this account whenever Plug n Drive pays out your revenue.</p>
+            <div class="form-row"><label>Business name</label><input type="text" id="stg-business-name"></div>
+            <div class="form-row"><label>Bank</label><select id="stg-bank"><option value="">Loading banks…</option></select></div>
+            <div class="form-row"><label>Account number</label><input type="text" id="stg-account-number"></div>
+            <button class="btn btn-primary" id="stg-connect-btn" onclick="submitPayoutConnect()">Connect</button>
+            <div id="stg-connect-error" style="color:var(--red, #c0392b);font-size:12px;margin-top:8px;"></div>
+          </div>
         </div>
       </div>
 
@@ -1588,6 +1627,8 @@ function applyRoleBasedNav(){
   if(adminLabel) adminLabel.style.display = isClientAdmin ? 'none' : '';
   const opsNav = document.getElementById('myoperators-nav');
   if(opsNav) opsNav.style.display = isClientAdmin ? '' : 'none';
+  const settingsNav = document.getElementById('settings-nav');
+  if(settingsNav) settingsNav.style.display = isClientAdmin ? '' : 'none';
   const addSiteBtn = document.querySelector('#sites-list-view button.btn-primary');
   if(addSiteBtn) addSiteBtn.style.display = isClientAdmin ? 'none' : '';
   const addChargerBtn = document.querySelector('#chargers-list-view button.btn-primary');
@@ -1639,7 +1680,7 @@ function describeCommission(cl){
   // is negotiated — payouts are never paused while that happens.
   return `0% <span style="color:var(--red, #c0392b);">(previous ${cl.commissionRate}% deal ended ${end} — not renegotiated)</span>`;
 }
-function mapClient(c){ return {id:c.id, name:c.name, businessType:c.business_type, contactName:c.contact_name, contactPhone:c.contact_phone, contactEmail:c.contact_email, address:c.address, commissionRate:c.commission_rate, commissionStartDate:c.commission_start_date, commissionDurationMonths:c.commission_duration_months, contractStart:c.contract_start_date}; }
+function mapClient(c){ return {id:c.id, name:c.name, businessType:c.business_type, contactName:c.contact_name, contactPhone:c.contact_phone, contactEmail:c.contact_email, address:c.address, commissionRate:c.commission_rate, commissionStartDate:c.commission_start_date, commissionDurationMonths:c.commission_duration_months, contractStart:c.contract_start_date, payoutBankCode:c.payout_bank_code, payoutBankName:c.payout_bank_name, payoutAccountNumber:c.payout_account_number, payoutAccountName:c.payout_account_name, paystackRecipientCode:c.paystack_recipient_code, paystackConnectedAt:c.paystack_connected_at}; }
 
 async function loadAll(){
   const [locRes, chgRes, sesRes, rfidRes, userRes, tarRes, clientRes] = await Promise.all([
@@ -1759,6 +1800,7 @@ const ROUTES = {
   clientDetail: (id) => `/clients/${id}`,
   addclient: () => '/addclient',
   myoperators: () => '/myoperators',
+  settings: () => '/settings',
 };
 function navigate(path){
   if(location.pathname !== path) history.pushState({}, '', path);
@@ -1774,7 +1816,7 @@ function showPage(id, opts){
   const parentNav = { addsite:'sites', addcharger:'chargers', addclient:'clients' };
   const navEl = document.querySelector(`.navitem[data-page="${parentNav[id] || id}"]`);
   if(navEl) navEl.classList.add('active');
-  const titles={dashboard:'Dashboard',sites:'Sites',addsite:'Add site',chargers:'Chargers',addcharger:'Add charger',sessions:'Sessions',rfid:'RFID cards',load:'Load management',tariffs:'Tariffs',clients:'Clients',addclient:'Add client',myoperators:'My operators',walletactivity:'Wallet activity'};
+  const titles={dashboard:'Dashboard',sites:'Sites',addsite:'Add site',chargers:'Chargers',addcharger:'Add charger',sessions:'Sessions',rfid:'RFID cards',load:'Load management',tariffs:'Tariffs',clients:'Clients',addclient:'Add client',myoperators:'My operators',walletactivity:'Wallet activity',settings:'Settings'};
   document.getElementById('topbar-title').textContent = titles[id];
   if(!opts.skipNav) navigate(ROUTES[id] ? ROUTES[id]() : '/'+id);
   if(id==='sites') renderSites();
@@ -1790,6 +1832,7 @@ function showPage(id, opts){
   if(id==='addclient') renderAddClient();
   if(id==='myoperators') renderMyOperators();
   if(id==='walletactivity') renderWalletActivity();
+  if(id==='settings') renderSettings();
 }
 
 // Reads the current URL and shows the matching page/detail view.
@@ -1797,7 +1840,7 @@ function showPage(id, opts){
 function routeFromLocation(){
   const parts = location.pathname.split('/').filter(Boolean); // e.g. ['sites','<id>']
   const page = parts[0] || 'dashboard';
-  const knownPages = ['dashboard','sites','addsite','chargers','addcharger','sessions','rfid','load','tariffs','clients','addclient','myoperators','walletactivity'];
+  const knownPages = ['dashboard','sites','addsite','chargers','addcharger','sessions','rfid','load','tariffs','clients','addclient','myoperators','walletactivity','settings'];
   if(!knownPages.includes(page)){ showPage('dashboard'); return; }
 
   showPage(page, {skipNav:true});
@@ -3112,6 +3155,93 @@ async function submitAdminCredit(){
     closeAdminCredit();
     if(currentCardUid) openCardDetail(currentCardUid); else renderRfid();
   }, 1200);
+}
+// --- Settings (client_admin only): read-only profile + Paystack payout connection ---
+function renderSettings(){
+  const cl = clients[0];   // RLS already limits a client_admin to exactly their own row
+  if(!cl) return;
+
+  document.getElementById('stg-name').textContent = cl.name;
+  document.getElementById('stg-type').textContent = cl.businessType;
+  document.getElementById('stg-contact').textContent = cl.contactName || '-';
+  document.getElementById('stg-phone').textContent = cl.contactPhone || '-';
+  document.getElementById('stg-email').textContent = cl.contactEmail || '-';
+  document.getElementById('stg-address').textContent = cl.address || '-';
+  document.getElementById('stg-since').textContent = cl.contractStart || '-';
+  document.getElementById('stg-commission').innerHTML = describeCommission(cl);
+
+  const sites = locations.filter(l=>l.clientId===cl.id);
+  const totalChargers = sites.reduce((sum, s) => sum + chargers.filter(c=>{ const root=rootOf(c.locationId); return root && root.id===s.id; }).length, 0);
+  document.getElementById('stg-sites').textContent = sites.length;
+  document.getElementById('stg-chargers').textContent = totalChargers;
+
+  if(cl.paystackConnectedAt){
+    document.getElementById('stg-connected-view').style.display = 'block';
+    document.getElementById('stg-connect-form').style.display = 'none';
+    document.getElementById('stg-connected-name').textContent = cl.payoutAccountName;
+    document.getElementById('stg-connected-bank').textContent = `${cl.payoutBankName || ''} •••• ${(cl.payoutAccountNumber||'').slice(-4)}`;
+    document.getElementById('stg-connected-date').textContent = `Connected on ${cl.paystackConnectedAt.slice(0,10)}`;
+  } else {
+    showPayoutForm();
+  }
+}
+function showPayoutForm(){
+  document.getElementById('stg-connected-view').style.display = 'none';
+  document.getElementById('stg-connect-form').style.display = 'block';
+  document.getElementById('stg-connect-error').textContent = '';
+  const cl = clients[0];
+  document.getElementById('stg-business-name').value = (cl && cl.payoutAccountName) || (cl && cl.name) || '';
+  document.getElementById('stg-account-number').value = (cl && cl.payoutAccountNumber) || '';
+  loadPayoutBanks();
+}
+let payoutBanksCache = null;
+async function loadPayoutBanks(){
+  const sel = document.getElementById('stg-bank');
+  if(payoutBanksCache){
+    sel.innerHTML = payoutBanksCache.map(b=>`<option value="${b.code}">${b.name}</option>`).join('');
+    const cl = clients[0];
+    if(cl && cl.payoutBankCode) sel.value = cl.payoutBankCode;
+    return;
+  }
+  sel.innerHTML = '<option value="">Loading banks…</option>';
+  const { data, error } = await sb.functions.invoke('client-paystack-connect', { body: { action: 'banks' } });
+  if(error || data?.error){
+    sel.innerHTML = '<option value="">Could not load banks</option>';
+    return;
+  }
+  payoutBanksCache = data.banks;
+  sel.innerHTML = data.banks.map(b=>`<option value="${b.code}">${b.name}</option>`).join('');
+  const cl = clients[0];
+  if(cl && cl.payoutBankCode) sel.value = cl.payoutBankCode;
+}
+async function submitPayoutConnect(){
+  const errEl = document.getElementById('stg-connect-error');
+  errEl.textContent = '';
+  const business_name = document.getElementById('stg-business-name').value.trim();
+  const bankSel = document.getElementById('stg-bank');
+  const bank_code = bankSel.value;
+  const bank_name = bankSel.selectedOptions[0] ? bankSel.selectedOptions[0].textContent : '';
+  const account_number = document.getElementById('stg-account-number').value.trim();
+  if(!business_name || !bank_code || !account_number){
+    errEl.textContent = 'Please fill in all fields.';
+    return;
+  }
+  const btn = document.getElementById('stg-connect-btn');
+  btn.disabled = true;
+  btn.textContent = 'Connecting…';
+  const { data, error } = await sb.functions.invoke('client-paystack-connect', {
+    body: { action: 'connect', business_name, bank_code, bank_name, account_number }
+  });
+  btn.disabled = false;
+  btn.textContent = 'Connect';
+  if(error || data?.error){
+    let msg = data?.error;
+    if(!msg && error?.context){ try { msg = (await error.context.json()).error; } catch { /* not JSON */ } }
+    errEl.textContent = msg || error?.message || 'Could not connect this account.';
+    return;
+  }
+  await loadAll();
+  renderSettings();
 }
 async function toggleCard(uid){
   const c = rfidCards.find(r=>r.uid===uid);
