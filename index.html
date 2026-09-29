@@ -801,8 +801,8 @@ tr.rowlink:hover td{background:var(--blue-light);}
                     </span>
                     <div id="cd-power-note" style="font-size:11px;margin-top:3px;"></div>
                   </td></tr>
-                  <tr><td style="color:var(--text-muted);">WebSocket URL</td><td id="cd-ws" style="text-align:right;font-size:11px;color:var(--blue-dark);"></td></tr>
-                  <tr><td style="color:var(--text-muted);">Auth password</td><td style="text-align:right;">
+                  <tr id="cd-ws-row"><td style="color:var(--text-muted);">WebSocket URL</td><td id="cd-ws" style="text-align:right;font-size:11px;color:var(--blue-dark);"></td></tr>
+                  <tr id="cd-password-row"><td style="color:var(--text-muted);">Auth password</td><td style="text-align:right;">
                     <span id="cd-password" style="font-family:monospace;"></span>
                     <a href="#" onclick="toggleChargerPasswordVisibility();return false;" id="cd-password-eye" style="margin-left:6px;">👁</a>
                   </td></tr>
@@ -818,7 +818,7 @@ tr.rowlink:hover td{background:var(--blue-light);}
                   </td></tr>
                 </table>
               </div>
-              <div class="card card-pad" style="margin-top:10px;display:flex;gap:8px;">
+              <div class="card card-pad" id="cd-password-actions" style="margin-top:10px;display:flex;gap:8px;">
                 <button class="btn btn-sm" onclick="clearChargerPassword()">Clear password (for browser testing)</button>
                 <button class="btn btn-sm" onclick="regenerateChargerPassword()">Regenerate password</button>
               </div>
@@ -837,7 +837,7 @@ tr.rowlink:hover td{background:var(--blue-light);}
               <div class="card card-pad" style="display:flex;flex-direction:column;gap:8px;">
                 <button class="btn btn-primary btn-block" id="cd-remote-btn" onclick="toggleRemote()"></button>
                 <button class="btn btn-block" onclick="testChargerConnection()">Test connection</button>
-                <button class="btn btn-danger btn-block" onclick="openUnpair()">Unpair charger</button>
+                <button class="btn btn-danger btn-block" id="cd-unpair-btn" onclick="openUnpair()">Unpair charger</button>
               </div>
             </div>
           </div>
@@ -1973,6 +1973,7 @@ function renderChargerDetail(){
   renderChargerPasswordDisplay(c);
   renderChargerPublicInfo(c);
   renderChargerPowerEdit(c);
+  renderChargerAdminOnlySections();
   const root = rootOf(c.locationId);
   const mapEl = document.getElementById('cd-map');
   if(root && root.address && GOOGLE_MAPS_API_KEY){
@@ -2064,6 +2065,18 @@ async function savePower(){
   after.textContent = 'Saved. If this charger is connected, the site capacity check uses the new value after its next reconnection.';
 }
 const PUBLIC_SITE_BASE = 'https://charge.plugndrive.co.za';
+// The connection secrets (WebSocket URL, auth password) and Unpair are
+// destructive or reconfigure the physical charger — only a Plug n Drive
+// admin should see them. A client_admin still sees everything else:
+// live status, sessions, Test connection, and starting/stopping a charge.
+function renderChargerAdminOnlySections(){
+  const isAdmin = currentStaff && currentStaff.role === 'plugndrive_admin';
+  const display = isAdmin ? '' : 'none';
+  document.getElementById('cd-ws-row').style.display = display;
+  document.getElementById('cd-password-row').style.display = display;
+  document.getElementById('cd-password-actions').style.display = isAdmin ? 'flex' : 'none';
+  document.getElementById('cd-unpair-btn').style.display = display;
+}
 function renderChargerPublicInfo(c){
   const isAdmin = currentStaff && currentStaff.role === 'plugndrive_admin';
   const box = document.getElementById('cd-listed');
