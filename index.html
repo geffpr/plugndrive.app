@@ -706,20 +706,20 @@ tr.rowlink:hover td{background:var(--blue-light);}
             <input type="text" id="new-client-address">
           </div>
           <div class="form-row">
-            <label>Revenue share — first period (%)</label>
-            <input type="number" id="new-client-revshare-initial" placeholder="e.g. 100" value="100">
-          </div>
-          <div class="form-row">
-            <label>Revenue share — after transition (%)</label>
-            <input type="number" id="new-client-revshare-after" placeholder="e.g. 80" value="100">
-          </div>
-          <div class="form-row">
             <label>Contract start date</label>
             <input type="date" id="new-client-start-date">
           </div>
           <div class="form-row">
-            <label>Months before transition</label>
-            <input type="number" id="new-client-transition-months" placeholder="e.g. 6">
+            <label>Negotiated commission — the % Plug n Drive keeps (%)</label>
+            <input type="number" id="new-client-commission-rate" placeholder="e.g. 5" value="0">
+          </div>
+          <div class="form-row">
+            <label>Commission start date</label>
+            <input type="date" id="new-client-commission-start">
+          </div>
+          <div class="form-row">
+            <label>Commission duration, in months (leave blank for indefinite)</label>
+            <input type="number" id="new-client-commission-duration" placeholder="e.g. 12">
           </div>
           <button class="btn btn-primary btn-block" id="addclient-submit-btn" onclick="submitNewClient()">Create client</button>
           <div id="new-client-error" style="color:var(--red, #c0392b);font-size:12px;margin-top:8px;"></div>
@@ -1608,7 +1608,38 @@ function mapSession(s){ return {id:s.id, chargerId:s.charger_id, userId:s.user_i
 function mapRfid(r){ return {id:r.id, uid:r.uid, userId:r.user_id, complexId:r.location_id, status:r.status}; }
 function mapUser(u){ return {id:u.id, name:u.name, unit:u.unit, locationId:u.location_id, role:u.role, phone:u.phone, email:u.email, balance:u.balance, balanceCurrency:u.balance_currency}; }
 function mapTariff(t){ return {id:t.id, locationId:t.location_id, chargerId:t.charger_id, priceDay:t.price_day, priceNight:t.price_night, nightStart:t.night_start, nightEnd:t.night_end, idleFeePerMin:t.idle_fee_per_min, idleGraceMinutes:t.idle_grace_minutes, monthlyFee:t.monthly_ocpp_fee, monthlyKwhIncluded:t.monthly_kwh_included, overagePrice:t.overage_price, currency:t.currency}; }
-function mapClient(c){ return {id:c.id, name:c.name, businessType:c.business_type, contactName:c.contact_name, contactPhone:c.contact_phone, contactEmail:c.contact_email, address:c.address, revShareInitial:c.revenue_share_initial, revShareAfter:c.revenue_share_after, contractStart:c.contract_start_date, transitionMonths:c.months_before_transition}; }
+// Whether a client's negotiated commission is currently in force is always
+// computed from these dates, never stored — so nothing has to run on a
+// schedule to expire it, and a missed job can never leave a stale rate
+// showing as still active.
+function commissionEndDate(cl){
+  if(!cl.commissionStartDate || cl.commissionDurationMonths == null) return null;
+  const end = new Date(cl.commissionStartDate);
+  end.setMonth(end.getMonth() + cl.commissionDurationMonths);
+  return end.toISOString().slice(0,10);
+}
+function commissionIsActive(cl){
+  if(!cl.commissionStartDate) return false;         // never negotiated
+  const today = new Date().toISOString().slice(0,10);
+  if(today < cl.commissionStartDate) return false;  // not started yet
+  const end = commissionEndDate(cl);
+  if(!end) return true;                             // indefinite deal
+  return today < end;
+}
+function describeCommission(cl){
+  if(!cl.commissionStartDate){
+    return `0% <span style="color:var(--text-muted);">(no commission negotiated yet)</span>`;
+  }
+  const end = commissionEndDate(cl);
+  if(commissionIsActive(cl)){
+    const period = end ? `from ${cl.commissionStartDate} to ${end}` : `from ${cl.commissionStartDate}, indefinitely`;
+    return `${cl.commissionRate}% <span style="color:var(--text-muted);">(${period})</span>`;
+  }
+  // Lapsed: the client keeps 100%, Plug n Drive takes 0%, until a new rate
+  // is negotiated — payouts are never paused while that happens.
+  return `0% <span style="color:var(--red, #c0392b);">(previous ${cl.commissionRate}% deal ended ${end} — not renegotiated)</span>`;
+}
+function mapClient(c){ return {id:c.id, name:c.name, businessType:c.business_type, contactName:c.contact_name, contactPhone:c.contact_phone, contactEmail:c.contact_email, address:c.address, commissionRate:c.commission_rate, commissionStartDate:c.commission_start_date, commissionDurationMonths:c.commission_duration_months, contractStart:c.contract_start_date}; }
 
 async function loadAll(){
   const [locRes, chgRes, sesRes, rfidRes, userRes, tarRes, clientRes] = await Promise.all([
@@ -2447,9 +2478,7 @@ function openClient(id, opts){
   document.getElementById('cl-phone').textContent = cl.contactPhone || '-';
   document.getElementById('cl-email').textContent = cl.contactEmail || '-';
   document.getElementById('cl-address').textContent = cl.address || '-';
-  const transitionInfo = (cl.contractStart && cl.transitionMonths)
-    ? ` (transitions ${cl.transitionMonths}mo after ${cl.contractStart})` : '';
-  document.getElementById('cl-revshare').textContent = `${cl.revShareInitial}% → ${cl.revShareAfter}%${transitionInfo}`;
+  document.getElementById('cl-revshare').innerHTML = describeCommission(cl);
   document.getElementById('cl-since').textContent = cl.contractStart || '-';
   renderClientAdminLoginPanel(id);
 
@@ -2579,10 +2608,10 @@ function renderAddClient(){
   document.getElementById('new-client-contact-phone').value = cl ? (cl.contactPhone||'') : '';
   document.getElementById('new-client-contact-email').value = cl ? (cl.contactEmail||'') : '';
   document.getElementById('new-client-address').value = cl ? (cl.address||'') : '';
-  document.getElementById('new-client-revshare-initial').value = cl ? cl.revShareInitial : 100;
-  document.getElementById('new-client-revshare-after').value = cl ? cl.revShareAfter : 100;
+  document.getElementById('new-client-commission-rate').value = cl ? cl.commissionRate : 0;
+  document.getElementById('new-client-commission-start').value = cl ? (cl.commissionStartDate || '') : '';
   document.getElementById('new-client-start-date').value = cl ? (cl.contractStart||'') : '';
-  document.getElementById('new-client-transition-months').value = cl ? (cl.transitionMonths ?? '') : '';
+  document.getElementById('new-client-commission-duration').value = cl ? (cl.commissionDurationMonths ?? '') : '';
   document.getElementById('new-client-error').textContent = '';
   const addrInput = document.getElementById('new-client-address');
   addrInput.dataset.acAttached = '';
@@ -2599,11 +2628,11 @@ async function submitNewClient(){
     contact_phone: document.getElementById('new-client-contact-phone').value.trim() || null,
     contact_email: document.getElementById('new-client-contact-email').value.trim() || null,
     address: document.getElementById('new-client-address').value.trim() || null,
-    revenue_share_initial: Number(document.getElementById('new-client-revshare-initial').value || 100),
-    revenue_share_after: Number(document.getElementById('new-client-revshare-after').value || 100),
     contract_start_date: document.getElementById('new-client-start-date').value || null,
-    months_before_transition: document.getElementById('new-client-transition-months').value
-      ? Number(document.getElementById('new-client-transition-months').value) : null,
+    commission_rate: Number(document.getElementById('new-client-commission-rate').value || 0),
+    commission_start_date: document.getElementById('new-client-commission-start').value || null,
+    commission_duration_months: document.getElementById('new-client-commission-duration').value
+      ? Number(document.getElementById('new-client-commission-duration').value) : null,
   };
   const { error } = editingClientId
     ? await sb.from('clients').update(payload).eq('id', editingClientId)
