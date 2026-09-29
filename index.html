@@ -3207,6 +3207,9 @@ async function loadPayoutBanks(){
   const { data, error } = await sb.functions.invoke('client-paystack-connect', { body: { action: 'banks' } });
   if(error || data?.error){
     sel.innerHTML = '<option value="">Could not load banks</option>';
+    let msg = data?.error;
+    if(!msg && error?.context){ try { msg = (await error.context.json()).error; } catch { /* not JSON */ } }
+    document.getElementById('stg-connect-error').textContent = msg || error?.message || 'Could not load the bank list.';
     return;
   }
   payoutBanksCache = data.banks;
