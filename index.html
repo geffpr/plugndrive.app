@@ -643,6 +643,12 @@ tr.rowlink:hover td{background:var(--blue-light);}
               <tr><td style="color:var(--text-muted);">Address</td><td id="cl-address" style="text-align:right;"></td></tr>
               <tr><td style="color:var(--text-muted);">Revenue share</td><td id="cl-revshare" style="text-align:right;"></td></tr>
               <tr><td style="color:var(--text-muted);">Client since</td><td id="cl-since" style="text-align:right;"></td></tr>
+              <tr><td style="color:var(--text-muted);" title="Lets this client add operators who take cash/Mpesa top-ups on site. Off by default — only turn this on for a client you trust to handle cash, since it's the only situation that can create a roaming debt between clients.">Cash recharges</td><td style="text-align:right;">
+                <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
+                  <input type="checkbox" id="cl-cash-recharges" onchange="toggleClientCashRecharges(this.checked)">
+                  <span id="cl-cash-recharges-label"></span>
+                </label>
+              </td></tr>
               <tr><td style="color:var(--text-muted);">Total sites</td><td id="cl-total-sites" style="text-align:right;"></td></tr>
               <tr><td style="color:var(--text-muted);">Total chargers</td><td id="cl-total-chargers" style="text-align:right;"></td></tr>
             </table>
@@ -1510,6 +1516,7 @@ async function enterApp(){
   applyRoleBasedNav();
   document.getElementById('app-root').style.display = '';
   await loadAll();
+  applyRoleBasedNav();
   updateSidebarIdentity();
   routeFromLocation();
 }
@@ -1626,7 +1633,8 @@ function applyRoleBasedNav(){
   const adminLabel = document.getElementById('admin-section-label');
   if(adminLabel) adminLabel.style.display = isClientAdmin ? 'none' : '';
   const opsNav = document.getElementById('myoperators-nav');
-  if(opsNav) opsNav.style.display = isClientAdmin ? '' : 'none';
+  const cashRechargesOn = isClientAdmin && clients[0] && clients[0].cashRecharges;
+  if(opsNav) opsNav.style.display = cashRechargesOn ? '' : 'none';
   const settingsNav = document.getElementById('settings-nav');
   if(settingsNav) settingsNav.style.display = isClientAdmin ? '' : 'none';
   const addSiteBtn = document.querySelector('#sites-list-view button.btn-primary');
@@ -1680,7 +1688,7 @@ function describeCommission(cl){
   // is negotiated — payouts are never paused while that happens.
   return `0% <span style="color:var(--red, #c0392b);">(previous ${cl.commissionRate}% deal ended ${end} — not renegotiated)</span>`;
 }
-function mapClient(c){ return {id:c.id, name:c.name, businessType:c.business_type, contactName:c.contact_name, contactPhone:c.contact_phone, contactEmail:c.contact_email, address:c.address, commissionRate:c.commission_rate, commissionStartDate:c.commission_start_date, commissionDurationMonths:c.commission_duration_months, contractStart:c.contract_start_date, payoutBankCode:c.payout_bank_code, payoutBankName:c.payout_bank_name, payoutAccountNumber:c.payout_account_number, payoutAccountName:c.payout_account_name, paystackRecipientCode:c.paystack_recipient_code, paystackConnectedAt:c.paystack_connected_at}; }
+function mapClient(c){ return {id:c.id, name:c.name, businessType:c.business_type, contactName:c.contact_name, contactPhone:c.contact_phone, contactEmail:c.contact_email, address:c.address, commissionRate:c.commission_rate, commissionStartDate:c.commission_start_date, commissionDurationMonths:c.commission_duration_months, contractStart:c.contract_start_date, payoutBankCode:c.payout_bank_code, payoutBankName:c.payout_bank_name, payoutAccountNumber:c.payout_account_number, payoutAccountName:c.payout_account_name, paystackRecipientCode:c.paystack_recipient_code, paystackConnectedAt:c.paystack_connected_at, cashRecharges:c.cash_recharges_enabled}; }
 
 async function loadAll(){
   const [locRes, chgRes, sesRes, rfidRes, userRes, tarRes, clientRes] = await Promise.all([
@@ -2507,6 +2515,17 @@ function renderClients(){
     </tr>`;
   }).join('');
 }
+async function toggleClientCashRecharges(checked){
+  const box = document.getElementById('cl-cash-recharges');
+  const { data, error } = await sb.from('clients').update({ cash_recharges_enabled: checked }).eq('id', currentClientId).select();
+  if(error || !data || !data.length){
+    alert(error?.message || 'Could not change this setting.');
+    box.checked = !checked;   // a failed change must never look applied
+    return;
+  }
+  await loadAll();
+  openClient(currentClientId, {skipNav:true});
+}
 let currentClientId = null;
 function openClient(id, opts){
   opts = opts || {};
@@ -2523,6 +2542,8 @@ function openClient(id, opts){
   document.getElementById('cl-address').textContent = cl.address || '-';
   document.getElementById('cl-revshare').innerHTML = describeCommission(cl);
   document.getElementById('cl-since').textContent = cl.contractStart || '-';
+  document.getElementById('cl-cash-recharges').checked = !!cl.cashRecharges;
+  document.getElementById('cl-cash-recharges-label').textContent = cl.cashRecharges ? 'Enabled' : 'Disabled';
   renderClientAdminLoginPanel(id);
 
   const sites = locations.filter(l=>l.clientId===id);
@@ -2751,6 +2772,12 @@ async function renderWalletActivity(){
 }
 
 async function renderMyOperators(){
+  // Real enforcement is the RLS policy on staff; this just avoids showing a
+  // broken page if a client_admin reaches this URL while it's switched off.
+  if(currentStaff && currentStaff.role === 'client_admin' && !(clients[0] && clients[0].cashRecharges)){
+    showPage('dashboard');
+    return;
+  }
   const { data, error } = await sb.from('staff').select('*').eq('role', 'operator').order('created_at', {ascending:false});
   document.getElementById('add-operator-panel').style.display = 'none';
   if(error){
