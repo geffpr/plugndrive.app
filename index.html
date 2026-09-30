@@ -167,6 +167,101 @@ tr.rowlink:hover td{background:var(--blue-light);}
   .card{overflow-x:auto;}
 }
 
+/* ================================================================
+   Console UX aligned with the driver app (index_charge.html)
+   Additive override layer: the login block below is untouched.
+   ================================================================ */
+:root{
+  --navy:#1a3260; --navy-dark:#111f45;
+  --blue:#3a8fd4; --blue-dark:#2c74b0; --blue-light:#eaf3fb; --blue-mid:#c5def3;
+  --teal:#2bb5c8; --teal-light:#e6f7fa;
+  --bg:#f5f8fc; --surface:#f5f8fc; --border:#dde5f0;
+  --text:#1a3260; --text-secondary:#6b7a9a; --text-muted:#8b97b1;
+  --radius-card:16px; --radius-ctl:10px;
+  --shadow-soft:0 8px 24px -12px rgba(17,31,69,.18);
+}
+body{font-family:'Montserrat',sans-serif;background:var(--bg);}
+h1,h2,h3{font-family:'Montserrat',sans-serif;font-weight:800;}
+button,input,select{font-family:'Montserrat',sans-serif;}
+.app{grid-template-columns:232px 1fr;}
+
+/* Sidebar */
+.sidebar{background:var(--navy-dark);padding:22px 14px;}
+.brand-sub{font-size:11px;font-weight:600;color:#8fa3c9;letter-spacing:.02em;}
+.navitem{font-weight:600;padding:10px 12px;border-radius:12px;color:#c7d2e8;}
+.navitem:hover{background:rgba(255,255,255,.07);}
+.navitem.active{background:var(--blue);color:#fff;font-weight:700;box-shadow:0 6px 16px -6px rgba(58,143,212,.6);}
+.nav-section-label{font-weight:700;text-transform:none !important;letter-spacing:0 !important;}
+
+/* Top bar */
+.main{background:var(--bg);}
+.topbar{position:sticky;top:0;z-index:20;background:#fff;border-bottom:1px solid var(--border);padding:16px 28px;}
+.topbar-title{font-family:'Montserrat',sans-serif;font-size:19px;font-weight:800;color:var(--navy);}
+.avatar{background:var(--navy);color:#fff;font-weight:700;}
+.content{padding:24px 28px 36px;max-width:1440px;width:100%;margin:0 auto;}
+
+/* Cards, KPI, tables */
+.kpi{background:#fff;border:1px solid var(--border);border-radius:var(--radius-card);padding:16px 18px;box-shadow:var(--shadow-soft);}
+.kpi-label{font-weight:600;color:var(--text-secondary);}
+.kpi-value{font-family:'Montserrat',sans-serif;font-weight:800;font-size:26px;}
+.section-title{text-transform:none;letter-spacing:0;font-size:13px;font-weight:700;color:var(--text-secondary);}
+.card{border-radius:var(--radius-card);border-color:var(--border);}
+.card:not(.card-pad){overflow:hidden;}
+th{text-transform:none;letter-spacing:0;font-weight:700;font-size:12px;color:var(--text-secondary);background:var(--bg);padding:11px 14px;}
+td{padding:12px 14px;font-weight:500;}
+tr.rowlink:hover td{background:#f0f6fc;}
+.path{color:var(--text-muted);}
+
+/* Status badges: same palette as the driver app (available = teal, charging = blue, offline = grey) */
+.badge{font-weight:700;padding:4px 10px;}
+.badge.avail{background:var(--teal-light);color:#1c8797;}
+.badge.avail .badge-dot{background:var(--teal);}
+.badge.charging{background:var(--blue-light);color:var(--blue-dark);}
+.badge.offline{background:#eef2f8;color:#6b7a9a;}
+.badge.offline .badge-dot{background:#b7c2d6;}
+
+/* Buttons */
+.btn{border:1.5px solid var(--border);border-radius:12px;font-weight:700;padding:9px 16px;transition:background .15s,box-shadow .15s;}
+.btn-sm{padding:6px 12px;border-radius:10px;}
+.btn-primary{background:var(--navy);border-color:var(--navy);box-shadow:0 8px 22px -8px rgba(26,50,96,.5);}
+.btn-primary:hover{background:var(--navy-dark);}
+.btn-danger{border-color:var(--red);}
+.back-link{font-weight:700;color:var(--blue);}
+
+/* Forms and filters */
+.form-row label{font-weight:700;color:var(--navy);}
+.form-row input,.form-row select,.filters select,.filters input[type=text]{background:var(--bg);border:1.5px solid var(--border);border-radius:var(--radius-ctl);padding:10px 12px;color:var(--navy);outline:none;transition:border-color .15s,box-shadow .15s;}
+.form-row input:focus,.form-row select:focus,.filters select:focus,.filters input[type=text]:focus{border-color:var(--blue);background:#fff;box-shadow:0 0 0 3px rgba(58,143,212,.16);}
+.form-row .check-row input[type=checkbox]{accent-color:var(--navy);}
+.url-box{background:var(--bg);border-color:var(--border);border-radius:var(--radius-ctl);}
+.tree-node{border-radius:12px;background:#fff;}
+.gauge-bar{background:var(--blue-light);height:10px;border-radius:6px;}
+.gauge-fill{background:linear-gradient(90deg,var(--blue),var(--teal));}
+.gauge-fill.high{background:var(--amber);}
+.gauge-fill.over{background:var(--red);}
+
+/* Modal and activation card */
+.modal-bg{background:rgba(17,31,69,.45);}
+.modal{position:relative;overflow:hidden;border-radius:22px;padding:26px 24px 22px;width:400px;max-width:calc(100vw - 32px);box-shadow:0 24px 60px -18px rgba(17,31,69,.35);}
+.modal::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,var(--navy),var(--blue),var(--teal));}
+#activate-screen .card{border-radius:22px;box-shadow:0 24px 60px -18px rgba(17,31,69,.28);}
+
+/* Mobile bottom navigation (hidden on desktop) */
+.bottom-nav{display:none;}
+@media(max-width:900px){
+  body{padding-bottom:calc(64px + env(safe-area-inset-bottom,0px));}
+  #mobile-menu-toggle{display:none !important;}
+  .main{padding-top:0;}
+  .topbar{padding:14px 18px;}
+  .topbar-right > div:first-child{display:none;}
+  .content{padding:18px 16px 28px;}
+  .bottom-nav{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:60;background:#fff;border-top:1px solid var(--border);padding-bottom:env(safe-area-inset-bottom,0px);}
+  .bn-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 4px 8px;background:none;border:none;color:var(--text-secondary);font-size:11px;font-weight:700;}
+  .bn-item svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+  .bn-item.active{color:var(--navy);}
+  .bn-item.active svg{stroke:var(--blue);}
+}
+
 /* ---------- Login page (same brand style as the public charge site) ---------- */
 .login-wrap{position:relative;display:flex;min-height:100vh;min-height:100dvh;font-family:'Montserrat',sans-serif;color:#1a3260;-webkit-font-smoothing:antialiased;}
 .login-wrap input,.login-wrap button{font-family:inherit;}
@@ -354,6 +449,13 @@ tr.rowlink:hover td{background:var(--blue-light);}
 </div>
 
 <div class="app" id="app-root" style="display:none;">
+  <nav class="bottom-nav" id="bottom-nav" aria-label="Main navigation">
+    <button type="button" class="bn-item active" data-page="dashboard" onclick="showPage('dashboard')"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>Dashboard</button>
+    <button type="button" class="bn-item" data-page="sites" onclick="showPage('sites')"><svg viewBox="0 0 24 24"><path d="M3 21V8l7-4 7 4v13"/><path d="M17 21V11l4 2v8"/><path d="M8 21v-5h4v5"/></svg>Sites</button>
+    <button type="button" class="bn-item" data-page="chargers" onclick="showPage('chargers')"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg>Chargers</button>
+    <button type="button" class="bn-item" data-page="sessions" onclick="showPage('sessions')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Sessions</button>
+    <button type="button" class="bn-item" id="bn-more" onclick="toggleMobileSidebar()"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>More</button>
+  </nav>
 
   <button id="mobile-menu-toggle" onclick="toggleMobileSidebar()" aria-label="Menu">☰</button>
   <div id="sidebar-backdrop" onclick="closeMobileSidebar()"></div>
@@ -3538,6 +3640,20 @@ async function submitActivation(){
   }
   const { data: { session } } = await sb.auth.getSession();
   if(session){ await enterApp(); }
+})();
+</script>
+<script>
+/* Keeps the mobile bottom-nav highlight in sync with the sidebar (read-only: no existing logic is modified) */
+(function(){
+  var core=['dashboard','sites','chargers','sessions'];
+  function sync(){
+    var a=document.querySelector('.navitem.active'),p=a?a.getAttribute('data-page'):'';
+    document.querySelectorAll('#bottom-nav .bn-item[data-page]').forEach(function(b){b.classList.toggle('active',b.getAttribute('data-page')===p);});
+    var m=document.getElementById('bn-more'); if(m) m.classList.toggle('active',!!p&&core.indexOf(p)===-1);
+  }
+  var sb=document.getElementById('sidebar');
+  if(sb && window.MutationObserver){ new MutationObserver(sync).observe(sb,{subtree:true,attributes:true,attributeFilter:['class']}); }
+  sync();
 })();
 </script>
 </body>
