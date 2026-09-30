@@ -437,6 +437,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
       <div style="background:var(--bg,#f7f7f8);border-radius:10px;padding:12px;margin-bottom:14px;">
         <div style="font-weight:600;" id="op-card-name"></div>
         <div style="font-size:12px;color:var(--text-muted);" id="op-card-balance"></div>
+        <div style="font-size:12px;color:#8a5a12;margin-top:2px;" id="op-currency-note"></div>
       </div>
       <div id="op-amount-buttons" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;"></div>
       <div class="form-row"><label id="op-amount-label">Amount</label><input type="number" id="op-amount-input"></div>
@@ -469,6 +470,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
     <a class="navitem active" data-page="dashboard" onclick="showPage('dashboard')"><span class="ic">▦</span>Dashboard</a>
     <div class="nav-section-label" id="admin-section-label" style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:rgba(255,255,255,.45);padding:14px 10px 4px;">Admin</div>
     <a class="navitem" data-page="clients" onclick="showPage('clients')"><span class="ic">▣</span>Clients</a>
+    <a class="navitem" data-page="exchangerates" onclick="showPage('exchangerates')"><span class="ic">⇄</span>Exchange rates</a>
     <a class="navitem" data-page="myoperators" id="myoperators-nav" onclick="showPage('myoperators')" style="display:none;"><span class="ic">◉</span>My operators</a>
     <a class="navitem" data-page="settings" id="settings-nav" onclick="showPage('settings')" style="display:none;"><span class="ic">⚙</span>Settings</a>
     <a class="navitem" data-page="sites" onclick="showPage('sites')"><span class="ic">◫</span>Sites</a>
@@ -835,6 +837,26 @@ tr.rowlink:hover td{background:#f0f6fc;}
         </div>
       </div>
 
+      <!-- EXCHANGE RATES (plugndrive_admin only) -->
+      <div class="page" id="page-exchangerates">
+        <div class="section-title" style="margin:0 0 14px;">Conversion margin</div>
+        <div class="card card-pad" style="max-width:420px;margin-bottom:24px;">
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Applied whenever an amount actually crosses currencies — never when a card is credited or charged in its own currency.</div>
+          <div class="form-row"><label>Margin (%)</label><input type="text" id="fx-margin" inputmode="decimal"></div>
+          <button class="btn btn-primary" onclick="saveFxMargin()">Save margin</button>
+          <div id="fx-margin-error" style="color:var(--red, #c0392b);font-size:12px;margin-top:8px;"></div>
+        </div>
+
+        <div class="section-title" style="margin:0 0 14px;">Exchange rates</div>
+        <div style="font-size:12px;color:var(--text-muted);margin:-8px 0 14px;">1 unit of each currency, in South African Rand. Converting between any two currencies always goes through ZAR, so only these 5 rates need keeping up to date.</div>
+        <div class="card">
+          <table>
+            <thead><tr><th>Currency</th><th>1 unit =</th><th>Last updated</th><th></th></tr></thead>
+            <tbody id="fx-rates-body"></tbody>
+          </table>
+        </div>
+      </div>
+
       <!-- MY OPERATORS (client_admin only) -->
       <div class="page" id="page-myoperators">
         <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -1101,7 +1123,8 @@ tr.rowlink:hover td{background:#f0f6fc;}
         <!-- Shared with the card detail view below, so "Credit" works from either place -->
         <div id="admin-credit-panel" class="card card-pad" style="display:none;max-width:420px;margin-bottom:16px;">
           <div style="font-weight:600;margin-bottom:4px;">Credit <span id="acr-name"></span>'s card</div>
-          <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">Current balance: <span id="acr-balance"></span></div>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">Current balance: <span id="acr-balance"></span></div>
+          <div style="font-size:12px;color:#8a5a12;margin-bottom:10px;" id="acr-currency-note"></div>
           <div id="acr-amount-buttons" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;"></div>
           <div class="form-row"><label>Amount</label><input type="text" id="acr-amount" inputmode="decimal"></div>
           <div style="display:flex;gap:8px;">
@@ -1629,12 +1652,14 @@ const OP_I18N = {
     signout:'Sign out', notFound:'No card found with that UID.', wrongNetwork:'This card is not part of your network.',
     enterAmount:'Enter an amount greater than zero.', creditFailed:'Failed to credit card: ',
     success:(amt,cur,bal)=>`Credited ${fmtMoney(amt,cur)}. New balance: ${fmtMoney(bal,cur)}.`,
-    smsFailed:' (SMS confirmation failed to send)', balanceLabel:'Balance: ' },
+    smsFailed:' (SMS confirmation failed to send)', balanceLabel:'Balance: ',
+    willConvert:'Cash is taken in your site currency and converted into this card\u2019s {currency} wallet.' },
   pt: { site:s=>s, uid:'UID do cartão', search:'Pesquisar', amount:'Valor', confirm:'Confirmar', cancel:'Cancelar',
     signout:'Sair', notFound:'Nenhum cartão encontrado com esse UID.', wrongNetwork:'Este cartão não pertence à sua rede.',
     enterAmount:'Insira um valor maior que zero.', creditFailed:'Falha ao recarregar o cartão: ',
     success:(amt,cur,bal)=>`Recarregado ${fmtMoney(amt,cur)}. Novo saldo: ${fmtMoney(bal,cur)}.`,
-    smsFailed:' (falha ao enviar SMS de confirmação)', balanceLabel:'Saldo: ' },
+    smsFailed:' (falha ao enviar SMS de confirmação)', balanceLabel:'Saldo: ',
+    willConvert:'O dinheiro é recebido na moeda do seu site e convertido para a carteira em {currency} deste cartão.' },
 };
 const OP_QUICK_AMOUNTS = {
   ZAR: [50,100,200,500], MZN: [100,300,500,1000], NAD: [50,100,200,500],
@@ -1680,7 +1705,16 @@ async function operatorSearchCard(){
 
   opFoundCard = { uid: card.uid, user: cardUser };
   document.getElementById('op-card-name').textContent = cardUser.name;
-  document.getElementById('op-card-balance').textContent = t.balanceLabel + fmtMoney(cardUser.balance || 0, opSite.currency);
+  // The card keeps its OWN currency for life — show that, never the
+  // operator's own site currency (showing the raw number under the wrong
+  // label was the exact display bug that surfaced today).
+  const walletCurrency = cardUser.balance_currency || opSite.currency;
+  document.getElementById('op-card-balance').textContent = t.balanceLabel + fmtMoney(cardUser.balance || 0, walletCurrency);
+  const noteEl = document.getElementById('op-currency-note');
+  if(noteEl){
+    noteEl.textContent = (cardUser.balance_currency && cardUser.balance_currency !== opSite.currency)
+      ? t.willConvert.replace('{currency}', cardUser.balance_currency) : '';
+  }
   const amounts = OP_QUICK_AMOUNTS[opSite.currency] || [50,100,200,500];
   document.getElementById('op-amount-buttons').innerHTML = amounts.map(a =>
     `<button class="btn" onclick="document.getElementById('op-amount-input').value=${a}">${fmtMoney(a, opSite.currency)}</button>`
@@ -1716,6 +1750,8 @@ function operatorResetForm(){
   document.getElementById('op-search-step').style.display = 'block';
   document.getElementById('op-credit-step').style.display = 'none';
   document.getElementById('op-message').textContent = '';
+  const noteEl = document.getElementById('op-currency-note');
+  if(noteEl) noteEl.textContent = '';
 }
 
 function updateSidebarIdentity(){
@@ -1732,6 +1768,8 @@ function applyRoleBasedNav(){
   const isClientAdmin = currentStaff && currentStaff.role === 'client_admin';
   const clientsNav = document.querySelector('.navitem[data-page="clients"]');
   if(clientsNav) clientsNav.style.display = isClientAdmin ? 'none' : '';
+  const ratesNav = document.querySelector('.navitem[data-page="exchangerates"]');
+  if(ratesNav) ratesNav.style.display = isClientAdmin ? 'none' : '';
   const adminLabel = document.getElementById('admin-section-label');
   if(adminLabel) adminLabel.style.display = isClientAdmin ? 'none' : '';
   const opsNav = document.getElementById('myoperators-nav');
@@ -1911,6 +1949,7 @@ const ROUTES = {
   addclient: () => '/addclient',
   myoperators: () => '/myoperators',
   settings: () => '/settings',
+  exchangerates: () => '/exchangerates',
 };
 function navigate(path){
   if(location.pathname !== path) history.pushState({}, '', path);
@@ -1926,7 +1965,7 @@ function showPage(id, opts){
   const parentNav = { addsite:'sites', addcharger:'chargers', addclient:'clients' };
   const navEl = document.querySelector(`.navitem[data-page="${parentNav[id] || id}"]`);
   if(navEl) navEl.classList.add('active');
-  const titles={dashboard:'Dashboard',sites:'Sites',addsite:'Add site',chargers:'Chargers',addcharger:'Add charger',sessions:'Sessions',rfid:'RFID cards',load:'Load management',tariffs:'Tariffs',clients:'Clients',addclient:'Add client',myoperators:'My operators',walletactivity:'Wallet activity',settings:'Settings'};
+  const titles={dashboard:'Dashboard',sites:'Sites',addsite:'Add site',chargers:'Chargers',addcharger:'Add charger',sessions:'Sessions',rfid:'RFID cards',load:'Load management',tariffs:'Tariffs',clients:'Clients',addclient:'Add client',myoperators:'My operators',walletactivity:'Wallet activity',settings:'Settings',exchangerates:'Exchange rates'};
   document.getElementById('topbar-title').textContent = titles[id];
   if(!opts.skipNav) navigate(ROUTES[id] ? ROUTES[id]() : '/'+id);
   if(id==='sites') renderSites();
@@ -1943,6 +1982,7 @@ function showPage(id, opts){
   if(id==='myoperators') renderMyOperators();
   if(id==='walletactivity') renderWalletActivity();
   if(id==='settings') renderSettings();
+  if(id==='exchangerates') renderExchangeRates();
 }
 
 // Reads the current URL and shows the matching page/detail view.
@@ -1950,7 +1990,7 @@ function showPage(id, opts){
 function routeFromLocation(){
   const parts = location.pathname.split('/').filter(Boolean); // e.g. ['sites','<id>']
   const page = parts[0] || 'dashboard';
-  const knownPages = ['dashboard','sites','addsite','chargers','addcharger','sessions','rfid','load','tariffs','clients','addclient','myoperators','walletactivity','settings'];
+  const knownPages = ['dashboard','sites','addsite','chargers','addcharger','sessions','rfid','load','tariffs','clients','addclient','myoperators','walletactivity','settings','exchangerates'];
   if(!knownPages.includes(page)){ showPage('dashboard'); return; }
 
   showPage(page, {skipNav:true});
@@ -2873,6 +2913,54 @@ async function renderWalletActivity(){
   }).join('') || `<tr><td colspan="${isAdmin?7:6}" class="empty">No wallet activity yet.</td></tr>`;
 }
 
+// --- Exchange rates (plugndrive_admin only): the single shared source for
+// every currency conversion in the app (wallet credits, and OCPP charging). ---
+const FX_CURRENCIES = ['MZN','NAD','BWP','USD','EUR'];
+async function renderExchangeRates(){
+  if(!(currentStaff && currentStaff.role === 'plugndrive_admin')){
+    showPage('dashboard');
+    return;
+  }
+  const [{ data: rates }, { data: settings }] = await Promise.all([
+    sb.from('currency_rates').select('*'),
+    sb.from('conversion_settings').select('*').eq('id', true).maybeSingle(),
+  ]);
+  document.getElementById('fx-margin').value = settings ? settings.margin_percent : '';
+  document.getElementById('fx-margin-error').textContent = '';
+  document.getElementById('fx-margin-error').style.color = '';
+
+  const byCode = {};
+  (rates||[]).forEach(r => { byCode[r.currency] = r; });
+  document.getElementById('fx-rates-body').innerHTML = FX_CURRENCIES.map(code => {
+    const r = byCode[code];
+    return `<tr>
+      <td>${code}</td>
+      <td><input type="text" inputmode="decimal" id="fx-rate-${code}" value="${r ? r.rate_to_zar : ''}" placeholder="Not set" style="width:120px;border:1px solid var(--border);border-radius:8px;padding:6px 8px;"> ZAR</td>
+      <td>${r ? r.updated_at.slice(0,10) : '-'}</td>
+      <td><button class="btn btn-sm" onclick="saveFxRate('${code}')">Save</button></td>
+    </tr>`;
+  }).join('');
+}
+async function saveFxMargin(){
+  const errEl = document.getElementById('fx-margin-error');
+  errEl.style.color = '';
+  errEl.textContent = '';
+  const val = Number(document.getElementById('fx-margin').value);
+  if(!(val >= 0)){ errEl.textContent = 'Enter a margin of 0 or more.'; return; }
+  const { error } = await sb.from('conversion_settings').update({ margin_percent: val, updated_at: new Date().toISOString() }).eq('id', true);
+  if(error){ errEl.textContent = error.message; return; }
+  errEl.style.color = 'var(--green, #1a7f37)';
+  errEl.textContent = 'Saved.';
+}
+async function saveFxRate(code){
+  const input = document.getElementById('fx-rate-'+code);
+  const val = Number(input.value);
+  if(!(val > 0)){ alert('Enter a rate greater than zero.'); return; }
+  const { error } = await sb.from('currency_rates').upsert({ currency: code, rate_to_zar: val, updated_at: new Date().toISOString() });
+  if(error){ alert(error.message); return; }
+  await renderExchangeRates();
+}
+
 async function renderMyOperators(){
   // Real enforcement is the RLS policy on staff; this just avoids showing a
   // broken page if a client_admin reaches this URL while it's switched off.
@@ -3236,8 +3324,13 @@ function openAdminCredit(uid){
 
   document.getElementById('acr-name').textContent = user.name;
   const balanceEl = document.getElementById('acr-balance');
+  const noteEl = document.getElementById('acr-currency-note');
+  if(noteEl) noteEl.textContent = '';
   if(user.balanceCurrency){
     balanceEl.textContent = fmtMoney(user.balance||0, user.balanceCurrency);
+    if(noteEl && site && site.currency !== user.balanceCurrency){
+      noteEl.textContent = `This site's currency is ${site.currency} — the amount you enter will be converted into this card's ${user.balanceCurrency} wallet.`;
+    }
   } else {
     // Honest about the current state: an untracked card charges for free —
     // crediting it now is what sets up a real wallet, in the card's site currency.
