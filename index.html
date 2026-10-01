@@ -6,6 +6,7 @@
 <title>Plug n Drive — OCPP Console</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&family=Inter:wght@400;500;600&family=Montserrat:wght@500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
 <style>
 :root{
   --navy:#0d1b3d;
@@ -468,6 +469,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
       </div>
     </div>
     <a class="navitem active" data-page="dashboard" onclick="showPage('dashboard')"><span class="ic">▦</span>Dashboard</a>
+    <a class="navitem" data-page="reporting" onclick="showPage('reporting')"><span class="ic">◈</span>Reporting</a>
     <div class="nav-section-label" id="admin-section-label" style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:rgba(255,255,255,.45);padding:14px 10px 4px;">Admin</div>
     <a class="navitem" data-page="clients" onclick="showPage('clients')"><span class="ic">▣</span>Clients</a>
     <a class="navitem" data-page="exchangerates" onclick="showPage('exchangerates')"><span class="ic">⇄</span>Exchange rates</a>
@@ -520,6 +522,58 @@ tr.rowlink:hover td{background:#f0f6fc;}
             <thead><tr><th>Charger</th><th>Site</th><th>Client</th><th>Status</th><th>Live</th><th>Power</th><th>Cardholder</th><th>Session</th></tr></thead>
             <tbody id="dash-chargers-body"></tbody>
           </table>
+        </div>
+      </div>
+
+      <!-- REPORTING (both admin and client_admin; admin gets a client picker) -->
+      <div class="page" id="page-reporting">
+        <div class="filters">
+          <select id="rpt-client-select" style="display:none;" onchange="loadReporting()"></select>
+          <input type="date" id="rpt-from">
+          <input type="date" id="rpt-to">
+          <button class="btn btn-sm" onclick="applyRptPreset(30)">Last 30 days</button>
+          <button class="btn btn-primary btn-sm" onclick="loadReporting()">Apply</button>
+        </div>
+        <div id="rpt-currency-tabs" style="display:flex;gap:8px;margin:14px 0;"></div>
+        <div id="rpt-loading" style="color:var(--text-muted);">Loading…</div>
+        <div id="rpt-content" style="display:none;">
+          <div id="rpt-kpis" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:20px;"></div>
+          <div id="rpt-fx-margin-card" style="display:none;margin-bottom:20px;"></div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;">
+            <div class="card card-pad">
+              <div class="section-title" style="margin:0 0 10px;">Revenue over time</div>
+              <canvas id="rpt-revenue-chart" height="220"></canvas>
+            </div>
+            <div class="card card-pad">
+              <div class="section-title" style="margin:0 0 10px;">Volume charged (kWh)</div>
+              <canvas id="rpt-kwh-chart" height="220"></canvas>
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;">
+            <div class="card card-pad">
+              <div class="section-title" style="margin:0 0 10px;">RFID vs QR code</div>
+              <canvas id="rpt-paymethod-chart" height="220"></canvas>
+            </div>
+            <div class="card card-pad">
+              <div class="section-title" style="margin:0 0 10px;">Busiest days of the week</div>
+              <canvas id="rpt-weekday-chart" height="220"></canvas>
+            </div>
+          </div>
+
+          <div class="card card-pad" style="margin-bottom:20px;">
+            <div class="section-title" style="margin:0 0 10px;">Cash collected vs electricity sold</div>
+            <canvas id="rpt-cashenergy-chart" height="200"></canvas>
+          </div>
+
+          <div class="section-title">By site</div>
+          <div class="card">
+            <table>
+              <thead><tr><th>Site</th><th>Sessions</th><th>kWh sold</th><th>Net revenue</th><th>Avg kWh/session</th><th>Avg amount/session</th><th>RFID</th><th>QR code</th><th>Avg duration</th></tr></thead>
+              <tbody id="rpt-sites-body"></tbody>
+            </table>
+          </div>
         </div>
       </div>
 
@@ -1952,6 +2006,7 @@ const ROUTES = {
   myoperators: () => '/myoperators',
   settings: () => '/settings',
   exchangerates: () => '/exchangerates',
+  reporting: () => '/reporting',
 };
 function navigate(path){
   if(location.pathname !== path) history.pushState({}, '', path);
@@ -1967,7 +2022,7 @@ function showPage(id, opts){
   const parentNav = { addsite:'sites', addcharger:'chargers', addclient:'clients' };
   const navEl = document.querySelector(`.navitem[data-page="${parentNav[id] || id}"]`);
   if(navEl) navEl.classList.add('active');
-  const titles={dashboard:'Dashboard',sites:'Sites',addsite:'Add site',chargers:'Chargers',addcharger:'Add charger',sessions:'Sessions',rfid:'RFID cards',load:'Load management',tariffs:'Tariffs',clients:'Clients',addclient:'Add client',myoperators:'My operators',walletactivity:'Wallet activity',settings:'Settings',exchangerates:'Exchange rates'};
+  const titles={dashboard:'Dashboard',sites:'Sites',addsite:'Add site',chargers:'Chargers',addcharger:'Add charger',sessions:'Sessions',rfid:'RFID cards',load:'Load management',tariffs:'Tariffs',clients:'Clients',addclient:'Add client',myoperators:'My operators',walletactivity:'Wallet activity',settings:'Settings',exchangerates:'Exchange rates',reporting:'Reporting'};
   document.getElementById('topbar-title').textContent = titles[id];
   if(!opts.skipNav) navigate(ROUTES[id] ? ROUTES[id]() : '/'+id);
   if(id==='sites') renderSites();
@@ -1985,6 +2040,7 @@ function showPage(id, opts){
   if(id==='walletactivity') renderWalletActivity();
   if(id==='settings') renderSettings();
   if(id==='exchangerates') renderExchangeRates();
+  if(id==='reporting') renderReporting();
 }
 
 // Reads the current URL and shows the matching page/detail view.
@@ -1992,7 +2048,7 @@ function showPage(id, opts){
 function routeFromLocation(){
   const parts = location.pathname.split('/').filter(Boolean); // e.g. ['sites','<id>']
   const page = parts[0] || 'dashboard';
-  const knownPages = ['dashboard','sites','addsite','chargers','addcharger','sessions','rfid','load','tariffs','clients','addclient','myoperators','walletactivity','settings','exchangerates'];
+  const knownPages = ['dashboard','sites','addsite','chargers','addcharger','sessions','rfid','load','tariffs','clients','addclient','myoperators','walletactivity','settings','exchangerates','reporting'];
   if(!knownPages.includes(page)){ showPage('dashboard'); return; }
 
   showPage(page, {skipNav:true});
@@ -2947,6 +3003,204 @@ async function renderWalletActivity(){
 // --- Exchange rates (plugndrive_admin only): the single shared source for
 // every currency conversion in the app (wallet credits, and OCPP charging). ---
 const FX_CURRENCIES = ['MZN','NAD','BWP','USD','EUR'];
+// --- Reporting (both roles; a client_admin is forced server-side to their
+// own client regardless of anything sent from here — see effective_report_client_id). ---
+let rptData = null;
+let rptCurrency = null;
+let rptCharts = {};
+
+function applyRptPreset(days){
+  const to = new Date();
+  const from = new Date(); from.setDate(from.getDate() - days);
+  document.getElementById('rpt-from').value = from.toISOString().slice(0,10);
+  document.getElementById('rpt-to').value = to.toISOString().slice(0,10);
+  loadReporting();
+}
+
+async function renderReporting(){
+  const isAdmin = currentStaff && currentStaff.role === 'plugndrive_admin';
+  const sel = document.getElementById('rpt-client-select');
+  if(isAdmin){
+    sel.style.display = '';
+    sel.innerHTML = '<option value="">All clients</option>' + clients.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+  } else {
+    sel.style.display = 'none';
+  }
+  if(!document.getElementById('rpt-from').value){
+    applyRptPreset(30); // also calls loadReporting()
+  } else {
+    await loadReporting();
+  }
+}
+
+async function loadReporting(){
+  const loadingEl = document.getElementById('rpt-loading');
+  const contentEl = document.getElementById('rpt-content');
+  loadingEl.style.display = 'block';
+  loadingEl.textContent = 'Loading…';
+  contentEl.style.display = 'none';
+
+  const isAdmin = currentStaff && currentStaff.role === 'plugndrive_admin';
+  const clientId = isAdmin ? (document.getElementById('rpt-client-select').value || null) : null;
+  const from = document.getElementById('rpt-from').value || null;
+  const to = document.getElementById('rpt-to').value || null;
+
+  const calls = [
+    sb.rpc('report_summary', { p_client_id: clientId, p_from: from, p_to: to }),
+    sb.rpc('report_timeseries', { p_client_id: clientId, p_from: from, p_to: to }),
+    sb.rpc('report_by_site', { p_client_id: clientId, p_from: from, p_to: to }),
+    sb.rpc('report_by_weekday', { p_client_id: clientId, p_from: from, p_to: to }),
+    sb.rpc('report_cash_vs_energy_timeseries', { p_client_id: clientId, p_from: from, p_to: to }),
+  ];
+  if(isAdmin) calls.push(sb.rpc('report_fx_margin', { p_from: from, p_to: to }));
+
+  const results = await Promise.all(calls);
+  const firstError = results.find(r => r.error);
+  if(firstError){
+    loadingEl.textContent = 'Could not load the report: ' + firstError.error.message;
+    return;
+  }
+  const [summaryRes, tsRes, siteRes, weekdayRes, cashEnergyRes, fxRes] = results;
+
+  rptData = {
+    summary: summaryRes.data || [],
+    timeseries: tsRes.data || [],
+    bysite: siteRes.data || [],
+    weekday: weekdayRes.data || [],
+    cashenergy: cashEnergyRes.data || [],
+    fxmargin: isAdmin ? (fxRes.data || []) : [],
+  };
+
+  const currencies = [...new Set(rptData.summary.map(r => r.currency))];
+  if(currencies.length === 0){
+    loadingEl.textContent = 'No activity in this period yet.';
+    return;
+  }
+  if(!rptCurrency || !currencies.includes(rptCurrency)) rptCurrency = currencies[0];
+
+  renderRptCurrencyTabs(currencies);
+  renderRptForCurrency();
+
+  loadingEl.style.display = 'none';
+  contentEl.style.display = 'block';
+}
+
+function renderRptCurrencyTabs(currencies){
+  const el = document.getElementById('rpt-currency-tabs');
+  if(currencies.length <= 1){ el.innerHTML = ''; return; }
+  el.innerHTML = currencies.map(cur =>
+    `<button class="btn btn-sm ${cur===rptCurrency?'btn-primary':''}" onclick="selectRptCurrency('${cur}')">${cur}</button>`
+  ).join('');
+}
+function selectRptCurrency(cur){
+  rptCurrency = cur;
+  renderRptCurrencyTabs([...new Set(rptData.summary.map(r=>r.currency))]);
+  renderRptForCurrency();
+}
+
+function renderRptForCurrency(){
+  const isAdmin = currentStaff && currentStaff.role === 'plugndrive_admin';
+  const s = rptData.summary.find(r => r.currency === rptCurrency) || {};
+  const kpis = [
+    ['Net revenue', fmtMoney(s.net_revenue||0, rptCurrency)],
+    ['kWh sold', Number(s.total_kwh||0).toFixed(1)],
+    ['Sessions', s.session_count||0],
+    ['Commission taken', fmtMoney(s.commission_taken||0, rptCurrency)],
+    ['Cash collected', fmtMoney(s.cash_collected||0, rptCurrency)],
+  ];
+  document.getElementById('rpt-kpis').innerHTML = kpis.map(([label,val]) =>
+    `<div class="card card-pad"><div style="color:var(--text-muted);font-size:12px;">${label}</div><div style="font-size:22px;font-weight:700;">${val}</div></div>`
+  ).join('');
+
+  const fxCard = document.getElementById('rpt-fx-margin-card');
+  const fx = isAdmin ? rptData.fxmargin.find(r => r.margin_currency === rptCurrency) : null;
+  if(fx){
+    fxCard.style.display = 'block';
+    fxCard.innerHTML = `<div class="card card-pad" style="max-width:320px;"><div style="color:var(--text-muted);font-size:12px;">FX margin earned</div><div style="font-size:22px;font-weight:700;">${fmtMoney(fx.total_margin||0, rptCurrency)}</div><div style="font-size:12px;color:var(--text-muted);">${fx.conversion_count} conversion(s)</div></div>`;
+  } else {
+    fxCard.style.display = 'none';
+    fxCard.innerHTML = '';
+  }
+
+  renderRptCharts();
+  renderRptSitesTable();
+}
+
+function destroyRptChart(id){
+  if(rptCharts[id]){ rptCharts[id].destroy(); delete rptCharts[id]; }
+}
+
+function renderRptCharts(){
+  const ts = rptData.timeseries.filter(r => r.currency === rptCurrency);
+  const labels = ts.map(r => r.day);
+
+  destroyRptChart('rpt-revenue-chart');
+  rptCharts['rpt-revenue-chart'] = new Chart(document.getElementById('rpt-revenue-chart'), {
+    type: 'line',
+    data: { labels, datasets: [{ label: 'Net revenue', data: ts.map(r=>r.net_revenue), borderColor:'#3a8fd4', backgroundColor:'rgba(58,143,212,0.12)', fill:true, tension:0.3 }] },
+    options: { plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}} }
+  });
+
+  destroyRptChart('rpt-kwh-chart');
+  rptCharts['rpt-kwh-chart'] = new Chart(document.getElementById('rpt-kwh-chart'), {
+    type: 'line',
+    data: { labels, datasets: [{ label: 'kWh', data: ts.map(r=>r.kwh), borderColor:'#2bb5c8', backgroundColor:'rgba(43,181,200,0.12)', fill:true, tension:0.3 }] },
+    options: { plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}} }
+  });
+
+  const s = rptData.summary.find(r => r.currency === rptCurrency) || {};
+  destroyRptChart('rpt-paymethod-chart');
+  rptCharts['rpt-paymethod-chart'] = new Chart(document.getElementById('rpt-paymethod-chart'), {
+    type: 'pie',
+    data: { labels: ['RFID card','QR code'], datasets: [{ data: [s.rfid_session_count||0, s.qr_session_count||0], backgroundColor:['#1a3260','#3a8fd4'] }] }
+  });
+
+  const wd = rptData.weekday.filter(r => r.currency === rptCurrency);
+  const weekdayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const wdByDay = {};
+  wd.forEach(r => { wdByDay[r.day_of_week] = r; });
+  const wdLabels = [0,1,2,3,4,5,6].map(d=>weekdayNames[d]);
+  const wdCounts = [0,1,2,3,4,5,6].map(d => wdByDay[d] ? wdByDay[d].session_count : 0);
+  destroyRptChart('rpt-weekday-chart');
+  rptCharts['rpt-weekday-chart'] = new Chart(document.getElementById('rpt-weekday-chart'), {
+    type: 'bar',
+    data: { labels: wdLabels, datasets: [{ label: 'Sessions', data: wdCounts, backgroundColor:'#3a8fd4' }] },
+    options: { plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}} }
+  });
+
+  const ce = rptData.cashenergy.filter(r => r.currency === rptCurrency);
+  destroyRptChart('rpt-cashenergy-chart');
+  rptCharts['rpt-cashenergy-chart'] = new Chart(document.getElementById('rpt-cashenergy-chart'), {
+    type: 'line',
+    data: { labels: ce.map(r=>r.day), datasets: [
+      { label:'Cash collected', data: ce.map(r=>r.cash_collected||0), borderColor:'#c0392b', tension:0.3 },
+      { label:'Electricity sold', data: ce.map(r=>r.energy_sold||0), borderColor:'#1a7f37', tension:0.3 },
+    ] },
+    options: { scales:{y:{beginAtZero:true}} }
+  });
+}
+
+function fmtRptDuration(seconds){
+  if(seconds == null) return '-';
+  const m = Math.round(seconds / 60);
+  if(m < 60) return m + ' min';
+  return Math.floor(m/60) + 'h ' + (m%60) + 'min';
+}
+function renderRptSitesTable(){
+  const rows = rptData.bysite.filter(r => r.currency === rptCurrency);
+  document.getElementById('rpt-sites-body').innerHTML = rows.map(r => `<tr>
+    <td>${r.site_name}</td>
+    <td>${r.session_count}</td>
+    <td>${Number(r.total_kwh).toFixed(1)}</td>
+    <td>${fmtMoney(r.net_revenue, rptCurrency)}</td>
+    <td>${Number(r.avg_kwh_per_session).toFixed(1)}</td>
+    <td>${fmtMoney(r.avg_amount_per_session, rptCurrency)}</td>
+    <td>${r.rfid_session_count}</td>
+    <td>${r.qr_session_count}</td>
+    <td>${fmtRptDuration(r.avg_duration_seconds)}</td>
+  </tr>`).join('') || '<tr><td colspan="9" class="empty">No sites with activity in this period.</td></tr>';
+}
+
 async function renderExchangeRates(){
   if(!(currentStaff && currentStaff.role === 'plugndrive_admin')){
     showPage('dashboard');
