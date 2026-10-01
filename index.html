@@ -757,6 +757,8 @@ tr.rowlink:hover td{background:#f0f6fc;}
               <tr><td style="color:var(--text-muted);">Total chargers</td><td id="cl-total-chargers" style="text-align:right;"></td></tr>
             </table>
           </div>
+          <div class="section-title" title="Energy sold (commission already deducted) minus cash this client's operators have collected on site. A positive balance is what Plug n Drive owes this client; a negative one is what this client owes Plug n Drive.">Ledger balance</div>
+          <div class="card card-pad" style="max-width:420px;margin-bottom:20px;" id="cl-ledger-balance">Loading…</div>
           <div class="section-title">Admin login</div>
           <div id="client-admin-login-panel" class="card card-pad" style="max-width:420px;margin-bottom:20px;"></div>
           <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">
@@ -2669,6 +2671,30 @@ async function toggleClientCashRecharges(checked){
   openClient(currentClientId, {skipNav:true});
 }
 let currentClientId = null;
+// Energy sold (what this client is owed) minus cash collected (what this
+// client owes) — the running balance from the two-line ledger. Shown per
+// currency, never blended into one converted figure.
+async function renderClientLedgerBalance(clientId){
+  const el = document.getElementById('cl-ledger-balance');
+  el.textContent = 'Loading…';
+  const { data, error } = await sb.from('client_ledger_entries').select('*').eq('client_id', clientId);
+  if(error){ el.textContent = error.message; return; }
+  const byCurrency = {};
+  (data||[]).forEach(row => {
+    byCurrency[row.currency] = (byCurrency[row.currency] || 0) + (row.type === 'energy_sold' ? Number(row.amount) : -Number(row.amount));
+  });
+  const currencies = Object.keys(byCurrency);
+  if(currencies.length === 0){
+    el.innerHTML = '<span style="color:var(--text-muted);">No ledger activity yet.</span>';
+    return;
+  }
+  el.innerHTML = currencies.map(cur => {
+    const net = Math.round(byCurrency[cur] * 100) / 100;
+    const color = net > 0 ? 'var(--green, #1a7f37)' : (net < 0 ? 'var(--red, #c0392b)' : 'var(--text-muted)');
+    const label = net > 0 ? 'Plug n Drive owes this client' : (net < 0 ? 'This client owes Plug n Drive' : 'Settled');
+    return `<div style="margin-bottom:8px;"><span style="font-weight:700;color:${color};">${fmtMoney(Math.abs(net), cur)}</span> <span style="font-size:12px;color:var(--text-muted);">\u2014 ${label}</span></div>`;
+  }).join('');
+}
 function openClient(id, opts){
   opts = opts || {};
   currentClientId = id;
@@ -2687,6 +2713,7 @@ function openClient(id, opts){
   document.getElementById('cl-cash-recharges').checked = !!cl.cashRecharges;
   document.getElementById('cl-cash-recharges-label').textContent = cl.cashRecharges ? 'Enabled' : 'Disabled';
   renderClientAdminLoginPanel(id);
+  renderClientLedgerBalance(id);
 
   const sites = locations.filter(l=>l.clientId===id);
   const totalChargers = sites.reduce((sum, s) => sum + chargers.filter(c=>{ const root=rootOf(c.locationId); return root && root.id===s.id; }).length, 0);
@@ -2814,8 +2841,12 @@ function renderAddClient(){
   document.getElementById('new-client-contact-phone').value = cl ? (cl.contactPhone||'') : '';
   document.getElementById('new-client-contact-email').value = cl ? (cl.contactEmail||'') : '';
   document.getElementById('new-client-address').value = cl ? (cl.address||'') : '';
-  document.getElementById('new-client-commission-rate').value = cl ? cl.commissionRate : 0;
-  document.getElementById('new-client-commission-start').value = cl ? (cl.commissionStartDate || '') : '';
+  // A brand-new client starts at a 7% commission, active from today — not
+  // just "7" sitting inert in the field while nothing is actually charged.
+  // Editing an existing client always shows its real stored values, never
+  // silently overridden by this default.
+  document.getElementById('new-client-commission-rate').value = cl ? cl.commissionRate : 7;
+  document.getElementById('new-client-commission-start').value = cl ? (cl.commissionStartDate || '') : new Date().toISOString().slice(0,10);
   document.getElementById('new-client-start-date').value = cl ? (cl.contractStart||'') : '';
   document.getElementById('new-client-commission-duration').value = cl ? (cl.commissionDurationMonths ?? '') : '';
   document.getElementById('new-client-error').textContent = '';
