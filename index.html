@@ -6,7 +6,7 @@
 <title>Plug n Drive — OCPP Console</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&family=Inter:wght@400;500;600&family=Montserrat:wght@500;600;700;800&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <style>
 :root{
   --navy:#0d1b3d;
@@ -3129,13 +3129,23 @@ function renderRptForCurrency(){
   // The KPIs, fx card and table above are already correct and visible by
   // this point — a chart failure (e.g. Chart.js didn't load) stays contained
   // here instead of breaking the rest of the page.
+  const chartIds = ['rpt-revenue-chart','rpt-kwh-chart','rpt-paymethod-chart','rpt-weekday-chart','rpt-cashenergy-chart'];
+  // Clear any notice left over from a previous Apply click or tab switch
+  // first, so retrying never stacks up duplicate messages.
+  chartIds.forEach(id => { const old = document.getElementById(id+'-notice'); if(old) old.remove(); });
   try {
     if(typeof Chart === 'undefined') throw new Error('Chart.js did not load');
     renderRptCharts();
   } catch (err) {
-    ['rpt-revenue-chart','rpt-kwh-chart','rpt-paymethod-chart','rpt-weekday-chart','rpt-cashenergy-chart'].forEach(id => {
+    chartIds.forEach(id => {
       const canvas = document.getElementById(id);
-      if(canvas && canvas.parentElement) canvas.parentElement.innerHTML += '<div style="color:var(--text-muted);font-size:12px;">Charts could not load right now — the figures above are still accurate.</div>';
+      if(canvas && canvas.parentElement){
+        const notice = document.createElement('div');
+        notice.id = id + '-notice';
+        notice.style.cssText = 'color:var(--text-muted);font-size:12px;';
+        notice.textContent = 'Charts could not load right now — the figures above are still accurate.';
+        canvas.parentElement.appendChild(notice);
+      }
     });
   }
   renderRptSitesTable();
