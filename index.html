@@ -558,31 +558,31 @@ tr.rowlink:hover td{background:#f0f6fc;}
             <div class="rpt-block" data-block="revenue_chart">
               <div class="card card-pad" style="margin-bottom:20px;">
                 <div class="section-title" style="margin:0 0 10px;">Revenue over time</div>
-                <canvas id="rpt-revenue-chart" height="220"></canvas>
+                <div style="position:relative;height:260px;"><canvas id="rpt-revenue-chart"></canvas></div>
               </div>
             </div>
             <div class="rpt-block" data-block="kwh_chart">
               <div class="card card-pad" style="margin-bottom:20px;">
                 <div class="section-title" style="margin:0 0 10px;">Volume charged (kWh)</div>
-                <canvas id="rpt-kwh-chart" height="220"></canvas>
+                <div style="position:relative;height:260px;"><canvas id="rpt-kwh-chart"></canvas></div>
               </div>
             </div>
             <div class="rpt-block" data-block="paymethod_chart">
               <div class="card card-pad" style="margin-bottom:20px;">
                 <div class="section-title" style="margin:0 0 10px;">RFID vs QR code</div>
-                <canvas id="rpt-paymethod-chart" height="220"></canvas>
+                <div style="position:relative;height:260px;"><canvas id="rpt-paymethod-chart"></canvas></div>
               </div>
             </div>
             <div class="rpt-block" data-block="weekday_chart">
               <div class="card card-pad" style="margin-bottom:20px;">
                 <div class="section-title" style="margin:0 0 10px;">Busiest days of the week</div>
-                <canvas id="rpt-weekday-chart" height="220"></canvas>
+                <div style="position:relative;height:260px;"><canvas id="rpt-weekday-chart"></canvas></div>
               </div>
             </div>
             <div class="rpt-block" data-block="cashenergy_chart">
               <div class="card card-pad" style="margin-bottom:20px;">
                 <div class="section-title" style="margin:0 0 10px;">Cash collected vs electricity sold</div>
-                <canvas id="rpt-cashenergy-chart" height="200"></canvas>
+                <div style="position:relative;height:260px;"><canvas id="rpt-cashenergy-chart"></canvas></div>
               </div>
             </div>
             <div class="rpt-block" data-block="bysite_table">
@@ -3244,21 +3244,22 @@ function renderRptCharts(){
   rptCharts['rpt-revenue-chart'] = new Chart(document.getElementById('rpt-revenue-chart'), {
     type: 'line',
     data: { labels, datasets: [{ label: 'Net revenue', data: ts.map(r=>r.net_revenue), borderColor:'#3a8fd4', backgroundColor:'rgba(58,143,212,0.12)', fill:true, tension:0.3 }] },
-    options: { plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}} }
+    options: { maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}} }
   });
 
   destroyRptChart('rpt-kwh-chart');
   rptCharts['rpt-kwh-chart'] = new Chart(document.getElementById('rpt-kwh-chart'), {
     type: 'line',
     data: { labels, datasets: [{ label: 'kWh', data: ts.map(r=>r.kwh), borderColor:'#2bb5c8', backgroundColor:'rgba(43,181,200,0.12)', fill:true, tension:0.3 }] },
-    options: { plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}} }
+    options: { maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}} }
   });
 
   const s = rptData.summary.find(r => r.currency === rptCurrency) || {};
   destroyRptChart('rpt-paymethod-chart');
   rptCharts['rpt-paymethod-chart'] = new Chart(document.getElementById('rpt-paymethod-chart'), {
     type: 'pie',
-    data: { labels: ['RFID card','QR code'], datasets: [{ data: [s.rfid_session_count||0, s.qr_session_count||0], backgroundColor:['#1a3260','#3a8fd4'] }] }
+    data: { labels: ['RFID card','QR code'], datasets: [{ data: [s.rfid_session_count||0, s.qr_session_count||0], backgroundColor:['#1a3260','#3a8fd4'] }] },
+    options: { maintainAspectRatio:false }
   });
 
   const wd = rptData.weekday.filter(r => r.currency === rptCurrency);
@@ -3271,7 +3272,7 @@ function renderRptCharts(){
   rptCharts['rpt-weekday-chart'] = new Chart(document.getElementById('rpt-weekday-chart'), {
     type: 'bar',
     data: { labels: wdLabels, datasets: [{ label: 'Sessions', data: wdCounts, backgroundColor:'#3a8fd4' }] },
-    options: { plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}} }
+    options: { maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}} }
   });
 
   const ce = rptData.cashenergy.filter(r => r.currency === rptCurrency);
@@ -3282,7 +3283,7 @@ function renderRptCharts(){
       { label:'Cash collected', data: ce.map(r=>r.cash_collected||0), borderColor:'#c0392b', tension:0.3 },
       { label:'Electricity sold', data: ce.map(r=>r.energy_sold||0), borderColor:'#1a7f37', tension:0.3 },
     ] },
-    options: { scales:{y:{beginAtZero:true}} }
+    options: { maintainAspectRatio:false, scales:{y:{beginAtZero:true}} }
   });
 }
 
