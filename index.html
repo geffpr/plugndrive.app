@@ -3078,11 +3078,15 @@ async function loadReporting(){
   }
   if(!rptCurrency || !currencies.includes(rptCurrency)) rptCurrency = currencies[0];
 
-  renderRptCurrencyTabs(currencies);
-  renderRptForCurrency();
-
+  // Show the content (KPIs, table) as soon as the real data is in hand,
+  // BEFORE touching charts — a charting failure (e.g. the Chart.js script
+  // blocked or slow to load) must never leave the whole page stuck on
+  // "Loading…" when the figures themselves are already known and correct.
   loadingEl.style.display = 'none';
   contentEl.style.display = 'block';
+
+  renderRptCurrencyTabs(currencies);
+  renderRptForCurrency();
 }
 
 function renderRptCurrencyTabs(currencies){
@@ -3122,7 +3126,18 @@ function renderRptForCurrency(){
     fxCard.innerHTML = '';
   }
 
-  renderRptCharts();
+  // The KPIs, fx card and table above are already correct and visible by
+  // this point — a chart failure (e.g. Chart.js didn't load) stays contained
+  // here instead of breaking the rest of the page.
+  try {
+    if(typeof Chart === 'undefined') throw new Error('Chart.js did not load');
+    renderRptCharts();
+  } catch (err) {
+    ['rpt-revenue-chart','rpt-kwh-chart','rpt-paymethod-chart','rpt-weekday-chart','rpt-cashenergy-chart'].forEach(id => {
+      const canvas = document.getElementById(id);
+      if(canvas && canvas.parentElement) canvas.parentElement.innerHTML += '<div style="color:var(--text-muted);font-size:12px;">Charts could not load right now — the figures above are still accurate.</div>';
+    });
+  }
   renderRptSitesTable();
 }
 
