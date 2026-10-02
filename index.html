@@ -534,45 +534,66 @@ tr.rowlink:hover td{background:#f0f6fc;}
           <button class="btn btn-sm" onclick="applyRptPreset(30)">Last 30 days</button>
           <button class="btn btn-primary btn-sm" onclick="loadReporting()">Apply</button>
         </div>
-        <div id="rpt-currency-tabs" style="display:flex;gap:8px;margin:14px 0;"></div>
+        <div style="display:flex;gap:8px;align-items:center;margin:14px 0;">
+          <div id="rpt-currency-tabs" style="display:flex;gap:8px;"></div>
+          <button class="btn btn-sm" style="margin-left:auto;" onclick="openRptCustomize()">Customize</button>
+        </div>
+        <div id="rpt-customize-panel" class="card card-pad" style="display:none;max-width:420px;margin-bottom:20px;">
+          <div style="font-weight:600;margin-bottom:10px;">Choose what to show, and in what order</div>
+          <div id="rpt-customize-list"></div>
+          <div style="display:flex;gap:8px;margin-top:12px;">
+            <button class="btn btn-primary btn-sm" onclick="saveRptCustomize()">Save</button>
+            <button class="btn btn-sm" onclick="document.getElementById('rpt-customize-panel').style.display='none';">Cancel</button>
+          </div>
+        </div>
         <div id="rpt-loading" style="color:var(--text-muted);">Loading…</div>
         <div id="rpt-content" style="display:none;">
-          <div id="rpt-kpis" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:20px;"></div>
-          <div id="rpt-fx-margin-card" style="display:none;margin-bottom:20px;"></div>
-
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;">
-            <div class="card card-pad">
-              <div class="section-title" style="margin:0 0 10px;">Revenue over time</div>
-              <canvas id="rpt-revenue-chart" height="220"></canvas>
+          <div id="rpt-blocks-container">
+            <div class="rpt-block" data-block="kpis">
+              <div id="rpt-kpis" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:20px;"></div>
             </div>
-            <div class="card card-pad">
-              <div class="section-title" style="margin:0 0 10px;">Volume charged (kWh)</div>
-              <canvas id="rpt-kwh-chart" height="220"></canvas>
+            <div class="rpt-block" data-block="fx_margin">
+              <div id="rpt-fx-margin-card" style="display:none;margin-bottom:20px;"></div>
             </div>
-          </div>
-
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;">
-            <div class="card card-pad">
-              <div class="section-title" style="margin:0 0 10px;">RFID vs QR code</div>
-              <canvas id="rpt-paymethod-chart" height="220"></canvas>
+            <div class="rpt-block" data-block="revenue_chart">
+              <div class="card card-pad" style="margin-bottom:20px;">
+                <div class="section-title" style="margin:0 0 10px;">Revenue over time</div>
+                <canvas id="rpt-revenue-chart" height="220"></canvas>
+              </div>
             </div>
-            <div class="card card-pad">
-              <div class="section-title" style="margin:0 0 10px;">Busiest days of the week</div>
-              <canvas id="rpt-weekday-chart" height="220"></canvas>
+            <div class="rpt-block" data-block="kwh_chart">
+              <div class="card card-pad" style="margin-bottom:20px;">
+                <div class="section-title" style="margin:0 0 10px;">Volume charged (kWh)</div>
+                <canvas id="rpt-kwh-chart" height="220"></canvas>
+              </div>
             </div>
-          </div>
-
-          <div class="card card-pad" style="margin-bottom:20px;">
-            <div class="section-title" style="margin:0 0 10px;">Cash collected vs electricity sold</div>
-            <canvas id="rpt-cashenergy-chart" height="200"></canvas>
-          </div>
-
-          <div class="section-title">By site</div>
-          <div class="card">
-            <table>
-              <thead><tr><th>Site</th><th>Sessions</th><th>kWh sold</th><th>Net revenue</th><th>Avg kWh/session</th><th>Avg amount/session</th><th>RFID</th><th>QR code</th><th>Avg duration</th></tr></thead>
-              <tbody id="rpt-sites-body"></tbody>
-            </table>
+            <div class="rpt-block" data-block="paymethod_chart">
+              <div class="card card-pad" style="margin-bottom:20px;">
+                <div class="section-title" style="margin:0 0 10px;">RFID vs QR code</div>
+                <canvas id="rpt-paymethod-chart" height="220"></canvas>
+              </div>
+            </div>
+            <div class="rpt-block" data-block="weekday_chart">
+              <div class="card card-pad" style="margin-bottom:20px;">
+                <div class="section-title" style="margin:0 0 10px;">Busiest days of the week</div>
+                <canvas id="rpt-weekday-chart" height="220"></canvas>
+              </div>
+            </div>
+            <div class="rpt-block" data-block="cashenergy_chart">
+              <div class="card card-pad" style="margin-bottom:20px;">
+                <div class="section-title" style="margin:0 0 10px;">Cash collected vs electricity sold</div>
+                <canvas id="rpt-cashenergy-chart" height="200"></canvas>
+              </div>
+            </div>
+            <div class="rpt-block" data-block="bysite_table">
+              <div class="section-title">By site</div>
+              <div class="card">
+                <table>
+                  <thead><tr><th>Site</th><th>Sessions</th><th>kWh sold</th><th>Net revenue</th><th>Avg kWh/session</th><th>Avg amount/session</th><th>RFID</th><th>QR code</th><th>Avg duration</th></tr></thead>
+                  <tbody id="rpt-sites-body"></tbody>
+                </table>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -3008,6 +3029,61 @@ const FX_CURRENCIES = ['MZN','NAD','BWP','USD','EUR'];
 let rptData = null;
 let rptCurrency = null;
 let rptCharts = {};
+let rptLayout = null;
+const RPT_ALL_BLOCKS = ['kpis','fx_margin','revenue_chart','kwh_chart','paymethod_chart','weekday_chart','cashenergy_chart','bysite_table'];
+const RPT_BLOCK_LABELS = { kpis:'Key figures', fx_margin:'FX margin earned', revenue_chart:'Revenue over time', kwh_chart:'Volume charged (kWh)',
+  paymethod_chart:'RFID vs QR code', weekday_chart:'Busiest days of the week', cashenergy_chart:'Cash vs electricity sold', bysite_table:'By site table' };
+
+function rptAvailableBlocks(){
+  const isAdmin = currentStaff && currentStaff.role === 'plugndrive_admin';
+  return isAdmin ? RPT_ALL_BLOCKS : RPT_ALL_BLOCKS.filter(b => b !== 'fx_margin');
+}
+function applyRptLayout(){
+  const available = rptAvailableBlocks();
+  const order = (rptLayout || available).filter(b => available.includes(b));
+  const container = document.getElementById('rpt-blocks-container');
+  order.forEach(key => {
+    const el = container.querySelector(`.rpt-block[data-block="${key}"]`);
+    if(el){ el.style.display = ''; container.appendChild(el); }
+  });
+  available.filter(b => !order.includes(b)).forEach(key => {
+    const el = container.querySelector(`.rpt-block[data-block="${key}"]`);
+    if(el) el.style.display = 'none';
+  });
+}
+function openRptCustomize(){
+  const available = rptAvailableBlocks();
+  const order = (rptLayout || available).filter(b => available.includes(b));
+  const hidden = available.filter(b => !order.includes(b));
+  const full = [...order, ...hidden];
+  document.getElementById('rpt-customize-list').innerHTML = full.map((key, i) => `
+    <div style="display:flex;align-items:center;gap:8px;padding:4px 0;" data-key="${key}">
+      <input type="checkbox" ${order.includes(key)?'checked':''} onchange="toggleRptBlockChecked('${key}')">
+      <span style="flex:1;">${RPT_BLOCK_LABELS[key]}</span>
+      <button class="btn btn-sm" onclick="moveRptBlock('${key}',-1)">↑</button>
+      <button class="btn btn-sm" onclick="moveRptBlock('${key}',1)">↓</button>
+    </div>`).join('');
+  document.getElementById('rpt-customize-panel').style.display = 'block';
+}
+function toggleRptBlockChecked(key){ /* state read directly from DOM on save */ }
+function moveRptBlock(key, dir){
+  const list = document.getElementById('rpt-customize-list');
+  const rows = [...list.children];
+  const idx = rows.findIndex(r => r.dataset.key === key);
+  const swapWith = idx + dir;
+  if(swapWith < 0 || swapWith >= rows.length) return;
+  if(dir < 0) list.insertBefore(rows[idx], rows[swapWith]);
+  else list.insertBefore(rows[swapWith], rows[idx]);
+}
+async function saveRptCustomize(){
+  const rows = [...document.getElementById('rpt-customize-list').children];
+  const order = rows.filter(r => r.querySelector('input').checked).map(r => r.dataset.key);
+  const { error } = await sb.rpc('save_reporting_layout', { p_blocks: order });
+  if(error){ alert('Could not save: ' + error.message); return; }
+  rptLayout = order;
+  document.getElementById('rpt-customize-panel').style.display = 'none';
+  applyRptLayout();
+}
 
 function applyRptPreset(days){
   const to = new Date();
@@ -3018,6 +3094,10 @@ function applyRptPreset(days){
 }
 
 async function renderReporting(){
+  if(rptLayout === null){
+    const { data } = await sb.rpc('get_reporting_layout');
+    rptLayout = data || null;
+  }
   const isAdmin = currentStaff && currentStaff.role === 'plugndrive_admin';
   const sel = document.getElementById('rpt-client-select');
   if(isAdmin){
@@ -3087,6 +3167,7 @@ async function loadReporting(){
 
   renderRptCurrencyTabs(currencies);
   renderRptForCurrency();
+  applyRptLayout();
 }
 
 function renderRptCurrencyTabs(currencies){
