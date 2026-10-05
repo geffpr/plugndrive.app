@@ -1958,7 +1958,7 @@ let clients = [];
 
 function mapLocation(l){ return {id:l.id, name:l.name, type:l.type, parentId:l.parent_id, city:l.city, address:l.address, capacityKVA:l.capacity_kva, currency:l.currency, clientId:l.client_id, timezone:l.timezone, contactName:l.contact_name, contactPhone:l.contact_phone, contactEmail:l.contact_email, status:l.status, loadManagementEnabled:l.load_management_enabled}; }
 function mapCharger(c){ return {id:c.id, locationId:c.location_id, name:c.name, ocppId:c.ocpp_id, vendor:c.vendor, connector:c.connector, powerKW:c.power_kw, ocpp:c.ocpp_version, status:c.status, currentKW:c.current_kw, ocppPassword:c.ocpp_password, lastSeenAt:c.last_seen_at, ocppStatus:c.ocpp_status, listedPublicly:c.listed_publicly}; }
-function mapSession(s){ return {id:s.id, chargerId:s.charger_id, userId:s.user_id, rfidCardId:s.rfid_card_id, kwh:s.kwh, cost:s.cost, currency:s.currency, startedAt:s.started_at, endedAt:s.ended_at, paymentStatus:s.payment_status, payment:s.payment_method}; }
+function mapSession(s){ return {id:s.id, chargerId:s.charger_id, userId:s.user_id, rfidCardId:s.rfid_card_id, kwh:s.kwh, cost:s.cost, currency:s.currency, startedAt:s.started_at, endedAt:s.ended_at, paymentStatus:s.payment_status, payment:s.payment_method, groupId:s.access_group_id, groupMode:s.group_pricing_mode, groupPercent:s.group_discount_percent, offered:s.offered_value}; }
 function mapRfid(r){ return {id:r.id, uid:r.uid, userId:r.user_id, complexId:r.location_id, status:r.status}; }
 function mapUser(u){ return {id:u.id, name:u.name, unit:u.unit, locationId:u.location_id, role:u.role, phone:u.phone, email:u.email, balance:u.balance, balanceCurrency:u.balance_currency}; }
 function mapTariff(t){ return {id:t.id, locationId:t.location_id, chargerId:t.charger_id, priceDay:t.price_day, priceNight:t.price_night, nightStart:t.night_start, nightEnd:t.night_end, idleFeePerMin:t.idle_fee_per_min, idleGraceMinutes:t.idle_grace_minutes, monthlyFee:t.monthly_ocpp_fee, monthlyKwhIncluded:t.monthly_kwh_included, overagePrice:t.overage_price, currency:t.currency}; }
@@ -3886,8 +3886,34 @@ function renderSessions(){
   document.getElementById('sessions-body').innerHTML = rows.map(s=>{
     const c = chargers.find(x=>x.id===s.chargerId);
     const u = users.find(x=>x.id===s.userId);
-    return `<tr><td>${(s.startedAt||'').slice(0,10)}</td><td>${c?c.name:'-'}</td><td>${u?u.name:'-'}</td><td>${fmtDuration(s.startedAt, s.endedAt)}</td><td>${s.kwh??'-'} kWh</td><td>${fmtMoney(s.cost, s.currency)}</td><td>${s.payment||'-'}</td></tr>`;
+    return `<tr><td>${(s.startedAt||'').slice(0,10)}</td><td>${c?c.name:'-'}</td><td>${u?u.name:'-'}</td><td>${fmtDuration(s.startedAt, s.endedAt)}</td><td>${s.kwh??'-'} kWh</td><td>${sessionCostCell(s)}</td><td>${s.payment||'-'}</td></tr>`;
   }).join('');
+  ensureSessionGroupNames(rows);
+}
+
+// A charge made through an access group is labelled as such, so a free charge
+// can never be mistaken for a 0 kWh session or a charger without a tariff.
+// Standard-price groups change nothing about the price, so they stay unlabelled.
+const sessionGroupNames = {}, sessionGroupRequested = new Set();
+function sessionCostCell(s){
+  if(s.groupMode !== 'free' && s.groupMode !== 'discount') return fmtMoney(s.cost, s.currency);
+  const name = s.groupId && sessionGroupNames[s.groupId] ? accEsc(sessionGroupNames[s.groupId]) : 'access group';
+  const offeredTxt = s.offered != null ? 'value offered ' + fmtMoney(s.offered, s.currency) : '';
+  const small = (txt) => `<div style="font-size:11px;color:var(--text-muted);">${txt}</div>`;
+  if(s.groupMode === 'free') return `<b>Free</b> <span style="color:var(--text-muted);">\u00b7 ${name}</span>${offeredTxt ? small(offeredTxt) : ''}`;
+  const pct = Number(s.groupPercent);
+  return fmtMoney(s.cost, s.currency) + small((pct > 0 ? pct + '% off' : 'Discounted') + ' \u00b7 ' + name + (offeredTxt ? ' \u00b7 ' + offeredTxt : ''));
+}
+// Group names live behind a function (the table itself is not readable), fetched
+// once per group and cached. A failed lookup is not retried in a loop: the label
+// simply stays "access group".
+function ensureSessionGroupNames(rows){
+  const missing = [...new Set(rows.map(s => s.groupId).filter(id => id && !(id in sessionGroupNames) && !sessionGroupRequested.has(id)))];
+  if(!missing.length) return;
+  missing.forEach(id => sessionGroupRequested.add(id));
+  sb.rpc('get_access_group_names', { p_group_ids: missing }).then(({ data }) => {
+    if(data){ Object.assign(sessionGroupNames, data); renderSessions(); }
+  });
 }
 
 const RFID_STATUS_LABEL = { active: 'Active', blocked: 'Blocked', pending: 'Pending activation' };
