@@ -474,6 +474,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
     <a class="navitem" data-page="clients" onclick="showPage('clients')"><span class="ic">▣</span>Clients</a>
     <a class="navitem" data-page="exchangerates" onclick="showPage('exchangerates')"><span class="ic">⇄</span>Exchange rates</a>
     <a class="navitem" data-page="myoperators" id="myoperators-nav" onclick="showPage('myoperators')" style="display:none;"><span class="ic">◉</span>My operators</a>
+    <a class="navitem" data-page="access" id="access-nav" onclick="showPage('access')" style="display:none;"><span class="ic">◇</span>Access</a>
     <a class="navitem" data-page="settings" id="settings-nav" onclick="showPage('settings')" style="display:none;"><span class="ic">⚙</span>Settings</a>
     <a class="navitem" data-page="sites" onclick="showPage('sites')"><span class="ic">◫</span>Sites</a>
     <a class="navitem" data-page="chargers" onclick="showPage('chargers')"><span class="ic">⛽</span>Chargers</a>
@@ -976,6 +977,55 @@ tr.rowlink:hover td{background:#f0f6fc;}
           <table>
             <thead><tr><th>Name</th><th>Email</th><th>Site</th><th>Added</th><th></th></tr></thead>
             <tbody id="operators-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ACCESS (client_admin, when "Guest access" is on): groups with a tariff, valid on this client's own chargers only -->
+      <div class="page" id="page-access">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div class="section-title" style="margin:0;">Access groups</div>
+          <button class="btn btn-primary" onclick="openAccessGroupForm()">+ New group</button>
+        </div>
+        <div style="color:var(--text-muted);font-size:12px;margin:6px 0 12px;max-width:640px;">A group gives its members free or discounted charging on your own chargers only (for example staff, guests or residents). It has no value on anyone else's chargers.</div>
+        <div id="acc-group-form" class="card card-pad" style="display:none;max-width:480px;margin:12px 0;">
+          <input type="hidden" id="acc-g-id">
+          <div class="form-row"><label>Group name</label><input type="text" id="acc-g-name" maxlength="60" placeholder="e.g. Staff, Guests"></div>
+          <div class="form-row"><label>Tariff</label>
+            <select id="acc-g-mode" onchange="accModeChanged()"><option value="free">Free</option><option value="discount">Discounted</option><option value="standard">Standard price</option></select></div>
+          <div class="form-row" id="acc-g-pct-row" style="display:none;"><label>Discount (%)</label><input type="number" id="acc-g-pct" min="1" max="99"></div>
+          <div class="form-row"><label>Where it applies</label>
+            <select id="acc-g-scope" onchange="accScopeChanged()"><option value="all">All my sites</option><option value="some">Selected sites</option></select></div>
+          <div id="acc-g-sites" style="display:none;margin-bottom:10px;"></div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-primary" onclick="saveAccessGroup()">Save group</button>
+            <button class="btn" onclick="closeAccessGroupForm()">Cancel</button>
+          </div>
+          <div id="acc-g-error" style="color:var(--red, #c0392b);font-size:12px;margin-top:8px;"></div>
+        </div>
+        <div id="acc-list-error" style="color:var(--red, #c0392b);font-size:12px;margin:8px 0;"></div>
+        <div id="acc-groups-list"></div>
+        <div id="acc-members-panel" class="card card-pad" style="display:none;margin-top:16px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+            <div style="font-weight:600;" id="acc-m-title"></div>
+            <button class="btn btn-sm" onclick="closeAccessMembers()">Close</button>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:8px;">
+            <div class="form-row" style="margin:0;"><label>Card code</label><input type="text" id="acc-m-uid"></div>
+            <button class="btn btn-sm" onclick="accFindCard()">Find</button>
+          </div>
+          <div id="acc-m-found" style="display:none;margin:8px 0;">
+            <div style="margin-bottom:8px;">Card <b id="acc-m-found-uid"></b> — <span id="acc-m-found-name"></span></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+              <div class="form-row" style="margin:0;"><label>Access until (optional)</label><input type="date" id="acc-m-until"></div>
+              <div class="form-row" style="margin:0;"><label>Reference (e.g. room)</label><input type="text" id="acc-m-ref" maxlength="80"></div>
+              <button class="btn btn-primary btn-sm" onclick="accAddMember()">Add to group</button>
+            </div>
+          </div>
+          <div id="acc-m-error" style="color:var(--red, #c0392b);font-size:12px;margin:6px 0;"></div>
+          <table>
+            <thead><tr><th>Card</th><th>Holder</th><th>Reference</th><th>Access until</th><th>Added</th><th></th></tr></thead>
+            <tbody id="acc-members-body"></tbody>
           </table>
         </div>
       </div>
@@ -1888,6 +1938,8 @@ function applyRoleBasedNav(){
   const opsNav = document.getElementById('myoperators-nav');
   const operatorsOn = isClientAdmin && clients[0] && (clients[0].cashRecharges || clients[0].guestAccess);
   if(opsNav) opsNav.style.display = operatorsOn ? '' : 'none';
+  const accessNav = document.getElementById('access-nav');
+  if(accessNav) accessNav.style.display = (isClientAdmin && clients[0] && clients[0].guestAccess) ? '' : 'none';
   const settingsNav = document.getElementById('settings-nav');
   if(settingsNav) settingsNav.style.display = isClientAdmin ? '' : 'none';
   const addSiteBtn = document.querySelector('#sites-list-view button.btn-primary');
@@ -2064,6 +2116,7 @@ const ROUTES = {
   settings: () => '/settings',
   exchangerates: () => '/exchangerates',
   reporting: () => '/reporting',
+  access: () => '/access',
 };
 function navigate(path){
   if(location.pathname !== path) history.pushState({}, '', path);
@@ -2079,7 +2132,7 @@ function showPage(id, opts){
   const parentNav = { addsite:'sites', addcharger:'chargers', addclient:'clients' };
   const navEl = document.querySelector(`.navitem[data-page="${parentNav[id] || id}"]`);
   if(navEl) navEl.classList.add('active');
-  const titles={dashboard:'Dashboard',sites:'Sites',addsite:'Add site',chargers:'Chargers',addcharger:'Add charger',sessions:'Sessions',rfid:'RFID cards',load:'Load management',tariffs:'Tariffs',clients:'Clients',addclient:'Add client',myoperators:'My operators',walletactivity:'Wallet activity',settings:'Settings',exchangerates:'Exchange rates',reporting:'Reporting'};
+  const titles={dashboard:'Dashboard',sites:'Sites',addsite:'Add site',chargers:'Chargers',addcharger:'Add charger',sessions:'Sessions',rfid:'RFID cards',load:'Load management',tariffs:'Tariffs',clients:'Clients',addclient:'Add client',myoperators:'My operators',walletactivity:'Wallet activity',settings:'Settings',exchangerates:'Exchange rates',reporting:'Reporting',access:'Access'};
   document.getElementById('topbar-title').textContent = titles[id];
   if(!opts.skipNav) navigate(ROUTES[id] ? ROUTES[id]() : '/'+id);
   if(id==='sites') renderSites();
@@ -2098,6 +2151,7 @@ function showPage(id, opts){
   if(id==='settings') renderSettings();
   if(id==='exchangerates') renderExchangeRates();
   if(id==='reporting') renderReporting();
+  if(id==='access') renderAccess();
 }
 
 // Reads the current URL and shows the matching page/detail view.
@@ -2105,7 +2159,7 @@ function showPage(id, opts){
 function routeFromLocation(){
   const parts = location.pathname.split('/').filter(Boolean); // e.g. ['sites','<id>']
   const page = parts[0] || 'dashboard';
-  const knownPages = ['dashboard','sites','addsite','chargers','addcharger','sessions','rfid','load','tariffs','clients','addclient','myoperators','walletactivity','settings','exchangerates','reporting'];
+  const knownPages = ['dashboard','sites','addsite','chargers','addcharger','sessions','rfid','load','tariffs','clients','addclient','myoperators','walletactivity','settings','exchangerates','reporting','access'];
   if(!knownPages.includes(page)){ showPage('dashboard'); return; }
 
   showPage(page, {skipNav:true});
@@ -3402,6 +3456,137 @@ function renderRptSitesTable(){
     <td>${r.qr_session_count}</td>
     <td>${fmtRptDuration(r.avg_duration_seconds)}</td>
   </tr>`).join('') || '<tr><td colspan="9" class="empty">No sites with activity in this period.</td></tr>';
+}
+
+// --- Access groups (client_admin with "Guest access" on). Every check that
+// matters runs server-side; this page only presents it. ---
+let accGroups = [], accMembersGroupId = null, accFoundCard = null;
+function accEsc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
+function accDate(ts){ return ts ? new Date(ts).toLocaleDateString('en-CA', { timeZone: 'Africa/Johannesburg' }) : null; }
+function accTariffText(g){ return g.pricing_mode === 'free' ? 'Free' : (g.pricing_mode === 'discount' ? Number(g.discount_percent) + '% off' : 'Standard price'); }
+function accScopeText(g){
+  if(g.all_sites) return 'All sites';
+  const names = (g.site_ids || []).map(id => { const l = locations.find(x => x.id === id); return l ? l.name : '?'; });
+  return names.map(accEsc).join(', ');
+}
+async function renderAccess(){
+  const ok = currentStaff && currentStaff.role === 'client_admin' && clients[0] && clients[0].guestAccess;
+  if(!ok){ showPage('dashboard'); return; }   // real enforcement is in the functions
+  closeAccessGroupForm(); closeAccessMembers();
+  await loadAccessGroups();
+}
+async function loadAccessGroups(){
+  const errEl = document.getElementById('acc-list-error'); errEl.textContent = '';
+  const { data, error } = await sb.rpc('list_access_groups', { p_client_id: clients[0].id });
+  if(error){ errEl.textContent = error.message; return; }
+  accGroups = data || [];
+  const el = document.getElementById('acc-groups-list');
+  if(!accGroups.length){ el.innerHTML = '<div class="card card-pad" style="color:var(--text-muted);">No groups yet. Create one to give your staff or guests access.</div>'; return; }
+  el.innerHTML = accGroups.map(g => `
+    <div class="card card-pad" style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+      <div>
+        <div style="font-weight:600;">${accEsc(g.name)}</div>
+        <div style="font-size:12px;color:var(--text-muted);">${accTariffText(g)} · ${accScopeText(g)} · ${g.member_count} active member(s)</div>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button class="btn btn-sm" onclick="openAccessMembers('${g.id}')">Members</button>
+        <button class="btn btn-sm" onclick="openAccessGroupForm('${g.id}')">Edit</button>
+        <button class="btn btn-sm" onclick="archiveAccessGroup('${g.id}')">Delete</button>
+      </div>
+    </div>`).join('');
+}
+function accModeChanged(){ document.getElementById('acc-g-pct-row').style.display = document.getElementById('acc-g-mode').value === 'discount' ? '' : 'none'; }
+function accScopeChanged(){ document.getElementById('acc-g-sites').style.display = document.getElementById('acc-g-scope').value === 'some' ? 'block' : 'none'; }
+function openAccessGroupForm(groupId){
+  const g = groupId ? accGroups.find(x => x.id === groupId) : null;
+  document.getElementById('acc-g-id').value = g ? g.id : '';
+  document.getElementById('acc-g-name').value = g ? g.name : '';
+  document.getElementById('acc-g-mode').value = g ? g.pricing_mode : 'free';
+  document.getElementById('acc-g-pct').value = g && g.discount_percent ? g.discount_percent : '';
+  document.getElementById('acc-g-scope').value = g && !g.all_sites ? 'some' : 'all';
+  const rootSites = locations.filter(l => !l.parentId);
+  const chosen = g ? (g.site_ids || []) : [];
+  document.getElementById('acc-g-sites').innerHTML = rootSites.map(l =>
+    `<label style="display:block;"><input type="checkbox" class="acc-site-cb" value="${l.id}" ${chosen.includes(l.id) ? 'checked' : ''}> ${accEsc(l.name)}</label>`).join('') || '<span style="color:var(--text-muted);">No sites yet.</span>';
+  document.getElementById('acc-g-error').textContent = '';
+  accModeChanged(); accScopeChanged();
+  document.getElementById('acc-group-form').style.display = 'block';
+}
+function closeAccessGroupForm(){ document.getElementById('acc-group-form').style.display = 'none'; }
+async function saveAccessGroup(){
+  const errEl = document.getElementById('acc-g-error'); errEl.textContent = '';
+  const name = document.getElementById('acc-g-name').value.trim();
+  const mode = document.getElementById('acc-g-mode').value;
+  const pct = Number(document.getElementById('acc-g-pct').value);
+  const allSites = document.getElementById('acc-g-scope').value === 'all';
+  const siteIds = [...document.querySelectorAll('.acc-site-cb')].filter(cb => cb.checked).map(cb => cb.value);
+  if(!name){ errEl.textContent = 'A group needs a name.'; return; }
+  if(mode === 'discount' && !(pct >= 1 && pct <= 99)){ errEl.textContent = 'A discount must be between 1 and 99 percent.'; return; }
+  if(!allSites && !siteIds.length){ errEl.textContent = 'Choose at least one site, or apply the group to all sites.'; return; }
+  const { error } = await sb.rpc('save_access_group', {
+    p_client_id: clients[0].id, p_group_id: document.getElementById('acc-g-id').value || null, p_name: name,
+    p_pricing_mode: mode, p_discount_percent: mode === 'discount' ? pct : null, p_all_sites: allSites, p_site_ids: allSites ? null : siteIds });
+  if(error){ errEl.textContent = error.message; return; }
+  closeAccessGroupForm();
+  await loadAccessGroups();
+}
+async function archiveAccessGroup(groupId){
+  const g = accGroups.find(x => x.id === groupId);
+  if(!confirm('Delete the group "' + (g ? g.name : '') + '"?')) return;
+  const { error } = await sb.rpc('archive_access_group', { p_group_id: groupId });
+  if(error){ document.getElementById('acc-list-error').textContent = error.message; return; }
+  if(accMembersGroupId === groupId) closeAccessMembers();
+  await loadAccessGroups();
+}
+async function openAccessMembers(groupId){
+  accMembersGroupId = groupId; accFoundCard = null;
+  const g = accGroups.find(x => x.id === groupId);
+  document.getElementById('acc-m-title').textContent = 'Members of ' + (g ? g.name : '');
+  document.getElementById('acc-m-uid').value = '';
+  document.getElementById('acc-m-found').style.display = 'none';
+  document.getElementById('acc-m-error').textContent = '';
+  document.getElementById('acc-members-panel').style.display = 'block';
+  await loadAccessMembers();
+}
+function closeAccessMembers(){ accMembersGroupId = null; accFoundCard = null; document.getElementById('acc-members-panel').style.display = 'none'; }
+async function loadAccessMembers(){
+  const { data, error } = await sb.rpc('list_group_members', { p_group_id: accMembersGroupId });
+  const body = document.getElementById('acc-members-body');
+  if(error){ document.getElementById('acc-m-error').textContent = error.message; body.innerHTML = ''; return; }
+  body.innerHTML = (data || []).map(m => `<tr>
+    <td>${accEsc(m.uid)}</td><td>${accEsc(m.display_name)}</td><td>${accEsc(m.reference) || '-'}</td>
+    <td>${m.valid_until ? accDate(m.valid_until) + (m.expired ? ' <span style="color:var(--red,#c0392b);">(expired)</span>' : '') : 'No end date'}</td>
+    <td>${accDate(m.added_at)} · ${accEsc(m.added_by) || '-'}</td>
+    <td><button class="btn btn-sm" onclick="accRemoveMember('${m.id}')">Remove</button></td></tr>`).join('')
+    || '<tr><td colspan="6" class="empty">No members yet.</td></tr>';
+}
+async function accFindCard(){
+  const errEl = document.getElementById('acc-m-error'); errEl.textContent = '';
+  accFoundCard = null; document.getElementById('acc-m-found').style.display = 'none';
+  const uid = document.getElementById('acc-m-uid').value.trim();
+  if(!uid) return;
+  const { data, error } = await sb.rpc('lookup_card_for_group', { p_client_id: clients[0].id, p_uid: uid });
+  if(error){ errEl.textContent = error.message; return; }
+  accFoundCard = data;
+  document.getElementById('acc-m-found-uid').textContent = data.uid;
+  document.getElementById('acc-m-found-name').textContent = data.display_name;
+  document.getElementById('acc-m-until').value = '';
+  document.getElementById('acc-m-ref').value = '';
+  document.getElementById('acc-m-found').style.display = 'block';
+}
+async function accAddMember(){
+  const errEl = document.getElementById('acc-m-error'); errEl.textContent = '';
+  if(!accFoundCard) return;
+  const { error } = await sb.rpc('add_group_member', { p_group_id: accMembersGroupId, p_uid: accFoundCard.uid,
+    p_valid_until: document.getElementById('acc-m-until').value || null, p_reference: document.getElementById('acc-m-ref').value.trim() || null });
+  if(error){ errEl.textContent = error.message; return; }
+  accFoundCard = null; document.getElementById('acc-m-found').style.display = 'none'; document.getElementById('acc-m-uid').value = '';
+  await loadAccessMembers(); await loadAccessGroups();
+}
+async function accRemoveMember(memberId){
+  const { error } = await sb.rpc('remove_group_member', { p_member_id: memberId });
+  if(error){ document.getElementById('acc-m-error').textContent = error.message; return; }
+  await loadAccessMembers(); await loadAccessGroups();
 }
 
 async function renderExchangeRates(){
