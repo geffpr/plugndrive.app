@@ -833,7 +833,22 @@ tr.rowlink:hover td{background:#f0f6fc;}
             </table>
           </div>
           <div class="section-title" title="Energy sold (commission already deducted) minus cash this client's operators have collected on site. A positive balance is what Plug n Drive owes this client; a negative one is what this client owes Plug n Drive.">Ledger balance</div>
-          <div class="card card-pad" style="max-width:420px;margin-bottom:20px;" id="cl-ledger-balance">Loading…</div>
+          <div class="card card-pad" style="max-width:420px;margin-bottom:20px;">
+            <div id="cl-ledger-balance">Loading…</div>
+            <button class="btn btn-sm" style="margin-top:6px;" onclick="openSettlePanel()">Settle a period</button>
+            <div id="cl-settle-panel" style="display:none;margin-top:14px;border-top:1px solid var(--border);padding-top:14px;">
+              <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">Pay the client yourself (bank or Paystack), then record it here. The amount is always the full net of the period — you never type it.</div>
+              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                <input type="date" id="cl-settle-from"> <span>to</span> <input type="date" id="cl-settle-to">
+                <button class="btn btn-sm" onclick="previewSettlement()">Preview</button>
+              </div>
+              <div id="cl-settle-preview" style="margin:10px 0;"></div>
+              <button class="btn btn-primary btn-sm" id="cl-settle-confirm" style="display:none;" onclick="confirmSettlement()">Mark as settled</button>
+              <button class="btn btn-sm" onclick="document.getElementById('cl-settle-panel').style.display='none';">Close</button>
+              <div id="cl-settle-error" style="color:var(--red, #c0392b);font-size:12px;margin-top:8px;"></div>
+            </div>
+            <div id="cl-settle-history" style="margin-top:14px;"></div>
+          </div>
           <div class="section-title">Admin login</div>
           <div id="client-admin-login-panel" class="card card-pad" style="max-width:420px;margin-bottom:20px;"></div>
           <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">
@@ -976,6 +991,9 @@ tr.rowlink:hover td{background:#f0f6fc;}
             <tr><td style="color:var(--text-muted);">Plug n Drive commission</td><td id="stg-commission" style="text-align:right;"></td></tr>
           </table>
         </div>
+
+        <div class="section-title" style="margin:0 0 14px;">Balance &amp; payments</div>
+        <div class="card card-pad" style="max-width:520px;margin-bottom:24px;" id="stg-ledger">Loading…</div>
 
         <div class="section-title" style="margin:0 0 14px;">Payouts (Paystack)</div>
         <div class="card card-pad" style="max-width:420px;">
@@ -2751,26 +2769,73 @@ let currentClientId = null;
 // Energy sold (what this client is owed) minus cash collected (what this
 // client owes) — the running balance from the two-line ledger. Shown per
 // currency, never blended into one converted figure.
+let currentLedgerStatus = null;
+function ledgerBalancesHtml(status){
+  const bal = status.balances || [];
+  if(!bal.length) return '<span style="color:var(--text-muted);">Nothing outstanding.</span>';
+  return bal.map(b => {
+    const net = Math.round(Number(b.net) * 100) / 100;
+    const color = net > 0 ? 'var(--green, #1a7f37)' : (net < 0 ? 'var(--red, #c0392b)' : 'var(--text-muted)');
+    const label = net > 0 ? 'Plug n Drive owes this client' : (net < 0 ? 'This client owes Plug n Drive' : 'Settled');
+    return `<div style="margin-bottom:8px;"><span style="font-weight:700;color:${color};">${fmtMoney(Math.abs(net), b.currency)}</span> <span style="font-size:12px;color:var(--text-muted);">\u2014 ${label}</span></div>`;
+  }).join('');
+}
+function ledgerHistoryHtml(status){
+  const h = status.history || [];
+  if(!h.length) return '';
+  return '<div style="font-size:12px;font-weight:600;margin-bottom:6px;">Settled periods</div>' + h.map(s =>
+    `<div style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">${s.period_from} \u2192 ${s.period_to}: <b style="color:var(--text);">${fmtMoney(Math.abs(Number(s.amount)), s.currency)}</b> ${Number(s.amount) >= 0 ? 'paid to client' : 'received from client'} (${String(s.settled_at).slice(0,10)})</div>`).join('');
+}
+// Outstanding balance = energy sold minus cash collected, ignoring every
+// period already settled. Shown per currency, never blended.
 async function renderClientLedgerBalance(clientId){
   const el = document.getElementById('cl-ledger-balance');
   el.textContent = 'Loading…';
-  const { data, error } = await sb.from('client_ledger_entries').select('*').eq('client_id', clientId);
+  const { data, error } = await sb.rpc('client_ledger_status', { p_client_id: clientId });
   if(error){ el.textContent = error.message; return; }
-  const byCurrency = {};
-  (data||[]).forEach(row => {
-    byCurrency[row.currency] = (byCurrency[row.currency] || 0) + (row.type === 'energy_sold' ? Number(row.amount) : -Number(row.amount));
-  });
-  const currencies = Object.keys(byCurrency);
-  if(currencies.length === 0){
-    el.innerHTML = '<span style="color:var(--text-muted);">No ledger activity yet.</span>';
-    return;
-  }
-  el.innerHTML = currencies.map(cur => {
-    const net = Math.round(byCurrency[cur] * 100) / 100;
-    const color = net > 0 ? 'var(--green, #1a7f37)' : (net < 0 ? 'var(--red, #c0392b)' : 'var(--text-muted)');
-    const label = net > 0 ? 'Plug n Drive owes this client' : (net < 0 ? 'This client owes Plug n Drive' : 'Settled');
-    return `<div style="margin-bottom:8px;"><span style="font-weight:700;color:${color};">${fmtMoney(Math.abs(net), cur)}</span> <span style="font-size:12px;color:var(--text-muted);">\u2014 ${label}</span></div>`;
+  currentLedgerStatus = data;
+  el.innerHTML = ledgerBalancesHtml(data);
+  document.getElementById('cl-settle-history').innerHTML = ledgerHistoryHtml(data);
+}
+function openSettlePanel(){
+  const s = currentLedgerStatus || {};
+  const today = new Date().toISOString().slice(0,10);
+  let from = today;
+  if(s.last_settled_to){ const d = new Date(s.last_settled_to + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + 1); from = d.toISOString().slice(0,10); }
+  else if(s.first_unsettled_date){ from = s.first_unsettled_date; }
+  document.getElementById('cl-settle-from').value = from;
+  document.getElementById('cl-settle-to').value = today;
+  document.getElementById('cl-settle-preview').innerHTML = '';
+  document.getElementById('cl-settle-error').textContent = '';
+  document.getElementById('cl-settle-confirm').style.display = 'none';
+  document.getElementById('cl-settle-panel').style.display = 'block';
+}
+async function previewSettlement(){
+  const errEl = document.getElementById('cl-settle-error'); errEl.textContent = '';
+  document.getElementById('cl-settle-confirm').style.display = 'none';
+  const { data, error } = await sb.rpc('preview_client_settlement', { p_client_id: currentClientId,
+    p_from: document.getElementById('cl-settle-from').value, p_to: document.getElementById('cl-settle-to').value });
+  if(error){ errEl.textContent = error.message; document.getElementById('cl-settle-preview').innerHTML = ''; return; }
+  if(!data.length){ document.getElementById('cl-settle-preview').innerHTML = '<span style="color:var(--text-muted);">Nothing to settle in this period.</span>'; return; }
+  document.getElementById('cl-settle-preview').innerHTML = data.map(r => {
+    const net = Number(r.net);
+    return `<div>${net >= 0 ? 'Pay the client' : 'Collect from the client'}: <b>${fmtMoney(Math.abs(net), r.currency)}</b></div>`;
   }).join('');
+  document.getElementById('cl-settle-confirm').style.display = '';
+}
+async function confirmSettlement(){
+  const errEl = document.getElementById('cl-settle-error'); errEl.textContent = '';
+  const { error } = await sb.rpc('settle_client_period', { p_client_id: currentClientId,
+    p_from: document.getElementById('cl-settle-from').value, p_to: document.getElementById('cl-settle-to').value });
+  if(error){ errEl.textContent = error.message; return; }
+  document.getElementById('cl-settle-panel').style.display = 'none';
+  await renderClientLedgerBalance(currentClientId);
+}
+async function renderSettingsLedger(clientId){
+  const el = document.getElementById('stg-ledger');
+  const { data, error } = await sb.rpc('client_ledger_status', { p_client_id: clientId });
+  if(error){ el.textContent = error.message; return; }
+  el.innerHTML = ledgerBalancesHtml(data) + ledgerHistoryHtml(data);
 }
 function openClient(id, opts){
   opts = opts || {};
@@ -3772,6 +3837,7 @@ async function submitAdminCredit(){
 }
 // --- Settings (client_admin only): read-only profile + Paystack payout connection ---
 function renderSettings(){
+  if(clients[0]) renderSettingsLedger(clients[0].id);
   const cl = clients[0];   // RLS already limits a client_admin to exactly their own row
   if(!cl) return;
 
