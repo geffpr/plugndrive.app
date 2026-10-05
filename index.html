@@ -828,6 +828,12 @@ tr.rowlink:hover td{background:#f0f6fc;}
                   <span id="cl-cash-recharges-label"></span>
                 </label>
               </td></tr>
+              <tr><td style="color:var(--text-muted);" title="Lets this client's operators add guests and staff to access groups on their own chargers. Independent of Cash recharges: a client can have either, both, or neither.">Guest access</td><td style="text-align:right;">
+                <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
+                  <input type="checkbox" id="cl-guest-access" onchange="toggleClientGuestAccess(this.checked)">
+                  <span id="cl-guest-access-label"></span>
+                </label>
+              </td></tr>
               <tr><td style="color:var(--text-muted);">Total sites</td><td id="cl-total-sites" style="text-align:right;"></td></tr>
               <tr><td style="color:var(--text-muted);">Total chargers</td><td id="cl-total-chargers" style="text-align:right;"></td></tr>
             </table>
@@ -1748,25 +1754,34 @@ const OP_I18N = {
     enterAmount:'Enter an amount greater than zero.', creditFailed:'Failed to credit card: ',
     success:(amt,cur,bal)=>`Credited ${fmtMoney(amt,cur)}. New balance: ${fmtMoney(bal,cur)}.`,
     smsFailed:' (SMS confirmation failed to send)', balanceLabel:'Balance: ',
-    willConvert:'Cash is taken in your site currency and converted into this card\u2019s {currency} wallet.' },
+    willConvert:'Cash is taken in your site currency and converted into this card\u2019s {currency} wallet.',
+    guestSoon:'Cash top-ups are not enabled for your organization. Guest access tools are coming to this screen.',
+    noActions:'No actions are enabled for your organization. Please contact Plug n Drive.' },
   pt: { site:s=>s, uid:'UID do cartão', search:'Pesquisar', amount:'Valor', confirm:'Confirmar', cancel:'Cancelar',
     signout:'Sair', notFound:'Nenhum cartão encontrado com esse UID.', wrongNetwork:'Este cartão não pertence à sua rede.',
     enterAmount:'Insira um valor maior que zero.', creditFailed:'Falha ao recarregar o cartão: ',
     success:(amt,cur,bal)=>`Recarregado ${fmtMoney(amt,cur)}. Novo saldo: ${fmtMoney(bal,cur)}.`,
     smsFailed:' (falha ao enviar SMS de confirmação)', balanceLabel:'Saldo: ',
-    willConvert:'O dinheiro é recebido na moeda do seu site e convertido para a carteira em {currency} deste cartão.' },
+    willConvert:'O dinheiro é recebido na moeda do seu site e convertido para a carteira em {currency} deste cartão.',
+    guestSoon:'As recargas em dinheiro não estão ativadas para a sua organização. As ferramentas de acesso de convidados chegarão a este ecrã.',
+    noActions:'Nenhuma ação está ativada para a sua organização. Contacte a Plug n Drive.' },
 };
 const OP_QUICK_AMOUNTS = {
   ZAR: [50,100,200,500], MZN: [100,300,500,1000], NAD: [50,100,200,500],
   BWP: [25,50,100,250], USD: [5,10,20,50], EUR: [5,10,20,50],
 };
 let opSite = null, opLang = 'en', opFoundCard = null, opInactivityTimer = null;
+// What this operator's organization is allowed to do. Fails closed: if the
+// answer can't be read, nothing is offered rather than everything.
+let opCaps = { cash: false, guest: false };
 
 async function initOperatorScreen(){
   const { data: site } = await sb.from('locations').select('*').eq('id', currentStaff.location_id).maybeSingle();
   opSite = site;
   opLang = (site && site.currency === 'MZN') ? 'pt' : 'en';
   const t = OP_I18N[opLang];
+  const { data: caps } = await sb.rpc('get_my_client_caps');
+  opCaps = { cash: !!(caps && caps.cash), guest: !!(caps && caps.guest) };
 
   document.getElementById('op-site-name').textContent = site ? `${site.name} (${site.currency})` : 'No site assigned';
   document.getElementById('op-signout-label').textContent = t.signout;
@@ -1842,9 +1857,12 @@ async function operatorConfirmCredit(){
 function operatorResetForm(){
   opFoundCard = null;
   document.getElementById('op-search-uid').value = '';
-  document.getElementById('op-search-step').style.display = 'block';
+  document.getElementById('op-search-step').style.display = opCaps.cash ? 'block' : 'none';
   document.getElementById('op-credit-step').style.display = 'none';
-  document.getElementById('op-message').textContent = '';
+  const t = OP_I18N[opLang];
+  const msgEl0 = document.getElementById('op-message');
+  msgEl0.style.color = 'var(--text-muted)';
+  msgEl0.textContent = opCaps.cash ? '' : (opCaps.guest ? t.guestSoon : t.noActions);
   const noteEl = document.getElementById('op-currency-note');
   if(noteEl) noteEl.textContent = '';
 }
@@ -1868,8 +1886,8 @@ function applyRoleBasedNav(){
   const adminLabel = document.getElementById('admin-section-label');
   if(adminLabel) adminLabel.style.display = isClientAdmin ? 'none' : '';
   const opsNav = document.getElementById('myoperators-nav');
-  const cashRechargesOn = isClientAdmin && clients[0] && clients[0].cashRecharges;
-  if(opsNav) opsNav.style.display = cashRechargesOn ? '' : 'none';
+  const operatorsOn = isClientAdmin && clients[0] && (clients[0].cashRecharges || clients[0].guestAccess);
+  if(opsNav) opsNav.style.display = operatorsOn ? '' : 'none';
   const settingsNav = document.getElementById('settings-nav');
   if(settingsNav) settingsNav.style.display = isClientAdmin ? '' : 'none';
   const addSiteBtn = document.querySelector('#sites-list-view button.btn-primary');
@@ -1923,7 +1941,7 @@ function describeCommission(cl){
   // is negotiated — payouts are never paused while that happens.
   return `0% <span style="color:var(--red, #c0392b);">(previous ${cl.commissionRate}% deal ended ${end} — not renegotiated)</span>`;
 }
-function mapClient(c){ return {id:c.id, name:c.name, businessType:c.business_type, contactName:c.contact_name, contactPhone:c.contact_phone, contactEmail:c.contact_email, address:c.address, commissionRate:c.commission_rate, commissionStartDate:c.commission_start_date, commissionDurationMonths:c.commission_duration_months, contractStart:c.contract_start_date, payoutBankCode:c.payout_bank_code, payoutBankName:c.payout_bank_name, payoutAccountNumber:c.payout_account_number, payoutAccountName:c.payout_account_name, paystackRecipientCode:c.paystack_recipient_code, paystackConnectedAt:c.paystack_connected_at, cashRecharges:c.cash_recharges_enabled}; }
+function mapClient(c){ return {id:c.id, name:c.name, businessType:c.business_type, contactName:c.contact_name, contactPhone:c.contact_phone, contactEmail:c.contact_email, address:c.address, commissionRate:c.commission_rate, commissionStartDate:c.commission_start_date, commissionDurationMonths:c.commission_duration_months, contractStart:c.contract_start_date, payoutBankCode:c.payout_bank_code, payoutBankName:c.payout_bank_name, payoutAccountNumber:c.payout_account_number, payoutAccountName:c.payout_account_name, paystackRecipientCode:c.paystack_recipient_code, paystackConnectedAt:c.paystack_connected_at, cashRecharges:c.cash_recharges_enabled, guestAccess:c.guest_access_enabled}; }
 
 async function loadAll(){
   const [locRes, chgRes, sesRes, rfidRes, userRes, tarRes, clientRes] = await Promise.all([
@@ -2765,6 +2783,17 @@ async function toggleClientCashRecharges(checked){
   await loadAll();
   openClient(currentClientId, {skipNav:true});
 }
+async function toggleClientGuestAccess(checked){
+  const box = document.getElementById('cl-guest-access');
+  const { data, error } = await sb.from('clients').update({ guest_access_enabled: checked }).eq('id', currentClientId).select();
+  if(error || !data || !data.length){
+    alert(error?.message || 'Could not change this setting.');
+    box.checked = !checked;   // a failed change must never look applied
+    return;
+  }
+  await loadAll();
+  openClient(currentClientId, {skipNav:true});
+}
 let currentClientId = null;
 // Energy sold (what this client is owed) minus cash collected (what this
 // client owes) — the running balance from the two-line ledger. Shown per
@@ -2854,6 +2883,8 @@ function openClient(id, opts){
   document.getElementById('cl-since').textContent = cl.contractStart || '-';
   document.getElementById('cl-cash-recharges').checked = !!cl.cashRecharges;
   document.getElementById('cl-cash-recharges-label').textContent = cl.cashRecharges ? 'Enabled' : 'Disabled';
+  document.getElementById('cl-guest-access').checked = !!cl.guestAccess;
+  document.getElementById('cl-guest-access-label').textContent = cl.guestAccess ? 'Enabled' : 'Disabled';
   renderClientAdminLoginPanel(id);
   renderClientLedgerBalance(id);
 
@@ -3419,9 +3450,10 @@ async function saveFxRate(code){
 }
 
 async function renderMyOperators(){
-  // Real enforcement is the RLS policy on staff; this just avoids showing a
-  // broken page if a client_admin reaches this URL while it's switched off.
-  if(currentStaff && currentStaff.role === 'client_admin' && !(clients[0] && clients[0].cashRecharges)){
+  // Real enforcement is server-side (the staff policy and the manage-operators
+  // function); this just avoids showing a broken page if a client_admin
+  // reaches this URL while both switches are off.
+  if(currentStaff && currentStaff.role === 'client_admin' && !(clients[0] && (clients[0].cashRecharges || clients[0].guestAccess))){
     showPage('dashboard');
     return;
   }
