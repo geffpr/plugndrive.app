@@ -61,6 +61,11 @@ input,select{font-family:'Inter',sans-serif;font-size:13px;}
 .kpi-label{font-size:11px;color:var(--text-muted);margin-bottom:6px;}
 .kpi-value{font-size:22px;font-weight:600;color:var(--navy);font-family:'Poppins',sans-serif;}
 .kpi-value.red{color:var(--red);}
+.alert-banner{display:none;align-items:flex-start;gap:12px;background:var(--red-light);border:1px solid var(--red);color:var(--red);border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:13px;line-height:1.5;}
+.alert-banner b{font-weight:700;}
+.alert-banner .alert-body{flex:1;min-width:0;}
+.alert-banner .alert-btn{flex:none;background:var(--red);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-weight:600;font-size:12px;cursor:pointer;}
+.nav-badge{display:none;margin-left:auto;background:var(--red);color:#fff;border-radius:10px;min-width:18px;height:18px;padding:0 5px;font-size:11px;font-weight:700;align-items:center;justify-content:center;}
 
 .section-title{font-size:13px;font-weight:600;color:var(--text-secondary);margin:20px 0 10px;text-transform:uppercase;letter-spacing:.03em;}
 
@@ -519,7 +524,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
     <a class="navitem" data-page="sessions" onclick="showPage('sessions')"><span class="ic">◷</span>Sessions</a>
     <a class="navitem" data-page="rfid" onclick="showPage('rfid')"><span class="ic">▭</span>RFID cards</a>
     <a class="navitem" data-page="load" onclick="showPage('load')"><span class="ic">◔</span>Load management</a>
-    <a class="navitem" data-page="tariffs" onclick="showPage('tariffs')"><span class="ic">$</span>Tariffs</a>
+    <a class="navitem" data-page="tariffs" onclick="showPage('tariffs')"><span class="ic">$</span>Tariffs<span class="nav-badge" id="tariffs-badge"></span></a>
     <a class="navitem" data-page="walletactivity" onclick="showPage('walletactivity')"><span class="ic">◐</span>Wallet activity</a>
     <div style="margin-top:auto;padding-top:14px;border-top:1px solid rgba(255,255,255,.12);">
       <div id="sidebar-identity" style="font-size:12px;color:rgba(255,255,255,.7);margin-bottom:8px;"></div>
@@ -540,6 +545,10 @@ tr.rowlink:hover td{background:#f0f6fc;}
 
       <!-- DASHBOARD -->
       <div class="page active" id="page-dashboard">
+        <div class="alert-banner" id="tariff-banner" role="alert">
+          <div class="alert-body" id="tariff-banner-text"></div>
+          <button class="alert-btn" onclick="showPage('tariffs')">Set tariffs</button>
+        </div>
         <div class="kpi-grid">
           <div class="kpi"><div class="kpi-label">Sites</div><div class="kpi-value" id="kpi-sites">-</div></div>
           <div class="kpi"><div class="kpi-label">Chargers</div><div class="kpi-value" id="kpi-chargers">-</div></div>
@@ -2259,6 +2268,7 @@ async function loadAll(){
   users = (userRes.data||[]).map(mapUser);
   tariffs = (tarRes.data||[]).map(mapTariff);
   clients = (clientRes.data||[]).map(mapClient);
+  updateTariffAlerts();
 }
 
 // Attaches Google Places Autocomplete to an address input. Silently does
@@ -2434,7 +2444,28 @@ window.addEventListener('popstate', routeFromLocation);
 function chargerNeedsAttention(c){
   return c.status === 'Faulted' || c.status === 'Offline' || !isChargerFresh(c.lastSeenAt);
 }
+// A charger is billed with its own tariff, otherwise the tariff of its top-level site
+// (exactly what the OCPP server does). With neither, its charges are NOT billed.
+function chargerHasTariff(c){
+  if(tariffs.some(t=>t.chargerId===c.id)) return true;
+  const root = rootOf(c.locationId);
+  return !!root && tariffs.some(t=>t.locationId===root.id);
+}
+function updateTariffAlerts(){
+  const banner = document.getElementById('tariff-banner'), badge = document.getElementById('tariffs-badge');
+  const canSee = currentStaff && (currentStaff.role === 'plugndrive_admin' || currentStaff.role === 'client_admin');
+  const missing = canSee ? chargers.filter(c=>!chargerHasTariff(c)) : [];
+  if(badge){ badge.style.display = missing.length ? 'inline-flex' : 'none'; badge.textContent = missing.length ? String(missing.length) : ''; }
+  if(!banner) return;
+  if(!missing.length){ banner.style.display = 'none'; return; }
+  const esc = v => String(v==null?'':v).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+  const names = missing.slice(0,5).map(c=>esc(c.name)).join(', ') + (missing.length>5 ? ` and ${missing.length-5} more` : '');
+  document.getElementById('tariff-banner-text').innerHTML =
+    `<b>${missing.length} charger${missing.length>1?'s have':' has'} no tariff.</b> Charges on ${missing.length>1?'them':'it'} are not billed until a tariff is set.<br>${names}`;
+  banner.style.display = 'flex';
+}
 function renderDashboard(){
+  updateTariffAlerts();
   document.getElementById('kpi-sites').textContent = locations.filter(l=>!l.parentId).length;
   document.getElementById('kpi-chargers').textContent = chargers.length;
   document.getElementById('kpi-charging').textContent = chargers.filter(c=>c.status==='Charging').length;
@@ -4687,6 +4718,7 @@ async function toggleLoadManagement(locationId, enabled){
 function fmtTariffMoney(n, currency){ return n==null ? '-' : fmtMoney(n, currency); }
 
 function renderTariffs(){
+  updateTariffAlerts();
   document.getElementById('tariffs-list-view').style.display = 'block';
   document.getElementById('tariff-edit-view').style.display = 'none';
   const roots = locations.filter(l=>!l.parentId);
@@ -4694,7 +4726,7 @@ function renderTariffs(){
     const t = tariffs.find(x=>x.locationId===r.id);
     return `<tr class="rowlink" onclick="openTariffEdit('location','${r.id}')">
       <td>${r.name}</td><td>${r.currency}</td>
-      <td>${t?fmtTariffMoney(t.priceDay,t.currency):'Not set'}</td>
+      <td>${t?fmtTariffMoney(t.priceDay,t.currency):'<span style="color:var(--red);font-weight:600;">Not set</span>'}</td>
       <td>${t?fmtTariffMoney(t.priceNight,t.currency):'-'}</td>
       <td>${t?fmtTariffMoney(t.monthlyFee,t.currency):'-'}</td>
       <td>${t&&t.monthlyKwhIncluded!=null?t.monthlyKwhIncluded+' kWh':'-'}</td>
@@ -4705,7 +4737,7 @@ function renderTariffs(){
     const t = tariffs.find(x=>x.chargerId===c.id);
     return `<tr class="rowlink" onclick="openTariffEdit('charger','${c.id}')">
       <td>${c.name}</td><td class="path">${pathOf(c.locationId)}</td>
-      <td>${t?'Custom tariff':'Uses site tariff'}</td>
+      <td>${t?'Custom tariff':(chargerHasTariff(c)?'Uses site tariff':'<span style="color:var(--red);font-weight:600;">No tariff — not billed</span>')}</td>
     </tr>`;
   }).join('');
 }
