@@ -429,6 +429,11 @@ tr.rowlink:hover td{background:#f0f6fc;}
       <a href="#" onclick="handleSignOut();return false;" style="font-size:12px;color:var(--text-muted);" id="op-signout-label">Sign out</a>
     </div>
 
+    <div id="op-tabs" style="display:none;gap:8px;margin-bottom:12px;">
+      <button type="button" class="btn btn-sm" id="op-tab-cash" onclick="opShowTab('cash')">Cash top-up</button>
+      <button type="button" class="btn btn-sm" id="op-tab-guest" onclick="opShowTab('guest')">Guests</button>
+    </div>
+
     <div id="op-search-step">
       <div class="form-row"><label id="op-uid-label">Card UID</label><input type="text" id="op-search-uid" autofocus></div>
       <button class="btn btn-primary btn-block" id="op-search-btn" onclick="operatorSearchCard()">Search</button>
@@ -444,6 +449,38 @@ tr.rowlink:hover td{background:#f0f6fc;}
       <div class="form-row"><label id="op-amount-label">Amount</label><input type="number" id="op-amount-input"></div>
       <button class="btn btn-primary btn-block" id="op-confirm-btn" onclick="operatorConfirmCredit()">Confirm</button>
       <button class="btn btn-block" style="margin-top:8px;" id="op-cancel-btn" onclick="operatorResetForm()">Cancel</button>
+    </div>
+
+    <div id="op-guest-step" style="display:none;">
+      <div class="form-row"><label id="opg-group-label">Group</label><select id="opg-group" onchange="opgGroupChanged()"></select></div>
+      <div id="opg-group-info" style="font-size:12px;color:var(--text-muted);margin:-4px 0 10px;"></div>
+      <div id="opg-body">
+        <div class="form-row"><label id="opg-uid-label">Card code</label><input type="text" id="opg-uid"></div>
+        <button class="btn btn-primary btn-block" id="opg-find-btn" onclick="opgFind()">Find</button>
+
+        <div id="opg-found" style="display:none;margin-top:12px;">
+          <div style="background:var(--bg,#f7f7f8);border-radius:10px;padding:10px;margin-bottom:10px;">
+            <div style="font-weight:600;" id="opg-found-name"></div>
+            <div style="font-size:12px;color:var(--text-muted);" id="opg-found-uid"></div>
+          </div>
+          <div class="form-row"><label id="acc-om-until-label">Access until (optional)</label><div id="acc-om-chips" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px;"><button type="button" class="btn btn-sm" data-k="1" onclick="accPick('om','1')">1 h</button><button type="button" class="btn btn-sm" data-k="2" onclick="accPick('om','2')">2 h</button><button type="button" class="btn btn-sm" data-k="3" onclick="accPick('om','3')">3 h</button><button type="button" class="btn btn-sm" data-k="today" onclick="accPick('om','today')">Today</button><button type="button" class="btn btn-sm" data-k="tomorrow" onclick="accPick('om','tomorrow')">Tomorrow</button></div><div style="display:flex;gap:6px;"><input type="date" id="acc-om-until" oninput="accUntilTyped('om')"><input type="time" id="acc-om-time" oninput="accUntilTyped('om')"></div></div>
+          <div class="form-row"><label id="opg-m-ref-label">Reference (e.g. room)</label><input type="text" id="opg-m-ref" maxlength="80"></div>
+          <button class="btn btn-primary btn-block" id="opg-add-btn" onclick="opgAdd()">Add to group</button>
+        </div>
+
+        <div id="opg-new" style="display:none;margin-top:12px;">
+          <div style="font-size:13px;margin-bottom:8px;" id="opg-new-title"></div>
+          <div class="form-row"><label id="opg-n-name-label">First name *</label><input type="text" id="opg-n-name" maxlength="60"></div>
+          <div class="form-row"><label id="opg-n-phone-label">Phone (optional)</label><input type="text" id="opg-n-phone" placeholder="+27821234567"></div>
+          <div class="form-row"><label id="opg-n-email-label">E-mail (optional)</label><input type="email" id="opg-n-email" maxlength="120"></div>
+          <div class="form-row"><label id="acc-on-until-label">Access until (optional)</label><div id="acc-on-chips" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px;"><button type="button" class="btn btn-sm" data-k="1" onclick="accPick('on','1')">1 h</button><button type="button" class="btn btn-sm" data-k="2" onclick="accPick('on','2')">2 h</button><button type="button" class="btn btn-sm" data-k="3" onclick="accPick('on','3')">3 h</button><button type="button" class="btn btn-sm" data-k="today" onclick="accPick('on','today')">Today</button><button type="button" class="btn btn-sm" data-k="tomorrow" onclick="accPick('on','tomorrow')">Tomorrow</button></div><div style="display:flex;gap:6px;"><input type="date" id="acc-on-until" oninput="accUntilTyped('on')"><input type="time" id="acc-on-time" oninput="accUntilTyped('on')"></div></div>
+          <div class="form-row"><label id="opg-n-ref-label">Reference (e.g. room)</label><input type="text" id="opg-n-ref" maxlength="80"></div>
+          <button class="btn btn-primary btn-block" id="opg-register-btn" onclick="opgRegister()">Register card &amp; add</button>
+        </div>
+      </div>
+      <div id="opg-msg" style="font-size:13px;margin-top:10px;"></div>
+      <div id="opg-list-title" style="font-weight:600;margin:14px 0 6px;"></div>
+      <div id="opg-list"></div>
     </div>
 
     <div id="op-message" style="font-size:13px;margin-top:12px;"></div>
@@ -975,7 +1012,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
         </div>
         <div class="card">
           <table>
-            <thead><tr><th>Name</th><th>Email</th><th>Site</th><th>Added</th><th></th></tr></thead>
+            <thead><tr><th>Name</th><th>Email</th><th>Site</th><th>Added</th><th id="operators-guest-th">Can add guests</th><th></th></tr></thead>
             <tbody id="operators-body"></tbody>
           </table>
         </div>
@@ -998,6 +1035,16 @@ tr.rowlink:hover td{background:#f0f6fc;}
             <select id="acc-g-scope" onchange="accScopeChanged()"><option value="all">All my sites</option><option value="some">Selected sites</option></select></div>
           <div id="acc-g-sites" style="display:none;margin-bottom:10px;"></div>
           <div class="form-row"><label>Longest access you can grant (days, optional)</label><input type="number" id="acc-g-maxdays" min="1" max="365" placeholder="No limit"></div>
+          <div id="acc-g-allow-row" style="margin-bottom:10px;">
+            <label style="display:block;margin-bottom:4px;">Free allowance per guest (optional)</label>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+              <div class="form-row" style="margin:0;"><label style="font-weight:400;font-size:12px;">Minutes of charging</label><input type="number" id="acc-g-minutes" min="1" max="1440" placeholder="No limit" style="width:110px;"></div>
+              <div class="form-row" style="margin:0;"><label style="font-weight:400;font-size:12px;">kWh</label><input type="number" id="acc-g-kwh" min="0.1" max="1000" step="0.1" placeholder="No limit" style="width:110px;"></div>
+              <div style="display:flex;gap:4px;"><button type="button" class="btn btn-sm" onclick="accSetMinutes(30)">30 min</button><button type="button" class="btn btn-sm" onclick="accSetMinutes(60)">1 h</button><button type="button" class="btn btn-sm" onclick="accSetMinutes(120)">2 h</button></div>
+            </div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">Total for the whole access period, shared across all charges. The charge stops as soon as the first limit is reached. Free groups only.</div>
+          </div>
+          <div class="form-row"><label style="display:flex;gap:8px;align-items:flex-start;font-weight:400;"><input type="checkbox" id="acc-g-reception" style="margin-top:3px;"><span>Reception staff can add guests to this group<br><span style="font-size:12px;color:var(--text-muted);">Only operators you allow in &ldquo;My operators&rdquo; can do it, and only for the groups ticked here.</span></span></label></div>
           <div style="display:flex;gap:8px;">
             <button class="btn btn-primary" onclick="saveAccessGroup()">Save group</button>
             <button class="btn" onclick="closeAccessGroupForm()">Cancel</button>
@@ -1040,7 +1087,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
           <div id="acc-m-info" style="font-size:13px;margin:6px 0;color:var(--green, #1a7f37);"></div>
           <div id="acc-m-error" style="color:var(--red, #c0392b);font-size:12px;margin:6px 0;"></div>
           <table>
-            <thead><tr><th>Card</th><th>Holder</th><th>Reference</th><th>Access until</th><th>Added</th><th></th></tr></thead>
+            <thead><tr><th>Card</th><th>Holder</th><th>Reference</th><th>Access until</th><th id="acc-m-used-th" style="display:none;">Allowance used</th><th>Added</th><th></th></tr></thead>
             <tbody id="acc-members-body"></tbody>
           </table>
         </div>
@@ -1821,7 +1868,19 @@ const OP_I18N = {
     success:(amt,cur,bal)=>`Credited ${fmtMoney(amt,cur)}. New balance: ${fmtMoney(bal,cur)}.`,
     smsFailed:' (SMS confirmation failed to send)', balanceLabel:'Balance: ',
     willConvert:'Cash is taken in your site currency and converted into this card\u2019s {currency} wallet.',
-    guestSoon:'Cash top-ups are not enabled for your organization. Guest access tools are coming to this screen.',
+    guestSoon:'Cash top-ups are not enabled for your organization. Ask your manager if you need to add guests.',
+    tabCash:'Cash top-up', tabGuest:'Guests', gGroup:'Group', gNoGroups:'No group is open to reception yet. Ask your manager.',
+    gMax:n=>`Longest access: ${n} day(s)`, gCode:'Card code', gFind:'Find', gUntilReq:n=>`Access until (required, up to ${n} days)`,
+    gUntilOpt:'Access until (optional)', gRef:'Reference (e.g. room)', gAdd:'Add to group', gNewTitle:uid=>`Card ${uid} is not registered yet. Register it as a guest:`,
+    gName:'First name *', gPhone:'Phone (optional)', gEmail:'E-mail (optional)', gRegister:'Register card & add',
+    gNotFreeNew:'Card not found. A new guest card can only be added to a free group.', gNeedEnd:n=>`This group needs an end date (up to ${n} days).`,
+    gNameReq:'The guest\u2019s first name is required.', gPickDate:'Pick a date for that time, or use the 1 h / 2 h / 3 h buttons.',
+    gAdded:'Access added.', gSms:'Access added \u00b7 SMS sent.', gEmailSent:'Access added \u00b7 e-mail sent.',
+    gNoContact:'Access added. No phone or e-mail on file, so nobody was notified.', gUpdated:'Access updated.',
+    gSendFailed:'Access added, but the message could not be sent.', gCurrent:'Current guests', gNone:'No guests yet.',
+    gRemove:'Remove', gConfirmRemove:'Remove this guest\u2019s access?', gExpired:'expired', gNoEnd:'No end date',
+    gShowing:n=>`Showing the ${n} most recent.`, gToday:'Today', gTomorrow:'Tomorrow', gAddedBy:'added by',
+    gAllow:txt=>`Free allowance: ${txt}`, gUsed:txt=>`used ${txt}`,
     noActions:'No actions are enabled for your organization. Please contact Plug n Drive.' },
   pt: { site:s=>s, uid:'UID do cartão', search:'Pesquisar', amount:'Valor', confirm:'Confirmar', cancel:'Cancelar',
     signout:'Sair', notFound:'Nenhum cartão encontrado com esse UID.', wrongNetwork:'Este cartão não pertence à sua rede.',
@@ -1829,7 +1888,19 @@ const OP_I18N = {
     success:(amt,cur,bal)=>`Recarregado ${fmtMoney(amt,cur)}. Novo saldo: ${fmtMoney(bal,cur)}.`,
     smsFailed:' (falha ao enviar SMS de confirmação)', balanceLabel:'Saldo: ',
     willConvert:'O dinheiro é recebido na moeda do seu site e convertido para a carteira em {currency} deste cartão.',
-    guestSoon:'As recargas em dinheiro não estão ativadas para a sua organização. As ferramentas de acesso de convidados chegarão a este ecrã.',
+    guestSoon:'As recargas em dinheiro não estão ativadas para a sua organização. Peça ao seu gestor se precisar de adicionar convidados.',
+    tabCash:'Recarga em dinheiro', tabGuest:'Convidados', gGroup:'Grupo', gNoGroups:'Nenhum grupo está aberto à receção. Peça ao seu gestor.',
+    gMax:n=>`Acesso máximo: ${n} dia(s)`, gCode:'Código do cartão', gFind:'Procurar', gUntilReq:n=>`Acesso até (obrigatório, até ${n} dias)`,
+    gUntilOpt:'Acesso até (opcional)', gRef:'Referência (ex.: quarto)', gAdd:'Adicionar ao grupo', gNewTitle:uid=>`O cartão ${uid} ainda não está registado. Registe-o como convidado:`,
+    gName:'Nome próprio *', gPhone:'Telefone (opcional)', gEmail:'E-mail (opcional)', gRegister:'Registar cartão e adicionar',
+    gNotFreeNew:'Cartão não encontrado. Só é possível adicionar um novo cartão de convidado a um grupo gratuito.', gNeedEnd:n=>`Este grupo exige uma data de fim (até ${n} dias).`,
+    gNameReq:'O nome próprio do convidado é obrigatório.', gPickDate:'Escolha uma data para essa hora, ou use os botões 1 h / 2 h / 3 h.',
+    gAdded:'Acesso adicionado.', gSms:'Acesso adicionado \u00b7 SMS enviado.', gEmailSent:'Acesso adicionado \u00b7 e-mail enviado.',
+    gNoContact:'Acesso adicionado. Sem telefone nem e-mail, por isso ninguém foi avisado.', gUpdated:'Acesso atualizado.',
+    gSendFailed:'Acesso adicionado, mas a mensagem não pôde ser enviada.', gCurrent:'Convidados atuais', gNone:'Ainda sem convidados.',
+    gRemove:'Remover', gConfirmRemove:'Remover o acesso deste convidado?', gExpired:'expirado', gNoEnd:'Sem data de fim',
+    gShowing:n=>`A mostrar os ${n} mais recentes.`, gToday:'Hoje', gTomorrow:'Amanhã', gAddedBy:'adicionado por',
+    gAllow:txt=>`Carregamento gratuito: ${txt}`, gUsed:txt=>`usado ${txt}`,
     noActions:'Nenhuma ação está ativada para a sua organização. Contacte a Plug n Drive.' },
 };
 const OP_QUICK_AMOUNTS = {
@@ -1839,7 +1910,8 @@ const OP_QUICK_AMOUNTS = {
 let opSite = null, opLang = 'en', opFoundCard = null, opInactivityTimer = null;
 // What this operator's organization is allowed to do. Fails closed: if the
 // answer can't be read, nothing is offered rather than everything.
-let opCaps = { cash: false, guest: false };
+let opCaps = { cash: false, guest: false, guestOps: false };
+let opTab = 'cash';
 
 async function initOperatorScreen(){
   const { data: site } = await sb.from('locations').select('*').eq('id', currentStaff.location_id).maybeSingle();
@@ -1847,7 +1919,7 @@ async function initOperatorScreen(){
   opLang = (site && site.currency === 'MZN') ? 'pt' : 'en';
   const t = OP_I18N[opLang];
   const { data: caps } = await sb.rpc('get_my_client_caps');
-  opCaps = { cash: !!(caps && caps.cash), guest: !!(caps && caps.guest) };
+  opCaps = { cash: !!(caps && caps.cash), guest: !!(caps && caps.guest), guestOps: !!(caps && caps.guest_ops) };
 
   document.getElementById('op-site-name').textContent = site ? `${site.name} (${site.currency})` : 'No site assigned';
   document.getElementById('op-signout-label').textContent = t.signout;
@@ -1856,6 +1928,7 @@ async function initOperatorScreen(){
   document.getElementById('op-amount-label').textContent = t.amount;
   document.getElementById('op-confirm-btn').textContent = t.confirm;
   document.getElementById('op-cancel-btn').textContent = t.cancel;
+  opgApplyI18n();
   operatorResetForm();
   resetOperatorInactivityTimer();
   ['click','keydown'].forEach(evt => document.addEventListener(evt, resetOperatorInactivityTimer));
@@ -1920,17 +1993,169 @@ async function operatorConfirmCredit(){
   msgEl.textContent = t.success(amount, data.currency, data.new_balance) + (data.smsError ? t.smsFailed : '');
   setTimeout(operatorResetForm, 2500);
 }
+function opShowTab(tab){ opTab = tab; operatorResetForm(); }
 function operatorResetForm(){
   opFoundCard = null;
+  // Cash top-up and guests are two tabs; with only one available there is no tab bar.
+  opTab = (opCaps.guestOps && (!opCaps.cash || opTab === 'guest')) ? 'guest' : 'cash';
+  document.getElementById('op-tabs').style.display = (opCaps.guestOps && opCaps.cash) ? 'flex' : 'none';
+  document.getElementById('op-tab-cash').classList.toggle('btn-primary', opTab === 'cash');
+  document.getElementById('op-tab-guest').classList.toggle('btn-primary', opTab === 'guest');
+  document.getElementById('op-guest-step').style.display = opTab === 'guest' ? 'block' : 'none';
   document.getElementById('op-search-uid').value = '';
-  document.getElementById('op-search-step').style.display = opCaps.cash ? 'block' : 'none';
+  document.getElementById('op-search-step').style.display = (opCaps.cash && opTab === 'cash') ? 'block' : 'none';
   document.getElementById('op-credit-step').style.display = 'none';
   const t = OP_I18N[opLang];
   const msgEl0 = document.getElementById('op-message');
   msgEl0.style.color = 'var(--text-muted)';
-  msgEl0.textContent = opCaps.cash ? '' : (opCaps.guest ? t.guestSoon : t.noActions);
+  msgEl0.textContent = opTab === 'guest' ? '' : (opCaps.cash ? '' : (opCaps.guest ? t.guestSoon : t.noActions));
   const noteEl = document.getElementById('op-currency-note');
   if(noteEl) noteEl.textContent = '';
+  if(opTab === 'guest') opgReset();
+}
+
+// --- Operator screen: guests (only when the manager has given this operator the right) ---
+let opGroups = [], opgFound = null, opgNewUid = null;
+function opgApplyI18n(){
+  const t = OP_I18N[opLang], set = (id, v) => { const el = document.getElementById(id); if(el) el.textContent = v; };
+  set('op-tab-cash', t.tabCash); set('op-tab-guest', t.tabGuest); set('opg-group-label', t.gGroup);
+  set('opg-uid-label', t.gCode); set('opg-find-btn', t.gFind); set('opg-add-btn', t.gAdd); set('opg-register-btn', t.gRegister);
+  set('opg-m-ref-label', t.gRef); set('opg-n-ref-label', t.gRef); set('opg-n-name-label', t.gName);
+  set('opg-n-phone-label', t.gPhone); set('opg-n-email-label', t.gEmail); set('opg-list-title', t.gCurrent);
+  ['om', 'on'].forEach(pf => {
+    set('acc-' + pf + '-until-label', t.gUntilOpt);
+    document.querySelectorAll('#acc-' + pf + '-chips button').forEach(b => {
+      if(b.dataset.k === 'today') b.textContent = t.gToday; else if(b.dataset.k === 'tomorrow') b.textContent = t.gTomorrow;
+    });
+  });
+}
+function opgMsg(text, kind){
+  const el = document.getElementById('opg-msg');
+  el.style.color = kind === 'err' ? 'var(--red,#c0392b)' : (kind === 'ok' ? 'var(--green,#1a7f37)' : 'var(--text-muted)');
+  el.textContent = text || '';
+}
+function opgGroup(){ const id = document.getElementById('opg-group').value; return opGroups.find(g => g.id === id) || null; }
+async function opgReset(){
+  const t = OP_I18N[opLang];
+  opgFound = null; opgNewUid = null; opgMsg('');
+  document.getElementById('opg-uid').value = '';
+  document.getElementById('opg-found').style.display = 'none';
+  document.getElementById('opg-new').style.display = 'none';
+  accResetUntil('om'); accResetUntil('on');
+  const { data, error } = await sb.rpc('list_reception_groups');
+  if(error){ opGroups = []; opgMsg(error.message, 'err'); }
+  else opGroups = data || [];
+  const sel = document.getElementById('opg-group'), keep = sel.value;
+  sel.innerHTML = opGroups.map(g => `<option value="${accEsc(g.id)}">${accEsc(g.name)}</option>`).join('');
+  if(keep && opGroups.some(g => g.id === keep)) sel.value = keep;
+  const has = opGroups.length > 0;
+  document.getElementById('opg-body').style.display = has ? 'block' : 'none';
+  document.getElementById('opg-group').parentElement.style.display = has ? '' : 'none';
+  document.getElementById('opg-list-title').style.display = has ? '' : 'none';
+  if(!has){ document.getElementById('opg-list').innerHTML = ''; document.getElementById('opg-group-info').textContent = error ? '' : t.gNoGroups; return; }
+  opgGroupChanged(true);
+}
+function opgGroupChanged(fromReset){
+  const t = OP_I18N[opLang], g = opgGroup();
+  if(!fromReset){
+    opgFound = null; opgNewUid = null; opgMsg('');
+    document.getElementById('opg-found').style.display = 'none'; document.getElementById('opg-new').style.display = 'none';
+    accResetUntil('om'); accResetUntil('on');
+  }
+  document.getElementById('opg-group-info').textContent = [g && g.max_days ? t.gMax(g.max_days) : '', accAllowText(g) ? t.gAllow(accAllowText(g)) : ''].filter(Boolean).join(' \u00b7 ');
+  const today = accTodayCat();
+  ['acc-om-until', 'acc-on-until'].forEach(id => { const el = document.getElementById(id); el.min = today; el.max = g && g.max_days ? accAddDays(today, g.max_days) : ''; });
+  const lbl = g && g.max_days ? t.gUntilReq(g.max_days) : t.gUntilOpt;
+  document.getElementById('acc-om-until-label').textContent = lbl; document.getElementById('acc-on-until-label').textContent = lbl;
+  opgLoadList();
+}
+async function opgFind(){
+  const t = OP_I18N[opLang], g = opgGroup(); if(!g) return;
+  opgMsg(''); opgFound = null; opgNewUid = null;
+  document.getElementById('opg-found').style.display = 'none'; document.getElementById('opg-new').style.display = 'none';
+  const uid = document.getElementById('opg-uid').value.trim(); if(!uid) return;
+  const { data, error } = await sb.rpc('lookup_card_for_group', { p_client_id: currentStaff.client_id, p_uid: uid });
+  if(error){
+    if(error.message === 'Card not found'){
+      if(g.pricing_mode === 'free'){
+        opgNewUid = uid;
+        document.getElementById('opg-new-title').textContent = t.gNewTitle(uid);
+        ['opg-n-name', 'opg-n-phone', 'opg-n-email', 'opg-n-ref'].forEach(id => { document.getElementById(id).value = ''; });
+        accResetUntil('on');
+        document.getElementById('opg-new').style.display = 'block';
+      } else opgMsg(t.gNotFreeNew, 'err');
+    } else opgMsg(error.message, 'err');
+    return;
+  }
+  opgFound = data;
+  document.getElementById('opg-found-name').textContent = data.display_name || '';
+  document.getElementById('opg-found-uid').textContent = data.uid;
+  document.getElementById('opg-m-ref').value = ''; accResetUntil('om');
+  document.getElementById('opg-found').style.display = 'block';
+}
+async function opgAdd(){
+  const t = OP_I18N[opLang], g = opgGroup(); if(!g || !opgFound) return;
+  opgMsg('');
+  const u = accUntilArgs('om');
+  if(u.error){ opgMsg(t.gPickDate, 'err'); return; }
+  if(g.max_days && !u.has){ opgMsg(t.gNeedEnd(g.max_days), 'err'); return; }
+  const { data, error } = await sb.rpc('add_group_member', { p_group_id: g.id, p_uid: opgFound.uid,
+    p_valid_until: u.p_valid_until, p_valid_until_ts: u.p_valid_until_ts, p_reference: document.getElementById('opg-m-ref').value.trim() || null });
+  if(error){ opgMsg(error.message, 'err'); return; }
+  opgFound = null; document.getElementById('opg-found').style.display = 'none'; document.getElementById('opg-uid').value = '';
+  await opgNotify(data && data.member_id);
+  await opgLoadList();
+}
+async function opgRegister(){
+  const t = OP_I18N[opLang], g = opgGroup(); if(!g || !opgNewUid) return;
+  opgMsg('');
+  const name = document.getElementById('opg-n-name').value.trim();
+  if(!name){ opgMsg(t.gNameReq, 'err'); return; }
+  const u = accUntilArgs('on');
+  if(u.error){ opgMsg(t.gPickDate, 'err'); return; }
+  if(g.max_days && !u.has){ opgMsg(t.gNeedEnd(g.max_days), 'err'); return; }
+  const { data, error } = await sb.rpc('register_guest_card', { p_group_id: g.id, p_uid: opgNewUid, p_name: name,
+    p_phone: document.getElementById('opg-n-phone').value.trim() || null, p_email: document.getElementById('opg-n-email').value.trim() || null,
+    p_valid_until: u.p_valid_until, p_valid_until_ts: u.p_valid_until_ts, p_reference: document.getElementById('opg-n-ref').value.trim() || null });
+  if(error){ opgMsg(error.message, 'err'); return; }
+  opgNewUid = null; document.getElementById('opg-new').style.display = 'none'; document.getElementById('opg-uid').value = '';
+  await opgNotify(data && data.member_id);
+  await opgLoadList();
+}
+// The access is already granted when this runs: a failed message is reported, never undoes anything.
+async function opgNotify(memberId){
+  const t = OP_I18N[opLang];
+  opgMsg(t.gAdded, 'ok');
+  if(!memberId) return;
+  const { data, error } = await sb.functions.invoke('notify-guest-access', { body: { memberId } });
+  if(error || !data){ opgMsg(t.gSendFailed, 'err'); return; }
+  if(data.sent === 'sms') opgMsg(t.gSms, 'ok');
+  else if(data.sent === 'email') opgMsg(t.gEmailSent, 'ok');
+  else if(data.reason === 'no_contact') opgMsg(t.gNoContact, 'ok');
+  else if(data.reason === 'already_notified') opgMsg(t.gUpdated, 'ok');
+  else if(data.reason === 'send_failed') opgMsg(t.gSendFailed, 'err');
+}
+const OPG_LIST_MAX = 50;
+async function opgLoadList(){
+  const t = OP_I18N[opLang], g = opgGroup(), el = document.getElementById('opg-list'); if(!g){ el.innerHTML = ''; return; }
+  const { data, error } = await sb.rpc('list_group_members', { p_group_id: g.id });
+  if(error){ el.innerHTML = ''; opgMsg(error.message, 'err'); return; }
+  const rows = data || [];
+  const shown = rows.slice(0, OPG_LIST_MAX);
+  el.innerHTML = shown.map(m => `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;border-top:1px solid var(--border,#e5e5e8);padding:8px 0;">
+      <div style="min-width:0;"><div style="font-weight:600;font-size:13px;">${accEsc(m.display_name) || '-'} <span style="font-weight:400;color:var(--text-muted);">${accEsc(m.uid)}</span></div>
+      <div style="font-size:12px;color:var(--text-muted);">${m.valid_until ? accUntilText(m.valid_until) + (m.expired ? ' (' + t.gExpired + ')' : '') : t.gNoEnd}${m.reference ? ' \u00b7 ' + accEsc(m.reference) : ''}${(g.max_minutes || g.max_kwh) ? ' \u00b7 ' + t.gUsed(accUsedText(m, g)) : ''}</div></div>
+      <button class="btn btn-sm" onclick="opgRemove('${accEsc(m.id)}')">${t.gRemove}</button></div>`).join('')
+    || `<div style="color:var(--text-muted);font-size:13px;">${t.gNone}</div>`;
+  if(rows.length > OPG_LIST_MAX) el.innerHTML += `<div style="color:var(--text-muted);font-size:12px;margin-top:6px;">${t.gShowing(OPG_LIST_MAX)}</div>`;
+}
+async function opgRemove(memberId){
+  const t = OP_I18N[opLang];
+  if(!window.confirm(t.gConfirmRemove)) return;
+  const { error } = await sb.rpc('remove_group_member', { p_member_id: memberId });
+  if(error){ opgMsg(error.message, 'err'); return; }
+  opgMsg('');
+  await opgLoadList();
 }
 
 function updateSidebarIdentity(){
@@ -3534,7 +3759,7 @@ async function loadAccessGroups(){
     <div class="card card-pad" style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
       <div>
         <div style="font-weight:600;">${accEsc(g.name)}</div>
-        <div style="font-size:12px;color:var(--text-muted);">${accTariffText(g)} · ${accScopeText(g)}${g.max_days ? ' · max ' + g.max_days + ' days' : ''} · ${g.member_count} active member(s)</div>
+        <div style="font-size:12px;color:var(--text-muted);">${accTariffText(g)} · ${accScopeText(g)}${g.max_days ? ' · max ' + g.max_days + ' days' : ''}${accAllowText(g) ? ' · allowance ' + accEsc(accAllowText(g)) : ''}${g.reception_can_add ? ' · reception can add' : ''} · ${g.member_count} active member(s)</div>
       </div>
       <div style="display:flex;gap:6px;">
         <button class="btn btn-sm" onclick="openAccessMembers('${g.id}')">Members</button>
@@ -3543,7 +3768,26 @@ async function loadAccessGroups(){
       </div>
     </div>`).join('');
 }
-function accModeChanged(){ document.getElementById('acc-g-pct-row').style.display = document.getElementById('acc-g-mode').value === 'discount' ? '' : 'none'; }
+function accModeChanged(){
+  const mode = document.getElementById('acc-g-mode').value;
+  document.getElementById('acc-g-pct-row').style.display = mode === 'discount' ? '' : 'none';
+  document.getElementById('acc-g-allow-row').style.display = mode === 'free' ? '' : 'none';
+}
+function accSetMinutes(n){ document.getElementById('acc-g-minutes').value = n; }
+// Free allowance shown as text, e.g. "60 min / 10 kWh"
+// "25 / 60 min · 2.1 / 10 kWh" for one member
+function accUsedText(m, g){
+  const parts = [];
+  if(g && g.max_minutes) parts.push((m.used_minutes == null ? 0 : Number(m.used_minutes)) + ' / ' + g.max_minutes + ' min');
+  if(g && g.max_kwh) parts.push((m.used_kwh == null ? 0 : Number(m.used_kwh)) + ' / ' + Number(g.max_kwh) + ' kWh');
+  return parts.join(' \u00b7 ');
+}
+function accAllowText(g){
+  const parts = [];
+  if(g && g.max_minutes) parts.push(g.max_minutes + ' min');
+  if(g && g.max_kwh) parts.push(Number(g.max_kwh) + ' kWh');
+  return parts.join(' / ');
+}
 function accScopeChanged(){ document.getElementById('acc-g-sites').style.display = document.getElementById('acc-g-scope').value === 'some' ? 'block' : 'none'; }
 function openAccessGroupForm(groupId){
   const g = groupId ? accGroups.find(x => x.id === groupId) : null;
@@ -3553,6 +3797,10 @@ function openAccessGroupForm(groupId){
   document.getElementById('acc-g-pct').value = g && g.discount_percent ? g.discount_percent : '';
   document.getElementById('acc-g-scope').value = g && !g.all_sites ? 'some' : 'all';
   document.getElementById('acc-g-maxdays').value = g && g.max_days ? g.max_days : '';
+  document.getElementById('acc-g-reception').checked = !!(g && g.reception_can_add);
+  document.getElementById('acc-g-minutes').value = g && g.max_minutes ? g.max_minutes : '';
+  document.getElementById('acc-g-kwh').value = g && g.max_kwh ? Number(g.max_kwh) : '';
+  accModeChanged();
   const rootSites = locations.filter(l => !l.parentId);
   const chosen = g ? (g.site_ids || []) : [];
   document.getElementById('acc-g-sites').innerHTML = rootSites.map(l =>
@@ -3575,9 +3823,21 @@ async function saveAccessGroup(){
   const maxRaw = document.getElementById('acc-g-maxdays').value.trim();
   const maxDays = maxRaw === '' ? null : Number(maxRaw);
   if(maxDays !== null && !(Number.isInteger(maxDays) && maxDays >= 1 && maxDays <= 365)){ errEl.textContent = 'The longest access must be a whole number of days between 1 and 365, or empty for no limit.'; return; }
+  // Free allowance (free groups only): empty = no limit
+  let maxMinutes = null, maxKwh = null;
+  if(mode === 'free'){
+    const mEl = document.getElementById('acc-g-minutes'), kEl = document.getElementById('acc-g-kwh');
+    if((mEl.validity && mEl.validity.badInput) || (kEl.validity && kEl.validity.badInput)){ errEl.textContent = 'The free allowance must be a number, or empty for no limit.'; return; }
+    const mRaw = mEl.value.trim(), kRaw = kEl.value.trim();
+    maxMinutes = mRaw === '' ? null : Number(mRaw);
+    maxKwh = kRaw === '' ? null : Number(kRaw);
+    if(maxMinutes !== null && !(Number.isInteger(maxMinutes) && maxMinutes >= 1 && maxMinutes <= 1440)){ errEl.textContent = 'The free minutes must be a whole number between 1 and 1440, or empty for no limit.'; return; }
+    if(maxKwh !== null && !(maxKwh > 0 && maxKwh <= 1000)){ errEl.textContent = 'The free kWh must be a number between 0 and 1000, or empty for no limit.'; return; }
+  }
   const { error } = await sb.rpc('save_access_group', {
     p_client_id: clients[0].id, p_group_id: document.getElementById('acc-g-id').value || null, p_name: name,
-    p_pricing_mode: mode, p_discount_percent: mode === 'discount' ? pct : null, p_all_sites: allSites, p_site_ids: allSites ? null : siteIds, p_max_days: maxDays });
+    p_pricing_mode: mode, p_discount_percent: mode === 'discount' ? pct : null, p_all_sites: allSites, p_site_ids: allSites ? null : siteIds, p_max_days: maxDays, p_reception_can_add: document.getElementById('acc-g-reception').checked,
+    p_set_allowance: true, p_max_minutes: maxMinutes, p_max_kwh: maxKwh });
   if(error){ errEl.textContent = error.message; return; }
   closeAccessGroupForm();
   await loadAccessGroups();
@@ -3616,13 +3876,16 @@ function closeAccessMembers(){ accMembersGroupId = null; accFoundCard = null; ac
 async function loadAccessMembers(){
   const { data, error } = await sb.rpc('list_group_members', { p_group_id: accMembersGroupId });
   const body = document.getElementById('acc-members-body');
+  const g = accCurrentGroup(), hasCap = !!(g && (g.max_minutes || g.max_kwh));
+  document.getElementById('acc-m-used-th').style.display = hasCap ? '' : 'none';
   if(error){ document.getElementById('acc-m-error').textContent = error.message; body.innerHTML = ''; return; }
   body.innerHTML = (data || []).map(m => `<tr>
     <td>${accEsc(m.uid)}</td><td>${accEsc(m.display_name)}</td><td>${accEsc(m.reference) || '-'}</td>
     <td>${m.valid_until ? accUntilText(m.valid_until) + (m.expired ? ' <span style="color:var(--red,#c0392b);">(expired)</span>' : '') : 'No end date'}</td>
+    ${hasCap ? `<td>${accUsedText(m, g)}</td>` : ''}
     <td>${accDate(m.added_at)} · ${accEsc(m.added_by) || '-'}${m.notified_at ? ' <span style="color:var(--text-muted);">· notified</span>' : ''}</td>
     <td><button class="btn btn-sm" onclick="accRemoveMember('${m.id}')">Remove</button></td></tr>`).join('')
-    || '<tr><td colspan="6" class="empty">No members yet.</td></tr>';
+    || '<tr><td colspan="7" class="empty">No members yet.</td></tr>';
 }
 async function accFindCard(){
   const errEl = document.getElementById('acc-m-error'); errEl.textContent = '';
@@ -3766,14 +4029,22 @@ async function renderMyOperators(){
   const { data, error } = await sb.from('staff').select('*').eq('role', 'operator').order('created_at', {ascending:false});
   document.getElementById('add-operator-panel').style.display = 'none';
   if(error){
-    document.getElementById('operators-body').innerHTML = `<tr><td colspan="5" class="empty">${error.message}</td></tr>`;
+    document.getElementById('operators-body').innerHTML = `<tr><td colspan="6" class="empty">${error.message}</td></tr>`;
     return;
   }
+  const guestOn = !!(clients[0] && clients[0].guestAccess);
+  document.getElementById('operators-guest-th').style.display = guestOn ? '' : 'none';
   document.getElementById('operators-body').innerHTML = (data||[]).map(o=>{
     const site = locations.find(l=>l.id===o.location_id);
-    return `<tr><td>${o.name}</td><td>${o.email||'-'}</td><td>${site?site.name:'-'}</td><td>${(o.created_at||'').slice(0,10)}</td>
+    const guestCell = guestOn
+      ? `<td><input type="checkbox" ${o.can_add_guests ? 'checked' : ''} onchange="setOperatorGuestRight('${o.id}', this.checked, this)" aria-label="Can add guests"></td>` : '';
+    return `<tr><td>${o.name}</td><td>${o.email||'-'}</td><td>${site?site.name:'-'}</td><td>${(o.created_at||'').slice(0,10)}</td>${guestCell}
       <td><button class="btn btn-sm" onclick="deleteOperator('${o.id}')">Remove</button></td></tr>`;
-  }).join('') || '<tr><td colspan="5" class="empty">No operators yet.</td></tr>';
+  }).join('') || '<tr><td colspan="6" class="empty">No operators yet.</td></tr>';
+}
+async function setOperatorGuestRight(staffId, enabled, box){
+  const { error } = await sb.rpc('set_operator_guest_right', { p_staff_id: staffId, p_enabled: enabled });
+  if(error){ alert(error.message || 'Could not change this right.'); if(box) box.checked = !enabled; }
 }
 function openAddOperator(){
   document.getElementById('op-name').value = '';
