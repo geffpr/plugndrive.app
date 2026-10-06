@@ -997,6 +997,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
           <div class="form-row"><label>Where it applies</label>
             <select id="acc-g-scope" onchange="accScopeChanged()"><option value="all">All my sites</option><option value="some">Selected sites</option></select></div>
           <div id="acc-g-sites" style="display:none;margin-bottom:10px;"></div>
+          <div class="form-row"><label>Longest access you can grant (days, optional)</label><input type="number" id="acc-g-maxdays" min="1" max="365" placeholder="No limit"></div>
           <div style="display:flex;gap:8px;">
             <button class="btn btn-primary" onclick="saveAccessGroup()">Save group</button>
             <button class="btn" onclick="closeAccessGroupForm()">Cancel</button>
@@ -1017,11 +1018,26 @@ tr.rowlink:hover td{background:#f0f6fc;}
           <div id="acc-m-found" style="display:none;margin:8px 0;">
             <div style="margin-bottom:8px;">Card <b id="acc-m-found-uid"></b> — <span id="acc-m-found-name"></span></div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
-              <div class="form-row" style="margin:0;"><label>Access until (optional)</label><input type="date" id="acc-m-until"></div>
+              <div class="form-row" style="margin:0;"><label id="acc-m-until-label">Access until (optional)</label><input type="date" id="acc-m-until"></div>
               <div class="form-row" style="margin:0;"><label>Reference (e.g. room)</label><input type="text" id="acc-m-ref" maxlength="80"></div>
               <button class="btn btn-primary btn-sm" onclick="accAddMember()">Add to group</button>
             </div>
           </div>
+          <div id="acc-m-new" style="display:none;margin:8px 0;">
+            <div style="margin-bottom:8px;">Card <b id="acc-m-new-uid"></b> is not registered yet. Register it as a guest:</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+              <div class="form-row" style="margin:0;"><label>First name *</label><input type="text" id="acc-n-name" maxlength="60"></div>
+              <div class="form-row" style="margin:0;"><label>Phone (optional)</label><input type="text" id="acc-n-phone" placeholder="+27821234567"></div>
+              <div class="form-row" style="margin:0;"><label>E-mail (optional)</label><input type="email" id="acc-n-email" maxlength="120"></div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:8px;">
+              <div class="form-row" style="margin:0;"><label id="acc-n-until-label">Access until (optional)</label><input type="date" id="acc-n-until"></div>
+              <div class="form-row" style="margin:0;"><label>Reference (e.g. room)</label><input type="text" id="acc-n-ref" maxlength="80"></div>
+              <button class="btn btn-primary btn-sm" onclick="accRegisterGuest()">Register card &amp; add to group</button>
+            </div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:6px;">The card works only on your chargers, through this group. The guest is told by SMS or e-mail if you give a contact.</div>
+          </div>
+          <div id="acc-m-info" style="font-size:13px;margin:6px 0;color:var(--green, #1a7f37);"></div>
           <div id="acc-m-error" style="color:var(--red, #c0392b);font-size:12px;margin:6px 0;"></div>
           <table>
             <thead><tr><th>Card</th><th>Holder</th><th>Reference</th><th>Access until</th><th>Added</th><th></th></tr></thead>
@@ -3460,9 +3476,12 @@ function renderRptSitesTable(){
 
 // --- Access groups (client_admin with "Guest access" on). Every check that
 // matters runs server-side; this page only presents it. ---
-let accGroups = [], accMembersGroupId = null, accFoundCard = null;
+let accGroups = [], accMembersGroupId = null, accFoundCard = null, accNewUid = null;
 function accEsc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
 function accDate(ts){ return ts ? new Date(ts).toLocaleDateString('en-CA', { timeZone: 'Africa/Johannesburg' }) : null; }
+function accTodayCat(){ return new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Johannesburg' }); }
+function accAddDays(dateStr, n){ const d = new Date(dateStr + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+function accCurrentGroup(){ return accGroups.find(x => x.id === accMembersGroupId) || null; }
 function accTariffText(g){ return g.pricing_mode === 'free' ? 'Free' : (g.pricing_mode === 'discount' ? Number(g.discount_percent) + '% off' : 'Standard price'); }
 function accScopeText(g){
   if(g.all_sites) return 'All sites';
@@ -3486,7 +3505,7 @@ async function loadAccessGroups(){
     <div class="card card-pad" style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
       <div>
         <div style="font-weight:600;">${accEsc(g.name)}</div>
-        <div style="font-size:12px;color:var(--text-muted);">${accTariffText(g)} · ${accScopeText(g)} · ${g.member_count} active member(s)</div>
+        <div style="font-size:12px;color:var(--text-muted);">${accTariffText(g)} · ${accScopeText(g)}${g.max_days ? ' · max ' + g.max_days + ' days' : ''} · ${g.member_count} active member(s)</div>
       </div>
       <div style="display:flex;gap:6px;">
         <button class="btn btn-sm" onclick="openAccessMembers('${g.id}')">Members</button>
@@ -3504,6 +3523,7 @@ function openAccessGroupForm(groupId){
   document.getElementById('acc-g-mode').value = g ? g.pricing_mode : 'free';
   document.getElementById('acc-g-pct').value = g && g.discount_percent ? g.discount_percent : '';
   document.getElementById('acc-g-scope').value = g && !g.all_sites ? 'some' : 'all';
+  document.getElementById('acc-g-maxdays').value = g && g.max_days ? g.max_days : '';
   const rootSites = locations.filter(l => !l.parentId);
   const chosen = g ? (g.site_ids || []) : [];
   document.getElementById('acc-g-sites').innerHTML = rootSites.map(l =>
@@ -3523,9 +3543,12 @@ async function saveAccessGroup(){
   if(!name){ errEl.textContent = 'A group needs a name.'; return; }
   if(mode === 'discount' && !(pct >= 1 && pct <= 99)){ errEl.textContent = 'A discount must be between 1 and 99 percent.'; return; }
   if(!allSites && !siteIds.length){ errEl.textContent = 'Choose at least one site, or apply the group to all sites.'; return; }
+  const maxRaw = document.getElementById('acc-g-maxdays').value.trim();
+  const maxDays = maxRaw === '' ? null : Number(maxRaw);
+  if(maxDays !== null && !(Number.isInteger(maxDays) && maxDays >= 1 && maxDays <= 365)){ errEl.textContent = 'The longest access must be a whole number of days between 1 and 365, or empty for no limit.'; return; }
   const { error } = await sb.rpc('save_access_group', {
     p_client_id: clients[0].id, p_group_id: document.getElementById('acc-g-id').value || null, p_name: name,
-    p_pricing_mode: mode, p_discount_percent: mode === 'discount' ? pct : null, p_all_sites: allSites, p_site_ids: allSites ? null : siteIds });
+    p_pricing_mode: mode, p_discount_percent: mode === 'discount' ? pct : null, p_all_sites: allSites, p_site_ids: allSites ? null : siteIds, p_max_days: maxDays });
   if(error){ errEl.textContent = error.message; return; }
   closeAccessGroupForm();
   await loadAccessGroups();
@@ -3539,16 +3562,27 @@ async function archiveAccessGroup(groupId){
   await loadAccessGroups();
 }
 async function openAccessMembers(groupId){
-  accMembersGroupId = groupId; accFoundCard = null;
+  accMembersGroupId = groupId; accFoundCard = null; accNewUid = null;
   const g = accGroups.find(x => x.id === groupId);
   document.getElementById('acc-m-title').textContent = 'Members of ' + (g ? g.name : '');
   document.getElementById('acc-m-uid').value = '';
   document.getElementById('acc-m-found').style.display = 'none';
+  document.getElementById('acc-m-new').style.display = 'none';
+  document.getElementById('acc-m-info').textContent = '';
   document.getElementById('acc-m-error').textContent = '';
+  // A group with a longest access forces an end date, within that limit.
+  const today = accTodayCat();
+  ['acc-m-until', 'acc-n-until'].forEach(id => {
+    const el = document.getElementById(id);
+    el.min = today; el.max = g && g.max_days ? accAddDays(today, g.max_days) : '';
+  });
+  const lbl = g && g.max_days ? 'Access until (required, up to ' + g.max_days + ' days)' : 'Access until (optional)';
+  document.getElementById('acc-m-until-label').textContent = lbl;
+  document.getElementById('acc-n-until-label').textContent = lbl;
   document.getElementById('acc-members-panel').style.display = 'block';
   await loadAccessMembers();
 }
-function closeAccessMembers(){ accMembersGroupId = null; accFoundCard = null; document.getElementById('acc-members-panel').style.display = 'none'; }
+function closeAccessMembers(){ accMembersGroupId = null; accFoundCard = null; accNewUid = null; document.getElementById('acc-members-panel').style.display = 'none'; }
 async function loadAccessMembers(){
   const { data, error } = await sb.rpc('list_group_members', { p_group_id: accMembersGroupId });
   const body = document.getElementById('acc-members-body');
@@ -3556,17 +3590,32 @@ async function loadAccessMembers(){
   body.innerHTML = (data || []).map(m => `<tr>
     <td>${accEsc(m.uid)}</td><td>${accEsc(m.display_name)}</td><td>${accEsc(m.reference) || '-'}</td>
     <td>${m.valid_until ? accDate(m.valid_until) + (m.expired ? ' <span style="color:var(--red,#c0392b);">(expired)</span>' : '') : 'No end date'}</td>
-    <td>${accDate(m.added_at)} · ${accEsc(m.added_by) || '-'}</td>
+    <td>${accDate(m.added_at)} · ${accEsc(m.added_by) || '-'}${m.notified_at ? ' <span style="color:var(--text-muted);">· notified</span>' : ''}</td>
     <td><button class="btn btn-sm" onclick="accRemoveMember('${m.id}')">Remove</button></td></tr>`).join('')
     || '<tr><td colspan="6" class="empty">No members yet.</td></tr>';
 }
 async function accFindCard(){
   const errEl = document.getElementById('acc-m-error'); errEl.textContent = '';
-  accFoundCard = null; document.getElementById('acc-m-found').style.display = 'none';
+  accFoundCard = null; accNewUid = null;
+  document.getElementById('acc-m-found').style.display = 'none';
+  document.getElementById('acc-m-new').style.display = 'none';
+  document.getElementById('acc-m-info').textContent = '';
   const uid = document.getElementById('acc-m-uid').value.trim();
   if(!uid) return;
   const { data, error } = await sb.rpc('lookup_card_for_group', { p_client_id: clients[0].id, p_uid: uid });
-  if(error){ errEl.textContent = error.message; return; }
+  if(error){
+    const g = accCurrentGroup();
+    if(error.message === 'Card not found' && g && g.pricing_mode === 'free'){
+      accNewUid = uid;
+      document.getElementById('acc-m-new-uid').textContent = uid;
+      ['acc-n-name', 'acc-n-phone', 'acc-n-email', 'acc-n-until', 'acc-n-ref'].forEach(id => { document.getElementById(id).value = ''; });
+      document.getElementById('acc-m-new').style.display = 'block';
+      return;
+    }
+    errEl.textContent = error.message === 'Card not found' && g && g.pricing_mode !== 'free'
+      ? 'Card not found. A new guest card can only be added to a free group for now.' : error.message;
+    return;
+  }
   accFoundCard = data;
   document.getElementById('acc-m-found-uid').textContent = data.uid;
   document.getElementById('acc-m-found-name').textContent = data.display_name;
@@ -3576,12 +3625,51 @@ async function accFindCard(){
 }
 async function accAddMember(){
   const errEl = document.getElementById('acc-m-error'); errEl.textContent = '';
+  document.getElementById('acc-m-info').textContent = '';
   if(!accFoundCard) return;
-  const { error } = await sb.rpc('add_group_member', { p_group_id: accMembersGroupId, p_uid: accFoundCard.uid,
-    p_valid_until: document.getElementById('acc-m-until').value || null, p_reference: document.getElementById('acc-m-ref').value.trim() || null });
+  const g = accCurrentGroup();
+  const until = document.getElementById('acc-m-until').value || null;
+  if(g && g.max_days && !until){ errEl.textContent = 'This group needs an end date (up to ' + g.max_days + ' days).'; return; }
+  const { data, error } = await sb.rpc('add_group_member', { p_group_id: accMembersGroupId, p_uid: accFoundCard.uid,
+    p_valid_until: until, p_reference: document.getElementById('acc-m-ref').value.trim() || null });
   if(error){ errEl.textContent = error.message; return; }
   accFoundCard = null; document.getElementById('acc-m-found').style.display = 'none'; document.getElementById('acc-m-uid').value = '';
+  await accNotify(data && data.member_id);
   await loadAccessMembers(); await loadAccessGroups();
+}
+
+// Register a card that does not exist yet (a guest at the desk), then tell them.
+async function accRegisterGuest(){
+  const errEl = document.getElementById('acc-m-error'); errEl.textContent = '';
+  document.getElementById('acc-m-info').textContent = '';
+  if(!accNewUid) return;
+  const name = document.getElementById('acc-n-name').value.trim();
+  if(!name){ errEl.textContent = 'The guest\u2019s first name is required.'; return; }
+  const g = accCurrentGroup();
+  const until = document.getElementById('acc-n-until').value || null;
+  if(g && g.max_days && !until){ errEl.textContent = 'This group needs an end date (up to ' + g.max_days + ' days).'; return; }
+  const { data, error } = await sb.rpc('register_guest_card', { p_group_id: accMembersGroupId, p_uid: accNewUid, p_name: name,
+    p_phone: document.getElementById('acc-n-phone').value.trim() || null, p_email: document.getElementById('acc-n-email').value.trim() || null,
+    p_valid_until: until, p_reference: document.getElementById('acc-n-ref').value.trim() || null });
+  if(error){ errEl.textContent = error.message; return; }
+  accNewUid = null; document.getElementById('acc-m-new').style.display = 'none'; document.getElementById('acc-m-uid').value = '';
+  await accNotify(data && data.member_id);
+  await loadAccessMembers(); await loadAccessGroups();
+}
+
+// Tell the cardholder by SMS or e-mail. The access is already granted at this
+// point: a failed message is reported, never allowed to undo or block anything.
+async function accNotify(memberId){
+  const infoEl = document.getElementById('acc-m-info'), errEl = document.getElementById('acc-m-error');
+  infoEl.textContent = 'Access added.';
+  if(!memberId) return;
+  const { data, error } = await sb.functions.invoke('notify-guest-access', { body: { memberId } });
+  if(error || !data){ errEl.textContent = 'Access added, but the message could not be sent.'; return; }
+  if(data.sent === 'sms') infoEl.textContent = 'Access added \u00b7 SMS sent.';
+  else if(data.sent === 'email') infoEl.textContent = 'Access added \u00b7 e-mail sent.';
+  else if(data.reason === 'no_contact') infoEl.textContent = 'Access added. No phone or e-mail on file, so nobody was notified.';
+  else if(data.reason === 'already_notified') infoEl.textContent = 'Access updated.';
+  else if(data.reason === 'send_failed') errEl.textContent = 'Access added, but the message could not be sent' + (data.detail ? ': ' + data.detail : '.');
 }
 async function accRemoveMember(memberId){
   const { error } = await sb.rpc('remove_group_member', { p_member_id: memberId });
