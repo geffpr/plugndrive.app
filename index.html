@@ -1018,7 +1018,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
           <div id="acc-m-found" style="display:none;margin:8px 0;">
             <div style="margin-bottom:8px;">Card <b id="acc-m-found-uid"></b> — <span id="acc-m-found-name"></span></div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
-              <div class="form-row" style="margin:0;"><label id="acc-m-until-label">Access until (optional)</label><input type="date" id="acc-m-until"></div>
+              <div class="form-row" style="margin:0;"><label id="acc-m-until-label">Access until (optional)</label><div id="acc-m-chips" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px;"><button type="button" class="btn btn-sm" data-k="1" onclick="accPick('m','1')">1 h</button><button type="button" class="btn btn-sm" data-k="2" onclick="accPick('m','2')">2 h</button><button type="button" class="btn btn-sm" data-k="3" onclick="accPick('m','3')">3 h</button><button type="button" class="btn btn-sm" data-k="today" onclick="accPick('m','today')">Today</button><button type="button" class="btn btn-sm" data-k="tomorrow" onclick="accPick('m','tomorrow')">Tomorrow</button></div><div style="display:flex;gap:6px;"><input type="date" id="acc-m-until" oninput="accUntilTyped('m')"><input type="time" id="acc-m-time" oninput="accUntilTyped('m')" title="Time (optional, South African time)"></div></div>
               <div class="form-row" style="margin:0;"><label>Reference (e.g. room)</label><input type="text" id="acc-m-ref" maxlength="80"></div>
               <button class="btn btn-primary btn-sm" onclick="accAddMember()">Add to group</button>
             </div>
@@ -1031,7 +1031,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
               <div class="form-row" style="margin:0;"><label>E-mail (optional)</label><input type="email" id="acc-n-email" maxlength="120"></div>
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:8px;">
-              <div class="form-row" style="margin:0;"><label id="acc-n-until-label">Access until (optional)</label><input type="date" id="acc-n-until"></div>
+              <div class="form-row" style="margin:0;"><label id="acc-n-until-label">Access until (optional)</label><div id="acc-n-chips" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px;"><button type="button" class="btn btn-sm" data-k="1" onclick="accPick('n','1')">1 h</button><button type="button" class="btn btn-sm" data-k="2" onclick="accPick('n','2')">2 h</button><button type="button" class="btn btn-sm" data-k="3" onclick="accPick('n','3')">3 h</button><button type="button" class="btn btn-sm" data-k="today" onclick="accPick('n','today')">Today</button><button type="button" class="btn btn-sm" data-k="tomorrow" onclick="accPick('n','tomorrow')">Tomorrow</button></div><div style="display:flex;gap:6px;"><input type="date" id="acc-n-until" oninput="accUntilTyped('n')"><input type="time" id="acc-n-time" oninput="accUntilTyped('n')" title="Time (optional, South African time)"></div></div>
               <div class="form-row" style="margin:0;"><label>Reference (e.g. room)</label><input type="text" id="acc-n-ref" maxlength="80"></div>
               <button class="btn btn-primary btn-sm" onclick="accRegisterGuest()">Register card &amp; add to group</button>
             </div>
@@ -3481,6 +3481,35 @@ function accEsc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, ch => 
 function accDate(ts){ return ts ? new Date(ts).toLocaleDateString('en-CA', { timeZone: 'Africa/Johannesburg' }) : null; }
 function accTodayCat(){ return new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Johannesburg' }); }
 function accAddDays(dateStr, n){ const d = new Date(dateStr + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+// Access end: end of day shows the date only; an exact time adds the hour (South African time).
+function accTime(ts){ return new Date(ts).toLocaleTimeString('en-GB', { timeZone: 'Africa/Johannesburg', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }); }
+function accUntilText(ts){ if(!ts) return null; const t = accTime(ts); return accDate(ts) + (t === '23:59' ? '' : ' ' + t); }
+// Quick pick: 1 / 2 / 3 hours counted from the moment of saving, or Today / Tomorrow (end of that day).
+let accSel = { m: null, n: null };
+function accPaintChips(pf, k){
+  document.querySelectorAll('#acc-' + pf + '-chips button').forEach(b => b.classList.toggle('btn-primary', b.dataset.k === k));
+}
+function accPick(pf, k){
+  const dEl = document.getElementById('acc-' + pf + '-until'), tEl = document.getElementById('acc-' + pf + '-time');
+  if(k === 'today' || k === 'tomorrow'){ accSel[pf] = null; dEl.value = k === 'today' ? accTodayCat() : accAddDays(accTodayCat(), 1); tEl.value = ''; }
+  else { accSel[pf] = parseInt(k, 10); dEl.value = ''; tEl.value = ''; }
+  accPaintChips(pf, k);
+}
+function accUntilTyped(pf){ accSel[pf] = null; accPaintChips(pf, null); }
+function accResetUntil(pf){
+  accSel[pf] = null;
+  document.getElementById('acc-' + pf + '-until').value = ''; document.getElementById('acc-' + pf + '-time').value = '';
+  accPaintChips(pf, null);
+}
+// What to send: hours from now, or a date (+ optional time), or nothing.
+function accUntilArgs(pf){
+  if(accSel[pf]) return { has: true, p_valid_until: null, p_valid_until_ts: new Date(Date.now() + accSel[pf] * 3600000).toISOString() };
+  const date = document.getElementById('acc-' + pf + '-until').value, time = document.getElementById('acc-' + pf + '-time').value;
+  if(!date && time) return { error: 'Pick a date for that time, or use the 1 h / 2 h / 3 h buttons.' };
+  if(!date) return { has: false, p_valid_until: null, p_valid_until_ts: null };
+  if(time) return { has: true, p_valid_until: null, p_valid_until_ts: date + 'T' + time + ':00+02:00' };
+  return { has: true, p_valid_until: date, p_valid_until_ts: null };
+}
 function accCurrentGroup(){ return accGroups.find(x => x.id === accMembersGroupId) || null; }
 function accTariffText(g){ return g.pricing_mode === 'free' ? 'Free' : (g.pricing_mode === 'discount' ? Number(g.discount_percent) + '% off' : 'Standard price'); }
 function accScopeText(g){
@@ -3570,6 +3599,7 @@ async function openAccessMembers(groupId){
   document.getElementById('acc-m-new').style.display = 'none';
   document.getElementById('acc-m-info').textContent = '';
   document.getElementById('acc-m-error').textContent = '';
+  accResetUntil('m'); accResetUntil('n');
   // A group with a longest access forces an end date, within that limit.
   const today = accTodayCat();
   ['acc-m-until', 'acc-n-until'].forEach(id => {
@@ -3589,7 +3619,7 @@ async function loadAccessMembers(){
   if(error){ document.getElementById('acc-m-error').textContent = error.message; body.innerHTML = ''; return; }
   body.innerHTML = (data || []).map(m => `<tr>
     <td>${accEsc(m.uid)}</td><td>${accEsc(m.display_name)}</td><td>${accEsc(m.reference) || '-'}</td>
-    <td>${m.valid_until ? accDate(m.valid_until) + (m.expired ? ' <span style="color:var(--red,#c0392b);">(expired)</span>' : '') : 'No end date'}</td>
+    <td>${m.valid_until ? accUntilText(m.valid_until) + (m.expired ? ' <span style="color:var(--red,#c0392b);">(expired)</span>' : '') : 'No end date'}</td>
     <td>${accDate(m.added_at)} · ${accEsc(m.added_by) || '-'}${m.notified_at ? ' <span style="color:var(--text-muted);">· notified</span>' : ''}</td>
     <td><button class="btn btn-sm" onclick="accRemoveMember('${m.id}')">Remove</button></td></tr>`).join('')
     || '<tr><td colspan="6" class="empty">No members yet.</td></tr>';
@@ -3609,6 +3639,7 @@ async function accFindCard(){
       accNewUid = uid;
       document.getElementById('acc-m-new-uid').textContent = uid;
       ['acc-n-name', 'acc-n-phone', 'acc-n-email', 'acc-n-until', 'acc-n-ref'].forEach(id => { document.getElementById(id).value = ''; });
+      accResetUntil('n');
       document.getElementById('acc-m-new').style.display = 'block';
       return;
     }
@@ -3619,7 +3650,7 @@ async function accFindCard(){
   accFoundCard = data;
   document.getElementById('acc-m-found-uid').textContent = data.uid;
   document.getElementById('acc-m-found-name').textContent = data.display_name;
-  document.getElementById('acc-m-until').value = '';
+  accResetUntil('m');
   document.getElementById('acc-m-ref').value = '';
   document.getElementById('acc-m-found').style.display = 'block';
 }
@@ -3628,10 +3659,11 @@ async function accAddMember(){
   document.getElementById('acc-m-info').textContent = '';
   if(!accFoundCard) return;
   const g = accCurrentGroup();
-  const until = document.getElementById('acc-m-until').value || null;
-  if(g && g.max_days && !until){ errEl.textContent = 'This group needs an end date (up to ' + g.max_days + ' days).'; return; }
+  const u = accUntilArgs('m');
+  if(u.error){ errEl.textContent = u.error; return; }
+  if(g && g.max_days && !u.has){ errEl.textContent = 'This group needs an end date (up to ' + g.max_days + ' days).'; return; }
   const { data, error } = await sb.rpc('add_group_member', { p_group_id: accMembersGroupId, p_uid: accFoundCard.uid,
-    p_valid_until: until, p_reference: document.getElementById('acc-m-ref').value.trim() || null });
+    p_valid_until: u.p_valid_until, p_valid_until_ts: u.p_valid_until_ts, p_reference: document.getElementById('acc-m-ref').value.trim() || null });
   if(error){ errEl.textContent = error.message; return; }
   accFoundCard = null; document.getElementById('acc-m-found').style.display = 'none'; document.getElementById('acc-m-uid').value = '';
   await accNotify(data && data.member_id);
@@ -3646,11 +3678,12 @@ async function accRegisterGuest(){
   const name = document.getElementById('acc-n-name').value.trim();
   if(!name){ errEl.textContent = 'The guest\u2019s first name is required.'; return; }
   const g = accCurrentGroup();
-  const until = document.getElementById('acc-n-until').value || null;
-  if(g && g.max_days && !until){ errEl.textContent = 'This group needs an end date (up to ' + g.max_days + ' days).'; return; }
+  const u = accUntilArgs('n');
+  if(u.error){ errEl.textContent = u.error; return; }
+  if(g && g.max_days && !u.has){ errEl.textContent = 'This group needs an end date (up to ' + g.max_days + ' days).'; return; }
   const { data, error } = await sb.rpc('register_guest_card', { p_group_id: accMembersGroupId, p_uid: accNewUid, p_name: name,
     p_phone: document.getElementById('acc-n-phone').value.trim() || null, p_email: document.getElementById('acc-n-email').value.trim() || null,
-    p_valid_until: until, p_reference: document.getElementById('acc-n-ref').value.trim() || null });
+    p_valid_until: u.p_valid_until, p_valid_until_ts: u.p_valid_until_ts, p_reference: document.getElementById('acc-n-ref').value.trim() || null });
   if(error){ errEl.textContent = error.message; return; }
   accNewUid = null; document.getElementById('acc-m-new').style.display = 'none'; document.getElementById('acc-m-uid').value = '';
   await accNotify(data && data.member_id);
