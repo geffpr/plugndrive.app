@@ -472,7 +472,8 @@ tr.rowlink:hover td{background:#f0f6fc;}
           <div style="font-size:13px;margin-bottom:8px;" id="opg-new-title"></div>
           <div class="form-row"><label id="opg-n-name-label">First name *</label><input type="text" id="opg-n-name" maxlength="60"></div>
           <div class="form-row"><label id="opg-n-phone-label">Phone (optional)</label><input type="text" id="opg-n-phone" placeholder="+27821234567"></div>
-          <div class="form-row"><label id="opg-n-email-label">E-mail (optional)</label><input type="email" id="opg-n-email" maxlength="120"></div>
+          <div class="form-row"><label id="opg-n-email-label">E-mail *</label><input type="email" id="opg-n-email" maxlength="120"></div>
+          <div class="form-row"><label id="opg-n-email2-label">Confirm e-mail *</label><input type="email" id="opg-n-email2" maxlength="120"></div>
           <div class="form-row"><label id="acc-on-until-label">Access until (optional)</label><div id="acc-on-chips" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px;"><button type="button" class="btn btn-sm" data-k="1" onclick="accPick('on','1')">1 h</button><button type="button" class="btn btn-sm" data-k="2" onclick="accPick('on','2')">2 h</button><button type="button" class="btn btn-sm" data-k="3" onclick="accPick('on','3')">3 h</button><button type="button" class="btn btn-sm" data-k="today" onclick="accPick('on','today')">Today</button><button type="button" class="btn btn-sm" data-k="tomorrow" onclick="accPick('on','tomorrow')">Tomorrow</button></div><div style="display:flex;gap:6px;"><input type="date" id="acc-on-until" oninput="accUntilTyped('on')"><input type="time" id="acc-on-time" oninput="accUntilTyped('on')"></div></div>
           <div class="form-row"><label id="opg-n-ref-label">Reference (e.g. room)</label><input type="text" id="opg-n-ref" maxlength="80"></div>
           <button class="btn btn-primary btn-block" id="opg-register-btn" onclick="opgRegister()">Register card &amp; add</button>
@@ -1075,14 +1076,15 @@ tr.rowlink:hover td{background:#f0f6fc;}
             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
               <div class="form-row" style="margin:0;"><label>First name *</label><input type="text" id="acc-n-name" maxlength="60"></div>
               <div class="form-row" style="margin:0;"><label>Phone (optional)</label><input type="text" id="acc-n-phone" placeholder="+27821234567"></div>
-              <div class="form-row" style="margin:0;"><label>E-mail (optional)</label><input type="email" id="acc-n-email" maxlength="120"></div>
+              <div class="form-row" style="margin:0;"><label>E-mail *</label><input type="email" id="acc-n-email" maxlength="120"></div>
+              <div class="form-row" style="margin:0;"><label>Confirm e-mail *</label><input type="email" id="acc-n-email2" maxlength="120"></div>
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:8px;">
               <div class="form-row" style="margin:0;"><label id="acc-n-until-label">Access until (optional)</label><div id="acc-n-chips" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px;"><button type="button" class="btn btn-sm" data-k="1" onclick="accPick('n','1')">1 h</button><button type="button" class="btn btn-sm" data-k="2" onclick="accPick('n','2')">2 h</button><button type="button" class="btn btn-sm" data-k="3" onclick="accPick('n','3')">3 h</button><button type="button" class="btn btn-sm" data-k="today" onclick="accPick('n','today')">Today</button><button type="button" class="btn btn-sm" data-k="tomorrow" onclick="accPick('n','tomorrow')">Tomorrow</button></div><div style="display:flex;gap:6px;"><input type="date" id="acc-n-until" oninput="accUntilTyped('n')"><input type="time" id="acc-n-time" oninput="accUntilTyped('n')" title="Time (optional, South African time)"></div></div>
               <div class="form-row" style="margin:0;"><label>Reference (e.g. room)</label><input type="text" id="acc-n-ref" maxlength="80"></div>
               <button class="btn btn-primary btn-sm" onclick="accRegisterGuest()">Register card &amp; add to group</button>
             </div>
-            <div style="font-size:12px;color:var(--text-muted);margin-top:6px;">The card works only on your chargers, through this group. The guest is told by SMS or e-mail if you give a contact.</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:6px;">The card works only on your chargers, through this group. The guest uses this e-mail to create an account on the customer site, which links the card to their account. Type it carefully.</div>
           </div>
           <div id="acc-m-info" style="font-size:13px;margin:6px 0;color:var(--green, #1a7f37);"></div>
           <div id="acc-m-error" style="color:var(--red, #c0392b);font-size:12px;margin:6px 0;"></div>
@@ -1872,7 +1874,7 @@ const OP_I18N = {
     tabCash:'Cash top-up', tabGuest:'Guests', gGroup:'Group', gNoGroups:'No group is open to reception yet. Ask your manager.',
     gMax:n=>`Longest access: ${n} day(s)`, gCode:'Card code', gFind:'Find', gUntilReq:n=>`Access until (required, up to ${n} days)`,
     gUntilOpt:'Access until (optional)', gRef:'Reference (e.g. room)', gAdd:'Add to group', gNewTitle:uid=>`Card ${uid} is not registered yet. Register it as a guest:`,
-    gName:'First name *', gPhone:'Phone (optional)', gEmail:'E-mail (optional)', gRegister:'Register card & add',
+    gName:'First name *', gPhone:'Phone (optional)', gEmail:'E-mail *', gEmail2:'Confirm e-mail *', gEmailReq:'The guest\u2019s e-mail is required: it links the card to their account.', gEmailBad:'That e-mail address does not look valid.', gEmailDiff:'The two e-mail addresses are different. Check them.', gRegister:'Register card & add',
     gNotFreeNew:'Card not found. A new guest card can only be added to a free group.', gNeedEnd:n=>`This group needs an end date (up to ${n} days).`,
     gNameReq:'The guest\u2019s first name is required.', gPickDate:'Pick a date for that time, or use the 1 h / 2 h / 3 h buttons.',
     gAdded:'Access added.', gSms:'Access added \u00b7 SMS sent.', gEmailSent:'Access added \u00b7 e-mail sent.',
@@ -1892,7 +1894,7 @@ const OP_I18N = {
     tabCash:'Recarga em dinheiro', tabGuest:'Convidados', gGroup:'Grupo', gNoGroups:'Nenhum grupo está aberto à receção. Peça ao seu gestor.',
     gMax:n=>`Acesso máximo: ${n} dia(s)`, gCode:'Código do cartão', gFind:'Procurar', gUntilReq:n=>`Acesso até (obrigatório, até ${n} dias)`,
     gUntilOpt:'Acesso até (opcional)', gRef:'Referência (ex.: quarto)', gAdd:'Adicionar ao grupo', gNewTitle:uid=>`O cartão ${uid} ainda não está registado. Registe-o como convidado:`,
-    gName:'Nome próprio *', gPhone:'Telefone (opcional)', gEmail:'E-mail (opcional)', gRegister:'Registar cartão e adicionar',
+    gName:'Nome próprio *', gPhone:'Telefone (opcional)', gEmail:'E-mail *', gEmail2:'Confirmar e-mail *', gEmailReq:'O e-mail do convidado \u00e9 obrigat\u00f3rio: liga o cart\u00e3o \u00e0 sua conta.', gEmailBad:'Esse endere\u00e7o de e-mail n\u00e3o parece v\u00e1lido.', gEmailDiff:'Os dois e-mails s\u00e3o diferentes. Verifique.', gRegister:'Registar cartão e adicionar',
     gNotFreeNew:'Cartão não encontrado. Só é possível adicionar um novo cartão de convidado a um grupo gratuito.', gNeedEnd:n=>`Este grupo exige uma data de fim (até ${n} dias).`,
     gNameReq:'O nome próprio do convidado é obrigatório.', gPickDate:'Escolha uma data para essa hora, ou use os botões 1 h / 2 h / 3 h.',
     gAdded:'Acesso adicionado.', gSms:'Acesso adicionado \u00b7 SMS enviado.', gEmailSent:'Acesso adicionado \u00b7 e-mail enviado.',
@@ -2021,7 +2023,7 @@ function opgApplyI18n(){
   set('op-tab-cash', t.tabCash); set('op-tab-guest', t.tabGuest); set('opg-group-label', t.gGroup);
   set('opg-uid-label', t.gCode); set('opg-find-btn', t.gFind); set('opg-add-btn', t.gAdd); set('opg-register-btn', t.gRegister);
   set('opg-m-ref-label', t.gRef); set('opg-n-ref-label', t.gRef); set('opg-n-name-label', t.gName);
-  set('opg-n-phone-label', t.gPhone); set('opg-n-email-label', t.gEmail); set('opg-list-title', t.gCurrent);
+  set('opg-n-phone-label', t.gPhone); set('opg-n-email-label', t.gEmail); set('opg-n-email2-label', t.gEmail2); set('opg-list-title', t.gCurrent);
   ['om', 'on'].forEach(pf => {
     set('acc-' + pf + '-until-label', t.gUntilOpt);
     document.querySelectorAll('#acc-' + pf + '-chips button').forEach(b => {
@@ -2080,7 +2082,7 @@ async function opgFind(){
       if(g.pricing_mode === 'free'){
         opgNewUid = uid;
         document.getElementById('opg-new-title').textContent = t.gNewTitle(uid);
-        ['opg-n-name', 'opg-n-phone', 'opg-n-email', 'opg-n-ref'].forEach(id => { document.getElementById(id).value = ''; });
+        ['opg-n-name', 'opg-n-phone', 'opg-n-email', 'opg-n-email2', 'opg-n-ref'].forEach(id => { document.getElementById(id).value = ''; });
         accResetUntil('on');
         document.getElementById('opg-new').style.display = 'block';
       } else opgMsg(t.gNotFreeNew, 'err');
@@ -2111,11 +2113,15 @@ async function opgRegister(){
   opgMsg('');
   const name = document.getElementById('opg-n-name').value.trim();
   if(!name){ opgMsg(t.gNameReq, 'err'); return; }
+  const email = document.getElementById('opg-n-email').value.trim(), email2 = document.getElementById('opg-n-email2').value.trim();
+  if(!email){ opgMsg(t.gEmailReq, 'err'); return; }
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ opgMsg(t.gEmailBad, 'err'); return; }
+  if(email.toLowerCase() !== email2.toLowerCase()){ opgMsg(t.gEmailDiff, 'err'); return; }
   const u = accUntilArgs('on');
   if(u.error){ opgMsg(t.gPickDate, 'err'); return; }
   if(g.max_days && !u.has){ opgMsg(t.gNeedEnd(g.max_days), 'err'); return; }
   const { data, error } = await sb.rpc('register_guest_card', { p_group_id: g.id, p_uid: opgNewUid, p_name: name,
-    p_phone: document.getElementById('opg-n-phone').value.trim() || null, p_email: document.getElementById('opg-n-email').value.trim() || null,
+    p_phone: document.getElementById('opg-n-phone').value.trim() || null, p_email: email,
     p_valid_until: u.p_valid_until, p_valid_until_ts: u.p_valid_until_ts, p_reference: document.getElementById('opg-n-ref').value.trim() || null });
   if(error){ opgMsg(error.message, 'err'); return; }
   opgNewUid = null; document.getElementById('opg-new').style.display = 'none'; document.getElementById('opg-uid').value = '';
@@ -3901,7 +3907,7 @@ async function accFindCard(){
     if(error.message === 'Card not found' && g && g.pricing_mode === 'free'){
       accNewUid = uid;
       document.getElementById('acc-m-new-uid').textContent = uid;
-      ['acc-n-name', 'acc-n-phone', 'acc-n-email', 'acc-n-until', 'acc-n-ref'].forEach(id => { document.getElementById(id).value = ''; });
+      ['acc-n-name', 'acc-n-phone', 'acc-n-email', 'acc-n-email2', 'acc-n-until', 'acc-n-ref'].forEach(id => { document.getElementById(id).value = ''; });
       accResetUntil('n');
       document.getElementById('acc-m-new').style.display = 'block';
       return;
@@ -3940,12 +3946,16 @@ async function accRegisterGuest(){
   if(!accNewUid) return;
   const name = document.getElementById('acc-n-name').value.trim();
   if(!name){ errEl.textContent = 'The guest\u2019s first name is required.'; return; }
+  const email = document.getElementById('acc-n-email').value.trim(), email2 = document.getElementById('acc-n-email2').value.trim();
+  if(!email){ errEl.textContent = 'The guest\u2019s e-mail is required: it links the card to their account.'; return; }
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ errEl.textContent = 'That e-mail address does not look valid.'; return; }
+  if(email.toLowerCase() !== email2.toLowerCase()){ errEl.textContent = 'The two e-mail addresses are different. Check them.'; return; }
   const g = accCurrentGroup();
   const u = accUntilArgs('n');
   if(u.error){ errEl.textContent = u.error; return; }
   if(g && g.max_days && !u.has){ errEl.textContent = 'This group needs an end date (up to ' + g.max_days + ' days).'; return; }
   const { data, error } = await sb.rpc('register_guest_card', { p_group_id: accMembersGroupId, p_uid: accNewUid, p_name: name,
-    p_phone: document.getElementById('acc-n-phone').value.trim() || null, p_email: document.getElementById('acc-n-email').value.trim() || null,
+    p_phone: document.getElementById('acc-n-phone').value.trim() || null, p_email: email,
     p_valid_until: u.p_valid_until, p_valid_until_ts: u.p_valid_until_ts, p_reference: document.getElementById('acc-n-ref').value.trim() || null });
   if(error){ errEl.textContent = error.message; return; }
   accNewUid = null; document.getElementById('acc-m-new').style.display = 'none'; document.getElementById('acc-m-uid').value = '';
