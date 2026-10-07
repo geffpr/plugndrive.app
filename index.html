@@ -540,6 +540,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
     <a class="navitem" data-page="walletactivity" onclick="showPage('walletactivity')"><span class="ic">◐</span>Wallet activity</a>
     <a class="navitem" data-page="payments" id="payments-nav" onclick="showPage('payments')" style="display:none;"><span class="ic">◎</span>Payments<span class="nav-badge" id="payments-badge"></span></a>
     <a class="navitem" data-page="shop" id="shop-nav" onclick="showPage('shop')" style="display:none;"><span class="ic">▣</span>Shop</a>
+    <a class="navitem" data-page="proshop" id="proshop-nav" onclick="showPage('proshop')" style="display:none;"><span class="ic">▣</span>Shop</a>
     <div style="margin-top:auto;padding-top:14px;border-top:1px solid rgba(255,255,255,.12);">
       <div id="sidebar-identity" style="font-size:12px;color:rgba(255,255,255,.7);margin-bottom:8px;"></div>
       <a href="#" onclick="handleSignOut();return false;" style="font-size:13px;color:#fff;display:flex;align-items:center;gap:6px;"><span class="ic">⏻</span>Sign out</a>
@@ -901,12 +902,14 @@ tr.rowlink:hover td{background:#f0f6fc;}
             <div class="form-row"><label>Price (R)</label><input type="number" id="shop-price" min="0" step="0.01" inputmode="decimal"></div>
             <div class="form-row"><label>Stock</label><input type="number" id="shop-stock" min="0" step="1" inputmode="numeric"><div class="hint">Empty = not tracked. Goes down by itself with each paid order.</div></div>
           </div>
+          <div class="form-row"><label>Pro price (R) — optional</label><input type="number" id="shop-price-pro" min="0" step="0.01" inputmode="decimal"><div class="hint">Price charged to pro clients. Empty = same as the public price.</div></div>
           <div class="form-row"><label>Photo (JPG, PNG or WebP, max 2 MB)</label>
             <div style="display:flex;align-items:center;gap:12px;"><img id="shop-img-preview" class="shop-thumb" alt="" style="display:none;"><input type="file" id="shop-file" accept="image/jpeg,image/png,image/webp" onchange="shopPickImage()"></div></div>
           <div class="form-row"><label>Internal notes (never shown to customers)</label><textarea id="shop-notes" maxlength="2000"></textarea></div>
           <div class="shop-2col">
             <div class="form-row"><label>Order in the shop</label><input type="number" id="shop-sort" step="1" inputmode="numeric"><div class="hint">Smaller numbers come first.</div></div>
-            <div class="form-row"><label class="check-row"><input type="checkbox" id="shop-active"> <span>Visible to customers</span></label></div>
+            <div class="form-row"><label class="check-row"><input type="checkbox" id="shop-active"> <span>Visible to the public (website)</span></label>
+              <label class="check-row" style="margin-top:8px;"><input type="checkbox" id="shop-active-pro"> <span>Visible to pro clients (console)</span></label></div>
           </div>
           <button class="btn btn-primary" id="shop-save-btn" onclick="saveShopProduct()">Save product</button>
           <button class="btn" onclick="shopCancel()">Cancel</button>
@@ -915,9 +918,49 @@ tr.rowlink:hover td{background:#f0f6fc;}
 
         <div class="card" style="max-width:900px;">
           <table>
-            <thead><tr><th></th><th>Product</th><th>Price</th><th>Stock</th><th>Status</th><th></th></tr></thead>
+            <thead><tr><th></th><th>Product</th><th>Price</th><th>Pro price</th><th>Stock</th><th>Visible to</th><th></th></tr></thead>
             <tbody id="shop-body"></tbody>
           </table>
+        </div>
+      </div>
+
+      <!-- PRO SHOP (client_admin only): orders from Plug n Drive -->
+      <div class="page" id="page-proshop">
+        <div id="ps-denied" class="empty" style="display:none;">Only your company administrator can order from Plug n Drive.</div>
+        <div id="ps-main">
+          <div id="ps-banner" style="display:none;max-width:900px;margin:0 0 16px;padding:12px 14px;border-radius:10px;border:1px solid var(--border);font-size:13.5px;"></div>
+          <div class="section-title" style="margin:0 0 14px;">Order from Plug n Drive</div>
+          <div class="card" style="max-width:900px;margin-bottom:18px;">
+            <table>
+              <thead><tr><th></th><th>Product</th><th>Price</th><th style="width:110px;">Quantity</th></tr></thead>
+              <tbody id="ps-catalog"></tbody>
+            </table>
+          </div>
+          <div class="card card-pad" id="ps-cart" style="max-width:620px;margin-bottom:28px;">
+            <div style="font-weight:700;margin-bottom:10px;">Your basket</div>
+            <div id="ps-summary" style="margin-bottom:16px;font-size:13.5px;"></div>
+            <div style="font-weight:700;margin-bottom:10px;">Delivery</div>
+            <div class="form-row"><label>Name</label><input type="text" id="ps-name" maxlength="120" autocomplete="off"></div>
+            <div class="form-row"><label>Phone</label><input type="text" id="ps-phone" maxlength="40" autocomplete="off"></div>
+            <div class="form-row"><label>Address</label><input type="text" id="ps-addr1" maxlength="160" autocomplete="off"></div>
+            <div class="form-row"><label>Address line 2 (optional)</label><input type="text" id="ps-addr2" maxlength="160" autocomplete="off"></div>
+            <div class="shop-2col">
+              <div class="form-row"><label>City</label><input type="text" id="ps-city" maxlength="80" autocomplete="off"></div>
+              <div class="form-row"><label>Province</label><input type="text" id="ps-prov" maxlength="80" autocomplete="off"></div>
+            </div>
+            <div class="form-row"><label>Postcode</label><input type="text" id="ps-post" maxlength="12" autocomplete="off" style="max-width:160px;"></div>
+            <div class="form-row"><label>Note for Plug n Drive (optional)</label><textarea id="ps-note" maxlength="500"></textarea></div>
+            <button class="btn btn-primary" id="ps-pay-btn" onclick="psPay()" disabled>Pay by card</button>
+            <span id="ps-msg" style="font-size:12.5px;margin-left:10px;"></span>
+            <div class="hint" style="margin-top:8px;">Prices are in rands (R). You will be taken to a secure card payment page.</div>
+          </div>
+          <div class="section-title" style="margin:0 0 14px;">My orders</div>
+          <div class="card" style="max-width:900px;">
+            <table>
+              <thead><tr><th>Order</th><th>Date</th><th>Items</th><th>Total</th><th>Status</th><th>Tracking</th></tr></thead>
+              <tbody id="ps-orders"></tbody>
+            </table>
+          </div>
         </div>
       </div>
 
@@ -2287,6 +2330,8 @@ function applyRoleBasedNav(){
   if(paymentsNav) paymentsNav.style.display = (currentStaff && currentStaff.role === 'plugndrive_admin') ? '' : 'none';
   const shopNav = document.getElementById('shop-nav');
   if(shopNav) shopNav.style.display = (currentStaff && currentStaff.role === 'plugndrive_admin') ? '' : 'none';
+  const proShopNav = document.getElementById('proshop-nav');
+  if(proShopNav) proShopNav.style.display = isClientAdmin ? '' : 'none';
   const addSiteBtn = document.querySelector('#sites-list-view button.btn-primary');
   if(addSiteBtn) addSiteBtn.style.display = isClientAdmin ? 'none' : '';
   const addChargerBtn = document.querySelector('#chargers-list-view button.btn-primary');
@@ -2462,6 +2507,7 @@ const ROUTES = {
   myoperators: () => '/myoperators',
   settings: () => '/settings',
   shop: () => '/shop',
+  proshop: () => '/proshop',
   exchangerates: () => '/exchangerates',
   reporting: () => '/reporting',
   access: () => '/access',
@@ -2480,7 +2526,7 @@ function showPage(id, opts){
   const parentNav = { addsite:'sites', addcharger:'chargers', addclient:'clients' };
   const navEl = document.querySelector(`.navitem[data-page="${parentNav[id] || id}"]`);
   if(navEl) navEl.classList.add('active');
-  const titles={dashboard:'Dashboard',sites:'Sites',addsite:'Add site',chargers:'Chargers',addcharger:'Add charger',sessions:'Sessions',rfid:'RFID cards',load:'Load management',tariffs:'Tariffs',clients:'Clients',addclient:'Add client',myoperators:'My operators',walletactivity:'Wallet activity',payments:'Payments',shop:'Shop',settings:'Settings',exchangerates:'Exchange rates',reporting:'Reporting',access:'Access'};
+  const titles={dashboard:'Dashboard',sites:'Sites',addsite:'Add site',chargers:'Chargers',addcharger:'Add charger',sessions:'Sessions',rfid:'RFID cards',load:'Load management',tariffs:'Tariffs',clients:'Clients',addclient:'Add client',myoperators:'My operators',walletactivity:'Wallet activity',payments:'Payments',shop:'Shop',proshop:'Shop',settings:'Settings',exchangerates:'Exchange rates',reporting:'Reporting',access:'Access'};
   document.getElementById('topbar-title').textContent = titles[id];
   if(!opts.skipNav) navigate(ROUTES[id] ? ROUTES[id]() : '/'+id);
   if(id==='sites') renderSites();
@@ -2498,6 +2544,7 @@ function showPage(id, opts){
   if(id==='walletactivity') renderWalletActivity();
   if(id==='payments') renderPayments();
   if(id==='shop') renderShop();
+  if(id==='proshop') renderProShop();
   if(id==='settings') renderSettings();
   if(id==='exchangerates') renderExchangeRates();
   if(id==='reporting') renderReporting();
@@ -2509,7 +2556,7 @@ function showPage(id, opts){
 function routeFromLocation(){
   const parts = location.pathname.split('/').filter(Boolean); // e.g. ['sites','<id>']
   const page = parts[0] || 'dashboard';
-  const knownPages = ['dashboard','sites','addsite','chargers','addcharger','sessions','rfid','load','tariffs','clients','addclient','myoperators','walletactivity','payments','shop','settings','exchangerates','reporting','access'];
+  const knownPages = ['dashboard','sites','addsite','chargers','addcharger','sessions','rfid','load','tariffs','clients','addclient','myoperators','walletactivity','payments','shop','proshop','settings','exchangerates','reporting','access'];
   if(!knownPages.includes(page)){ showPage('dashboard'); return; }
 
   showPage(page, {skipNav:true});
@@ -3641,6 +3688,162 @@ async function reviewPayment(id, reviewed){
   refreshPaymentAlerts();
 }
 
+// --- Pro shop (client_admin only) ---
+// A company administrator orders from Plug n Drive. Prices, delivery and stock are recomputed on the server (shop-checkout);
+// what is computed here is only a preview. The order is marked paid only by the payment webhook.
+let psCatalog = null;     // { products, shipping, client, buyer }
+let psQty = {};           // productId -> whole number
+let psFormReady = false;
+let psRun = 0;
+const PS_PENDING_KEY = 'pnd_proshop_pending';
+const PS_STATUS = { pending_payment:'Awaiting payment', paid:'Paid', preparing:'Preparing', shipped:'Shipped', delivered:'Delivered', cancelled:'Cancelled' };
+const psIsClientAdmin = () => !!(currentStaff && currentStaff.role === 'client_admin');
+const psMoney = n => Math.round(Number(n || 0) * 100) / 100;
+function psBanner(text, kind){
+  const el = document.getElementById('ps-banner'); if(!el) return;
+  if(!text){ el.style.display = 'none'; el.textContent = ''; return; }
+  el.style.display = 'block'; el.style.color = kind === 'bad' ? 'var(--red, #c0392b)' : (kind === 'good' ? 'var(--green, #1a7f37)' : 'var(--text)');
+  el.textContent = text;
+}
+function psTotals(){
+  const prods = (psCatalog && psCatalog.products) || [];
+  const lines = prods.filter(p => (psQty[p.id] || 0) > 0).map(p => ({ p, q: psQty[p.id], total: psMoney(psMoney(p.price) * psQty[p.id]) }));
+  const subtotal = psMoney(lines.reduce((a, l) => a + l.total, 0));
+  const sh = (psCatalog && psCatalog.shipping) || {};
+  const fee = psMoney(sh.fee), freeOver = sh.free_over == null ? null : Number(sh.free_over);
+  const shipping = !lines.length ? 0 : (freeOver != null && subtotal >= freeOver ? 0 : fee);
+  return { lines, subtotal, shipping, total: psMoney(subtotal + shipping), freeOver };
+}
+function psRecalc(){
+  const t = psTotals(), el = document.getElementById('ps-summary'), btn = document.getElementById('ps-pay-btn');
+  if(!el) return;
+  if(!t.lines.length){
+    el.innerHTML = '<span style="color:var(--text-muted);">Your basket is empty. Choose a quantity above.</span>';
+    if(btn) btn.disabled = true; return;
+  }
+  const rows = t.lines.map(l => `<div style="display:flex;justify-content:space-between;gap:12px;"><span>${shopEsc(l.q)} × ${shopEsc(l.p.name)}</span><span>${shopEsc(fmtMoney(l.total, 'ZAR'))}</span></div>`).join('');
+  const hint = t.freeOver != null && t.shipping > 0 ? `<div class="hint">Free delivery from ${shopEsc(fmtMoney(t.freeOver, 'ZAR'))}.</div>` : '';
+  el.innerHTML = rows
+    + `<div style="display:flex;justify-content:space-between;gap:12px;margin-top:6px;"><span>Delivery</span><span>${t.shipping === 0 ? 'Free' : shopEsc(fmtMoney(t.shipping, 'ZAR'))}</span></div>${hint}`
+    + `<div style="display:flex;justify-content:space-between;gap:12px;margin-top:6px;font-weight:700;"><span>Total</span><span>${shopEsc(fmtMoney(t.total, 'ZAR'))}</span></div>`;
+  if(btn) btn.disabled = false;
+}
+function psSetQty(id, raw){
+  const p = ((psCatalog && psCatalog.products) || []).find(x => x.id === id); if(!p) return;
+  const max = Math.max(0, Math.floor(Number(p.max_qty) || 0));
+  let q = Math.floor(Number(raw));
+  if(!isFinite(q) || q < 0) q = 0;
+  if(q > max) q = max;
+  if(!p.in_stock) q = 0;
+  psQty[id] = q;
+  const inp = document.getElementById('ps-qty-' + id);
+  if(inp && String(inp.value) !== String(q) && String(raw) !== '') inp.value = q;
+  psRecalc();
+}
+function psFillForm(){
+  if(psFormReady || !psCatalog) return;
+  const c = psCatalog.client || {};
+  const set = (id, v) => { const el = document.getElementById(id); if(el && !el.value) el.value = v || ''; };
+  set('ps-name', c.contact || c.name); set('ps-phone', c.phone); set('ps-addr1', c.address);
+  psFormReady = true;
+}
+function psRenderCatalog(){
+  const body = document.getElementById('ps-catalog'); if(!body) return;
+  const prods = (psCatalog && psCatalog.products) || [];
+  body.innerHTML = prods.map(p => {
+    const img = p.image_path ? `<img class="shop-thumb" src="${shopEsc(shopImgUrl(p.image_path))}" alt="">` : '<div class="shop-thumb none">No photo</div>';
+    const max = Math.max(0, Math.floor(Number(p.max_qty) || 0));
+    const qty = p.in_stock && max > 0
+      ? `<input type="number" id="ps-qty-${shopEsc(p.id)}" min="0" max="${max}" step="1" inputmode="numeric" value="${shopEsc(psQty[p.id] || 0)}" oninput="psSetQty('${shopEsc(p.id)}', this.value)" style="width:90px;">`
+      : '<span style="color:var(--red,#c0392b);font-weight:700;">Out of stock</span>';
+    return `<tr><td>${img}</td><td><b>${shopEsc(p.name)}</b>${p.description ? `<div style="color:var(--text-muted);font-size:12.5px;">${shopEsc(p.description)}</div>` : ''}</td><td>${shopEsc(fmtMoney(p.price, 'ZAR'))}</td><td>${qty}</td></tr>`;
+  }).join('') || '<tr><td colspan="4" class="empty">No product is available to order yet.</td></tr>';
+}
+function psRenderOrders(orders){
+  const body = document.getElementById('ps-orders'); if(!body) return;
+  body.innerHTML = (orders || []).map(o => {
+    const items = (o.items || []).map(i => `${shopEsc(i.quantity)} × ${shopEsc(i.name)}`).join('<br>');
+    const d = o.created_at ? new Date(o.created_at).toLocaleDateString('en-ZA') : '';
+    return `<tr><td><b>${shopEsc(o.number)}</b></td><td>${shopEsc(d)}</td><td>${items}</td><td>${shopEsc(fmtMoney(o.total, 'ZAR'))}</td><td>${shopEsc(PS_STATUS[o.status] || o.status)}</td><td>${o.tracking_number ? shopEsc(o.tracking_number) : '—'}</td></tr>`;
+  }).join('') || '<tr><td colspan="6" class="empty">No order yet.</td></tr>';
+}
+async function psLoadOrders(){
+  const r = await sb.rpc('my_shop_orders_pro');
+  if(r.error){ const body = document.getElementById('ps-orders'); if(body) body.innerHTML = `<tr><td colspan="6" class="empty">${shopEsc(r.error.message)}</td></tr>`; return null; }
+  psRenderOrders(r.data || []);
+  return r.data || [];
+}
+const psSleep = ms => new Promise(res => setTimeout(res, ms));
+async function psHandleReturn(run){
+  let ref = '';
+  try { ref = new URLSearchParams(location.search).get('shop_order') || ''; } catch(e){ ref = ''; }
+  if(!/^SHOP-[0-9a-f-]{36}$/i.test(ref)) return;
+  let number = '';
+  try { number = sessionStorage.getItem(PS_PENDING_KEY) || ''; } catch(e){ number = ''; }
+  try { history.replaceState({}, '', '/proshop'); } catch(e){ /* ignore */ }
+  psBanner('Confirming your payment…');
+  for(let i = 0; i < 8; i++){
+    if(run !== psRun) return;
+    const orders = await psLoadOrders();
+    const o = orders && number ? orders.find(x => x.number === number) : null;
+    if(o && o.status !== 'pending_payment'){
+      try { sessionStorage.removeItem(PS_PENDING_KEY); } catch(e){ /* ignore */ }
+      if(o.status === 'cancelled') psBanner(`Order ${o.number} was cancelled.`, 'bad');
+      else psBanner(`Thank you! Order ${o.number} is confirmed. A confirmation e-mail is on its way.`, 'good');
+      return;
+    }
+    if(!number){ psBanner('Payment received. Your order appears in “My orders” as soon as it is confirmed.', 'good'); return; }
+    await psSleep(2000);
+  }
+  if(run !== psRun) return;
+  psBanner('We are still waiting for the payment confirmation. Your order will show below as soon as it arrives.');
+}
+async function renderProShop(){
+  const run = ++psRun;
+  const denied = document.getElementById('ps-denied'), main = document.getElementById('ps-main');
+  if(!denied || !main) return;
+  if(!psIsClientAdmin()){ denied.style.display = 'block'; main.style.display = 'none'; return; }
+  denied.style.display = 'none'; main.style.display = 'block';
+  const [cat, ord] = await Promise.all([sb.rpc('shop_catalog_pro'), sb.rpc('my_shop_orders_pro')]);
+  if(run !== psRun) return;
+  if(cat.error || !cat.data){
+    psCatalog = null;
+    const body = document.getElementById('ps-catalog'); if(body) body.innerHTML = `<tr><td colspan="4" class="empty">${shopEsc(cat.error ? cat.error.message : 'The shop is not available.')}</td></tr>`;
+    psRecalc();
+  } else {
+    psCatalog = cat.data;
+    const ids = new Set((psCatalog.products || []).map(p => p.id));
+    Object.keys(psQty).forEach(k => { if(!ids.has(k)) delete psQty[k]; });
+    psRenderCatalog(); psFillForm(); psRecalc();
+  }
+  if(ord.error){ const body = document.getElementById('ps-orders'); if(body) body.innerHTML = `<tr><td colspan="6" class="empty">${shopEsc(ord.error.message)}</td></tr>`; }
+  else psRenderOrders(ord.data || []);
+  await psHandleReturn(run);
+}
+function psNavigate(url){ location.href = url; }
+async function psPay(){
+  if(!psIsClientAdmin()) return;
+  const t = psTotals(), msg = m => shopMsg('ps-msg', m, true);
+  if(!t.lines.length){ msg('Your basket is empty.'); return; }
+  const v = id => document.getElementById(id).value.trim();
+  const shipping = { name: v('ps-name'), phone: v('ps-phone'), address1: v('ps-addr1'), address2: v('ps-addr2'), city: v('ps-city'), province: v('ps-prov'), postcode: v('ps-post') };
+  if(!shipping.name || !shipping.phone || !shipping.address1 || !shipping.city || !shipping.postcode){ msg('Please complete the delivery details.'); return; }
+  if(shipping.phone.replace(/\D/g, '').length < 9){ msg('Please enter a valid phone number.'); return; }
+  const btn = document.getElementById('ps-pay-btn'); btn.disabled = true; shopMsg('ps-msg', 'Preparing your payment…');
+  const { data, error } = await sb.functions.invoke('shop-checkout', { body: {
+    channel: 'pro', items: t.lines.map(l => ({ productId: l.p.id, quantity: l.q })), shipping, note: v('ps-note'),
+  } });
+  if(error || !data || data.error || !data.checkoutUrl){
+    let m = data && data.error;
+    if(!m && error && error.context){ try { m = (await error.context.json()).error; } catch(e){ /* ignore */ } }
+    btn.disabled = false;
+    msg(m || (error && error.message) || 'Could not start the payment.'); return;
+  }
+  try { sessionStorage.setItem(PS_PENDING_KEY, data.orderNumber || ''); } catch(e){ /* not remembered */ }
+  shopMsg('ps-msg', 'Redirecting to the payment page…');
+  psNavigate(data.checkoutUrl);
+}
+
 // --- Shop (plugndrive_admin only) ---
 // Products, delivery price and the order e-mail. Customers never read these tables: they see shop_catalog().
 let shopProducts = [];
@@ -3657,14 +3860,14 @@ async function renderShop(){
   const body = document.getElementById('shop-body');
   if(!body) return;
   if(!shopIsAdmin()){
-    body.innerHTML = '<tr><td colspan="6" class="empty">Only Plug n Drive administrators can see this page.</td></tr>';
+    body.innerHTML = '<tr><td colspan="7" class="empty">Only Plug n Drive administrators can see this page.</td></tr>';
     return;
   }
   const [st, pr] = await Promise.all([
     sb.from('shop_settings').select('*').eq('id', true).maybeSingle(),
     sb.from('shop_products').select('*').order('sort_order', { ascending: true }).order('created_at', { ascending: true }),
   ]);
-  if(pr.error){ body.innerHTML = `<tr><td colspan="6" class="empty">${shopEsc(pr.error.message)}</td></tr>`; return; }
+  if(pr.error){ body.innerHTML = `<tr><td colspan="7" class="empty">${shopEsc(pr.error.message)}</td></tr>`; return; }
   if(st.data){
     document.getElementById('shop-fee').value = st.data.shipping_fee == null ? '' : st.data.shipping_fee;
     document.getElementById('shop-free').value = st.data.free_shipping_over == null ? '' : st.data.free_shipping_over;
@@ -3674,16 +3877,19 @@ async function renderShop(){
   body.innerHTML = shopProducts.map(p => {
     const img = p.image_path ? `<img class="shop-thumb" src="${shopEsc(shopImgUrl(p.image_path))}" alt="">` : '<div class="shop-thumb none">No photo</div>';
     const stock = p.stock == null ? 'Not tracked' : (p.stock === 0 ? '<span style="color:var(--red,#c0392b);font-weight:700;">0 (sold out)</span>' : String(p.stock));
-    const badge = p.active ? '<span class="badge active"><span class="badge-dot"></span>Visible</span>' : '<span class="badge offline"><span class="badge-dot"></span>Hidden</span>';
+    const badge = (p.active ? '<span class="badge active"><span class="badge-dot"></span>Public</span>' : '<span class="badge offline"><span class="badge-dot"></span>Not public</span>')
+      + ' ' + (p.active_pro ? '<span class="badge active"><span class="badge-dot"></span>Pro</span>' : '<span class="badge offline"><span class="badge-dot"></span>Not pro</span>');
+    const proPrice = p.price_pro == null ? '—' : shopEsc(fmtMoney(p.price_pro, 'ZAR'));
     return `<tr>
       <td>${img}</td>
       <td><b>${shopEsc(p.name)}</b>${p.notes ? `<div class="pay-todo">Note: ${shopEsc(p.notes)}</div>` : ''}</td>
       <td>${shopEsc(fmtMoney(p.price, 'ZAR'))}</td>
+      <td>${proPrice}</td>
       <td>${stock}</td>
       <td>${badge}</td>
-      <td style="white-space:nowrap;"><button class="btn" onclick="shopEdit('${shopEsc(p.id)}')">Edit</button> <button class="btn" onclick="shopToggle('${shopEsc(p.id)}')">${p.active ? 'Hide' : 'Publish'}</button></td>
+      <td style="white-space:nowrap;"><button class="btn" onclick="shopEdit('${shopEsc(p.id)}')">Edit</button> <button class="btn" onclick="shopToggle('${shopEsc(p.id)}','active')">${p.active ? 'Hide from public' : 'Publish to public'}</button> <button class="btn" onclick="shopToggle('${shopEsc(p.id)}','active_pro')">${p.active_pro ? 'Hide from pro' : 'Offer to pro'}</button></td>
     </tr>`;
-  }).join('') || '<tr><td colspan="6" class="empty">No product yet. Press “Add a product”.</td></tr>';
+  }).join('') || '<tr><td colspan="7" class="empty">No product yet. Press “Add a product”.</td></tr>';
 }
 
 async function saveShopSettings(){
@@ -3709,6 +3915,8 @@ function shopFillEditor(p){
   document.getElementById('shop-notes').value = p && p.notes ? p.notes : '';
   document.getElementById('shop-sort').value = p ? p.sort_order : 0;
   document.getElementById('shop-active').checked = p ? !!p.active : false;
+  document.getElementById('shop-active-pro').checked = p ? !!p.active_pro : false;
+  document.getElementById('shop-price-pro').value = p && p.price_pro != null ? p.price_pro : '';
   document.getElementById('shop-file').value = '';
   shopFile = null;
   const prev = document.getElementById('shop-img-preview');
@@ -3748,10 +3956,14 @@ async function saveShopProduct(){
   const sortRaw = document.getElementById('shop-sort').value.trim();
   const sort_order = sortRaw === '' ? 0 : Number(sortRaw);
   const active = document.getElementById('shop-active').checked;
+  const activePro = document.getElementById('shop-active-pro').checked;
+  const proRaw = document.getElementById('shop-price-pro').value.trim();
+  const pricePro = proRaw === '' ? null : Number(proRaw);
   const bad = m => shopMsg('shop-editor-msg', m, true);
   if(!name){ bad('Please enter a name.'); return; }
   if(name.length > 120){ bad('The name is too long (max 120 characters).'); return; }
   if(!(price > 0) || !isFinite(price)){ bad('Price must be above 0.'); return; }
+  if(pricePro !== null && (!(pricePro > 0) || !isFinite(pricePro))){ bad('Pro price must be above 0, or empty.'); return; }
   if(stock !== null && (!Number.isInteger(stock) || stock < 0)){ bad('Stock must be a whole number, or empty.'); return; }
   if(!Number.isInteger(sort_order)){ bad('Order must be a whole number.'); return; }
   if(description.length > 2000 || notes.length > 2000){ bad('Description and notes are limited to 2000 characters.'); return; }
@@ -3764,7 +3976,7 @@ async function saveShopProduct(){
     if(up.error){ btn.disabled = false; bad('Photo upload failed: ' + up.error.message); return; }
     uploaded = path; image_path = path;
   }
-  const row = { name, description: description || null, price: Math.round(price * 100) / 100, stock, active, sort_order, notes: notes || null, image_path };
+  const row = { name, description: description || null, price: Math.round(price * 100) / 100, stock, active, active_pro: activePro, price_pro: pricePro === null ? null : Math.round(pricePro * 100) / 100, sort_order, notes: notes || null, image_path };
   const res = cur.isNew ? await sb.from('shop_products').insert({ id: cur.id, ...row }) : await sb.from('shop_products').update(row).eq('id', cur.id);
   if(res.error){
     btn.disabled = false;
@@ -3776,10 +3988,11 @@ async function saveShopProduct(){
   await renderShop();
 }
 
-async function shopToggle(id){
+async function shopToggle(id, field){
   if(!shopIsAdmin()) return;
+  if(field !== 'active' && field !== 'active_pro') return;
   const p = shopProducts.find(x => x.id === id); if(!p) return;
-  const { error } = await sb.from('shop_products').update({ active: !p.active }).eq('id', id);
+  const { error } = await sb.from('shop_products').update({ [field]: !p[field] }).eq('id', id);
   if(error){ alert(error.message); return; }
   await renderShop();
 }
