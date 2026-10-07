@@ -739,6 +739,14 @@ tr.rowlink:hover td{background:#f0f6fc;}
             <input type="text" id="new-site-city" placeholder="Auto-filled from address, or type your own">
           </div>
           <div class="form-row">
+            <label>Map position (optional — shows the site on the customer map)</label>
+            <div style="display:flex;gap:8px;">
+              <input type="text" id="new-site-lat" inputmode="decimal" placeholder="Latitude e.g. -25.9890" autocomplete="off">
+              <input type="text" id="new-site-lng" inputmode="decimal" placeholder="Longitude e.g. 28.1280" autocomplete="off">
+            </div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">Filled automatically when you pick an address suggestion. Otherwise: in Google Maps, right-click the exact spot and click the numbers to copy them (you can paste both into the Latitude box).</div>
+          </div>
+          <div class="form-row">
             <label>Timezone</label>
             <select id="new-site-timezone">
               <option value="Africa/Johannesburg">Africa/Johannesburg (SAST, UTC+2)</option>
@@ -790,6 +798,14 @@ tr.rowlink:hover td{background:#f0f6fc;}
           <div class="form-row">
             <label>City</label>
             <input type="text" id="ss-city">
+          </div>
+          <div class="form-row">
+            <label>Map position (shows the site on the customer map)</label>
+            <div style="display:flex;gap:8px;">
+              <input type="text" id="ss-lat" inputmode="decimal" placeholder="Latitude e.g. -25.9890" autocomplete="off">
+              <input type="text" id="ss-lng" inputmode="decimal" placeholder="Longitude e.g. 28.1280" autocomplete="off">
+            </div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">Filled automatically when you pick an address suggestion. Otherwise: in Google Maps, right-click the exact spot and click the numbers to copy them (you can paste both into the Latitude box). Leave both empty to hide the site from the map.</div>
           </div>
           <div class="form-row">
             <label>Timezone</label>
@@ -2373,7 +2389,7 @@ let users = [];
 let tariffs = [];
 let clients = [];
 
-function mapLocation(l){ return {id:l.id, name:l.name, type:l.type, parentId:l.parent_id, city:l.city, address:l.address, capacityKVA:l.capacity_kva, currency:l.currency, clientId:l.client_id, timezone:l.timezone, contactName:l.contact_name, contactPhone:l.contact_phone, contactEmail:l.contact_email, status:l.status, loadManagementEnabled:l.load_management_enabled}; }
+function mapLocation(l){ return {id:l.id, name:l.name, type:l.type, parentId:l.parent_id, city:l.city, address:l.address, capacityKVA:l.capacity_kva, currency:l.currency, clientId:l.client_id, timezone:l.timezone, contactName:l.contact_name, contactPhone:l.contact_phone, contactEmail:l.contact_email, status:l.status, loadManagementEnabled:l.load_management_enabled, latitude:l.latitude, longitude:l.longitude}; }
 function mapCharger(c){ return {id:c.id, locationId:c.location_id, name:c.name, ocppId:c.ocpp_id, vendor:c.vendor, connector:c.connector, powerKW:c.power_kw, ocpp:c.ocpp_version, status:c.status, currentKW:c.current_kw, ocppPassword:c.ocpp_password, lastSeenAt:c.last_seen_at, ocppStatus:c.ocpp_status, listedPublicly:c.listed_publicly}; }
 function mapSession(s){ return {id:s.id, chargerId:s.charger_id, userId:s.user_id, rfidCardId:s.rfid_card_id, kwh:s.kwh, cost:s.cost, currency:s.currency, startedAt:s.started_at, endedAt:s.ended_at, paymentStatus:s.payment_status, payment:s.payment_method, groupId:s.access_group_id, groupMode:s.group_pricing_mode, groupPercent:s.group_discount_percent, offered:s.offered_value}; }
 function mapRfid(r){ return {id:r.id, uid:r.uid, userId:r.user_id, complexId:r.location_id, status:r.status}; }
@@ -2440,7 +2456,7 @@ function attachPlacesAutocomplete(inputEl, onSelect){
   if(!inputEl || inputEl.dataset.acAttached) return;
   if(!window.google || !google.maps || !google.maps.places) return;
   inputEl.dataset.acAttached = '1';
-  const ac = new google.maps.places.Autocomplete(inputEl, { fields: ['formatted_address','address_components'] });
+  const ac = new google.maps.places.Autocomplete(inputEl, { fields: ['formatted_address','address_components','geometry'] });
   ac.addListener('place_changed', () => {
     const place = ac.getPlace();
     if(!place || !place.formatted_address) return;
@@ -2449,7 +2465,9 @@ function attachPlacesAutocomplete(inputEl, onSelect){
       if(c.types.includes('locality')) city = c.long_name;
       else if(!city && c.types.includes('administrative_area_level_2')) city = c.long_name;
     });
-    onSelect({ address: place.formatted_address, city });
+    let lat = null, lng = null;
+    try { if(place.geometry && place.geometry.location){ lat = place.geometry.location.lat(); lng = place.geometry.location.lng(); } } catch(e){ lat = lng = null; }
+    onSelect({ address: place.formatted_address, city, lat, lng });
   });
 }
 
@@ -3143,6 +3161,23 @@ function openUnpair(){
 }
 function backToChargers(){ stopChargerLivePolling(); document.getElementById('chargers-list-view').style.display='block'; document.getElementById('charger-detail-view').style.display='none'; renderChargers(); navigate(ROUTES.chargers()); }
 
+// Reads the two map-position inputs. Both empty -> no position; both valid -> numbers;
+// anything else -> an error message (never a half-saved or out-of-range position).
+function readSiteCoords(latId, lngId){
+  const latEl = document.getElementById(latId), lngEl = document.getElementById(lngId);
+  let latRaw = (latEl.value||'').trim().replace(/;/g,',');
+  let lngRaw = (lngEl.value||'').trim();
+  const pair = latRaw.match(/^(-?\d+(?:[.,]\d+)?)\s*,\s*(-?\d+(?:[.,]\d+)?)$/);
+  if(pair && !lngRaw){ latRaw = pair[1]; lngRaw = pair[2]; latEl.value = latRaw; lngEl.value = lngRaw; }
+  if(!latRaw && !lngRaw) return { lat:null, lng:null, error:null };
+  if(!latRaw || !lngRaw) return { lat:null, lng:null, error:'Map position needs both latitude and longitude (or leave both empty).' };
+  const num = v => /^-?\d+(?:[.,]\d+)?$/.test(v) ? Number(v.replace(',','.')) : NaN;
+  const lat = num(latRaw), lng = num(lngRaw);
+  if(!isFinite(lat) || !isFinite(lng)) return { lat:null, lng:null, error:'Map position must be numbers, e.g. -25.9890 and 28.1280.' };
+  if(lat < -90 || lat > 90) return { lat:null, lng:null, error:'Latitude must be between -90 and 90.' };
+  if(lng < -180 || lng > 180) return { lat:null, lng:null, error:'Longitude must be between -180 and 180.' };
+  return { lat, lng, error:null };
+}
 function renderAddSite(){
   const sel = document.getElementById('new-site-parent');
   sel.innerHTML = '<option value="">None — top-level site</option>' +
@@ -3153,12 +3188,15 @@ function renderAddSite(){
   document.getElementById('new-site-name').value = '';
   document.getElementById('new-site-city').value = '';
   document.getElementById('new-site-address').value = '';
+  document.getElementById('new-site-lat').value = '';
+  document.getElementById('new-site-lng').value = '';
   document.getElementById('new-site-capacity').value = '';
   document.getElementById('new-site-error').textContent = '';
   const addrInput = document.getElementById('new-site-address');
-  attachPlacesAutocomplete(addrInput, ({address, city}) => {
+  attachPlacesAutocomplete(addrInput, ({address, city, lat, lng}) => {
     addrInput.value = address;
     if(city) document.getElementById('new-site-city').value = city;
+    if(lat != null && lng != null){ document.getElementById('new-site-lat').value = lat.toFixed(6); document.getElementById('new-site-lng').value = lng.toFixed(6); }
   });
 }
 async function submitNewSite(){
@@ -3174,9 +3212,12 @@ async function submitNewSite(){
   const capacityRaw = document.getElementById('new-site-capacity').value;
   const capacity = capacityRaw ? Number(capacityRaw) : null;
   const currency = document.getElementById('new-site-currency').value;
+  const pos = readSiteCoords('new-site-lat','new-site-lng');
+  if(pos.error){ errEl.textContent = pos.error; return; }
 
   const { error } = await sb.from('locations').insert({
-    name, type, parent_id: parentId, client_id: clientId, city, address, timezone, capacity_kva: capacity, currency
+    name, type, parent_id: parentId, client_id: clientId, city, address, timezone, capacity_kva: capacity, currency,
+    latitude: pos.lat, longitude: pos.lng
   });
   if(error){ errEl.textContent = error.message; return; }
 
@@ -3207,6 +3248,8 @@ function openSiteSettings(id){
   document.getElementById('ss-status').value = loc.status || 'Active';
   document.getElementById('ss-address').value = loc.address || '';
   document.getElementById('ss-city').value = loc.city || '';
+  document.getElementById('ss-lat').value = loc.latitude != null ? loc.latitude : '';
+  document.getElementById('ss-lng').value = loc.longitude != null ? loc.longitude : '';
   document.getElementById('ss-timezone').value = loc.timezone || 'Africa/Johannesburg';
   document.getElementById('ss-capacity').value = loc.capacityKVA ?? '';
   document.getElementById('ss-contact-name').value = loc.contactName || '';
@@ -3222,9 +3265,10 @@ function openSiteSettings(id){
 
   const addrInput = document.getElementById('ss-address');
   addrInput.dataset.acAttached = ''; // allow re-attaching each time this page opens
-  attachPlacesAutocomplete(addrInput, ({address, city}) => {
+  attachPlacesAutocomplete(addrInput, ({address, city, lat, lng}) => {
     addrInput.value = address;
     if(city) document.getElementById('ss-city').value = city;
+    if(lat != null && lng != null){ document.getElementById('ss-lat').value = lat.toFixed(6); document.getElementById('ss-lng').value = lng.toFixed(6); }
   });
 
   navigate(`/sites/${id}/settings`);
@@ -3240,6 +3284,8 @@ function cancelSiteSettings(){
 }
 async function saveSiteSettings(){
   const errEl = document.getElementById('site-settings-error');
+  const pos = readSiteCoords('ss-lat','ss-lng');
+  if(pos.error){ errEl.textContent = pos.error; return; }
   const payload = {
     client_id: document.getElementById('ss-client').value || null,
     status: document.getElementById('ss-status').value,
@@ -3251,6 +3297,8 @@ async function saveSiteSettings(){
     contact_phone: document.getElementById('ss-contact-phone').value.trim() || null,
     contact_email: document.getElementById('ss-contact-email').value.trim() || null,
     currency: document.getElementById('ss-currency').value,
+    latitude: pos.lat,
+    longitude: pos.lng,
   };
   const { error } = await sb.from('locations').update(payload).eq('id', siteSettingsTargetId);
   if(error){ errEl.textContent = error.message; return; }
