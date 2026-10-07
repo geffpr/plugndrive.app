@@ -540,6 +540,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
     <a class="navitem" data-page="walletactivity" onclick="showPage('walletactivity')"><span class="ic">◐</span>Wallet activity</a>
     <a class="navitem" data-page="payments" id="payments-nav" onclick="showPage('payments')" style="display:none;"><span class="ic">◎</span>Payments<span class="nav-badge" id="payments-badge"></span></a>
     <a class="navitem" data-page="shop" id="shop-nav" onclick="showPage('shop')" style="display:none;"><span class="ic">▣</span>Shop</a>
+    <a class="navitem" data-page="photos" id="photos-nav" onclick="showPage('photos')" style="display:none;"><span class="ic">▤</span>Photos<span class="nav-badge" id="photos-badge"></span></a>
     <a class="navitem" data-page="proshop" id="proshop-nav" onclick="showPage('proshop')" style="display:none;"><span class="ic">▣</span>Shop</a>
     <div style="margin-top:auto;padding-top:14px;border-top:1px solid rgba(255,255,255,.12);">
       <div id="sidebar-identity" style="font-size:12px;color:rgba(255,255,255,.7);margin-bottom:8px;"></div>
@@ -968,6 +969,21 @@ tr.rowlink:hover td{background:#f0f6fc;}
       </div>
 
       <!-- PRO SHOP (client_admin only): orders from Plug n Drive -->
+      <div class="page" id="page-photos">
+        <div class="section-title" style="margin:0 0 6px;">Site photos</div>
+        <div style="font-size:13px;color:var(--text-muted);max-width:760px;margin-bottom:14px;">Photos sent by customers from the public site. Nothing is shown to the public until you publish it. Each site shows at most 4 published photos. Reject anything with a face, a number plate, or that is not the station.</div>
+        <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;max-width:1000px;margin-bottom:14px;">
+          <select id="photos-filter" onchange="photosRender()" style="max-width:240px;">
+            <option value="todo">To check (new, reported)</option>
+            <option value="published">Published</option>
+            <option value="rejected">Rejected</option>
+            <option value="all">All</option>
+          </select>
+          <select id="photos-site" onchange="photosRender()" style="max-width:260px;"><option value="">All sites</option></select>
+        </div>
+        <div id="photos-msg" style="font-size:13px;margin-bottom:10px;"></div>
+        <div id="photos-body" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px;max-width:1000px;"></div>
+      </div>
       <div class="page" id="page-proshop">
         <div id="ps-denied" class="empty" style="display:none;">Only your company administrator can order from Plug n Drive.</div>
         <div id="ps-main">
@@ -2373,6 +2389,8 @@ function applyRoleBasedNav(){
   if(paymentsNav) paymentsNav.style.display = (currentStaff && currentStaff.role === 'plugndrive_admin') ? '' : 'none';
   const shopNav = document.getElementById('shop-nav');
   if(shopNav) shopNav.style.display = (currentStaff && currentStaff.role === 'plugndrive_admin') ? '' : 'none';
+  const photosNav = document.getElementById('photos-nav');
+  if(photosNav) photosNav.style.display = (currentStaff && (currentStaff.role === 'plugndrive_admin' || currentStaff.role === 'client_admin')) ? '' : 'none';
   const proShopNav = document.getElementById('proshop-nav');
   if(proShopNav) proShopNav.style.display = isClientAdmin ? '' : 'none';
   const addSiteBtn = document.querySelector('#sites-list-view button.btn-primary');
@@ -2447,6 +2465,7 @@ async function loadAll(){
   clients = (clientRes.data||[]).map(mapClient);
   updateTariffAlerts();
   refreshPaymentAlerts();
+  refreshPhotoAlerts();
 }
 
 // Attaches Google Places Autocomplete to an address input. Silently does
@@ -2553,6 +2572,7 @@ const ROUTES = {
   settings: () => '/settings',
   shop: () => '/shop',
   proshop: () => '/proshop',
+  photos: () => '/photos',
   exchangerates: () => '/exchangerates',
   reporting: () => '/reporting',
   access: () => '/access',
@@ -2571,7 +2591,7 @@ function showPage(id, opts){
   const parentNav = { addsite:'sites', addcharger:'chargers', addclient:'clients' };
   const navEl = document.querySelector(`.navitem[data-page="${parentNav[id] || id}"]`);
   if(navEl) navEl.classList.add('active');
-  const titles={dashboard:'Dashboard',sites:'Sites',addsite:'Add site',chargers:'Chargers',addcharger:'Add charger',sessions:'Sessions',rfid:'RFID cards',load:'Load management',tariffs:'Tariffs',clients:'Clients',addclient:'Add client',myoperators:'My operators',walletactivity:'Wallet activity',payments:'Payments',shop:'Shop',proshop:'Shop',settings:'Settings',exchangerates:'Exchange rates',reporting:'Reporting',access:'Access'};
+  const titles={dashboard:'Dashboard',sites:'Sites',addsite:'Add site',chargers:'Chargers',addcharger:'Add charger',sessions:'Sessions',rfid:'RFID cards',load:'Load management',tariffs:'Tariffs',clients:'Clients',addclient:'Add client',myoperators:'My operators',walletactivity:'Wallet activity',payments:'Payments',shop:'Shop',proshop:'Shop',photos:'Site photos',settings:'Settings',exchangerates:'Exchange rates',reporting:'Reporting',access:'Access'};
   document.getElementById('topbar-title').textContent = titles[id];
   if(!opts.skipNav) navigate(ROUTES[id] ? ROUTES[id]() : '/'+id);
   if(id==='sites') renderSites();
@@ -2590,6 +2610,7 @@ function showPage(id, opts){
   if(id==='payments') renderPayments();
   if(id==='shop') renderShop();
   if(id==='proshop') renderProShop();
+  if(id==='photos') renderPhotos();
   if(id==='settings') renderSettings();
   if(id==='exchangerates') renderExchangeRates();
   if(id==='reporting') renderReporting();
@@ -2601,7 +2622,7 @@ function showPage(id, opts){
 function routeFromLocation(){
   const parts = location.pathname.split('/').filter(Boolean); // e.g. ['sites','<id>']
   const page = parts[0] || 'dashboard';
-  const knownPages = ['dashboard','sites','addsite','chargers','addcharger','sessions','rfid','load','tariffs','clients','addclient','myoperators','walletactivity','payments','shop','proshop','settings','exchangerates','reporting','access'];
+  const knownPages = ['dashboard','sites','addsite','chargers','addcharger','sessions','rfid','load','tariffs','clients','addclient','myoperators','walletactivity','payments','shop','proshop','photos','settings','exchangerates','reporting','access'];
   if(!knownPages.includes(page)){ showPage('dashboard'); return; }
 
   showPage(page, {skipNav:true});
@@ -3761,6 +3782,84 @@ async function reviewPayment(id, reviewed){
   if(error){ alert(error.message); return; }
   await renderPayments();
   refreshPaymentAlerts();
+}
+
+// --- Site photos (moderation: plugndrive_admin sees all sites, client_admin only their own) ---
+// Customers upload from the public site; a photo stays invisible until published here. Max 4 published per site.
+let sitePhotosList = [];
+function photoStaffOk(){ return !!(currentStaff && (currentStaff.role === 'plugndrive_admin' || currentStaff.role === 'client_admin')); }
+function sitePhotoImg(path){ return path ? `${SUPABASE_URL}/storage/v1/object/public/site-photos/${String(path).split('/').map(encodeURIComponent).join('/')}` : ''; }
+function photosMsg(text, bad){ const el = document.getElementById('photos-msg'); if(!el) return; el.style.color = bad ? 'var(--red, #c0392b)' : 'var(--text-muted)'; el.textContent = text || ''; }
+async function refreshPhotoAlerts(){
+  const badge = document.getElementById('photos-badge');
+  if(!badge) return;
+  if(!photoStaffOk()){ badge.style.display = 'none'; badge.textContent = ''; return; }
+  try{
+    const { data, error } = await sb.rpc('admin_site_photos_todo');
+    if(error) throw error;
+    const n = Number(data) || 0;
+    badge.style.display = n ? 'inline-flex' : 'none';
+    badge.textContent = n ? String(n) : '';
+  }catch(e){ /* the badge is only a hint: it must never disturb loading */ }
+}
+async function renderPhotos(){
+  const body = document.getElementById('photos-body');
+  if(!body) return;
+  if(!photoStaffOk()){ body.innerHTML = '<div class="empty" style="grid-column:1/-1;">Not available for your role.</div>'; return; }
+  photosMsg('');
+  const { data, error } = await sb.rpc('admin_site_photos');
+  if(error){ sitePhotosList = []; body.innerHTML = ''; photosMsg(error.message || 'Could not load the photos.', true); return; }
+  sitePhotosList = Array.isArray(data) ? data : [];
+  const sel = document.getElementById('photos-site'), keep = sel.value;
+  const sites = []; sitePhotosList.forEach(p => { if(!sites.some(x => x.id === p.location_id)) sites.push({ id: p.location_id, name: p.site }); });
+  const esc = v => String(v==null?'':v).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+  sel.innerHTML = '<option value="">All sites</option>' + sites.map(x => `<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('');
+  sel.value = sites.some(x => x.id === keep) ? keep : '';
+  photosRender();
+}
+function photosRender(){
+  const body = document.getElementById('photos-body');
+  if(!body) return;
+  const esc = v => String(v==null?'':v).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+  const f = document.getElementById('photos-filter').value, site = document.getElementById('photos-site').value;
+  const rows = sitePhotosList.filter(p => (!site || p.location_id === site) && (f === 'all' || (f === 'todo' ? (p.status === 'pending' || p.status === 'reported') : p.status === f)));
+  if(!rows.length){ body.innerHTML = `<div class="empty" style="grid-column:1/-1;">${f === 'todo' ? 'Nothing to check.' : 'No photo here.'}</div>`; return; }
+  const label = { pending: ['New', 'avail'], reported: ['Reported', 'faulted'], published: ['Published', 'charging'], rejected: ['Rejected', 'offline'] };
+  body.innerHTML = rows.map(p => {
+    const lb = label[p.status] || [p.status, 'avail'];
+    const date = p.created_at ? new Date(p.created_at).toLocaleString() : '';
+    const btns = [];
+    if(p.status !== 'published') btns.push(`<button class="btn btn-sm btn-primary" onclick="photoAct('${esc(p.id)}','publish')">${p.status === 'reported' ? 'Keep (publish)' : 'Publish'}</button>`);
+    if(p.status === 'pending' || p.status === 'reported') btns.push(`<button class="btn btn-sm" onclick="photoAct('${esc(p.id)}','reject')">Reject</button>`);
+    btns.push(`<button class="btn btn-sm btn-danger" onclick="photoAct('${esc(p.id)}','delete')">Delete</button>`);
+    return `<div class="card" style="overflow:hidden;">
+      <a href="${esc(sitePhotoImg(p.path))}" target="_blank" rel="noopener"><img src="${esc(sitePhotoImg(p.path))}" alt="" loading="lazy" style="width:100%;height:170px;object-fit:cover;display:block;background:var(--surface);"></a>
+      <div style="padding:10px 12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><b style="font-size:13.5px;">${esc(p.site)}</b><span class="badge ${lb[1]}"><span class="badge-dot"></span>${lb[0]}${p.status === 'reported' && p.report_count > 1 ? ' ×' + esc(p.report_count) : ''}</span></div>
+        <div style="font-size:12px;color:var(--text-muted);margin:4px 0 8px;">${esc(date)}${p.by ? ' · ' + esc(p.by) : ''}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">${btns.join('')}</div>
+      </div></div>`;
+  }).join('');
+}
+async function photoAct(id, action){
+  const p = sitePhotosList.find(x => x.id === id);
+  if(!p) return;
+  if(action === 'delete' && !confirm('Delete this photo for good?')) return;
+  if(action === 'reject' && !confirm('Reject this photo? It will not be shown to the public.')) return;
+  const { data, error } = await sb.rpc('admin_site_photo_set', { p_id: id, p_action: action });
+  if(error || !data || !data.ok){
+    const code = data && data.error;
+    const msg = code === 'full' ? 'This site already shows 4 photos. Delete or reject one of its published photos first, then publish this one.'
+      : (code === 'notfound' ? 'This photo no longer exists.' : ((error && error.message) || 'Could not change this photo.'));
+    await renderPhotos(); photosMsg(msg, true); await refreshPhotoAlerts();
+    return;
+  }
+  if(action === 'delete' && data.path){
+    const r = await sb.storage.from('site-photos').remove([data.path]);
+    if(r && r.error){ await renderPhotos(); photosMsg('Photo removed from the list, but its file could not be deleted: ' + r.error.message, true); await refreshPhotoAlerts(); return; }
+  }
+  await renderPhotos();
+  await refreshPhotoAlerts();
 }
 
 // --- Pro shop (client_admin only) ---
