@@ -91,6 +91,11 @@ tr.rowlink:hover td{background:var(--blue-light);}
 .badge.offline .badge-dot{background:#b3b3b3;}
 .badge.active{background:var(--blue-light);color:var(--blue-dark);}
 .badge.blocked{background:var(--red-light);color:var(--red);}
+.badge.warn{background:#fff4e0;color:#b36b00;}
+.pay-todo{font-size:12px;color:var(--text-secondary);margin-top:3px;max-width:340px;line-height:1.4;}
+.pay-ref{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;user-select:all;word-break:break-all;}
+#page-payments td:nth-child(5){min-width:260px;}
+@media(max-width:900px){#page-payments .kpi-value{font-size:17px;}}
 .badge.type{background:var(--blue-light);color:var(--blue-dark);font-weight:500;}
 
 .filters{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center;}
@@ -526,6 +531,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
     <a class="navitem" data-page="load" onclick="showPage('load')"><span class="ic">◔</span>Load management</a>
     <a class="navitem" data-page="tariffs" onclick="showPage('tariffs')"><span class="ic">$</span>Tariffs<span class="nav-badge" id="tariffs-badge"></span></a>
     <a class="navitem" data-page="walletactivity" onclick="showPage('walletactivity')"><span class="ic">◐</span>Wallet activity</a>
+    <a class="navitem" data-page="payments" id="payments-nav" onclick="showPage('payments')" style="display:none;"><span class="ic">◎</span>Payments<span class="nav-badge" id="payments-badge"></span></a>
     <div style="margin-top:auto;padding-top:14px;border-top:1px solid rgba(255,255,255,.12);">
       <div id="sidebar-identity" style="font-size:12px;color:rgba(255,255,255,.7);margin-bottom:8px;"></div>
       <a href="#" onclick="handleSignOut();return false;" style="font-size:13px;color:#fff;display:flex;align-items:center;gap:6px;"><span class="ic">⏻</span>Sign out</a>
@@ -832,6 +838,33 @@ tr.rowlink:hover td{background:#f0f6fc;}
           <table>
             <thead><tr id="wa-thead"><th>Date</th><th>Cardholder</th><th>Site</th><th>Client</th><th>Type</th><th>Amount</th><th>Operator</th></tr></thead>
             <tbody id="wa-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- PAYMENTS TO CHECK (plugndrive_admin only) -->
+      <div class="page" id="page-payments">
+        <div style="font-size:13px;color:var(--text-secondary);margin-bottom:14px;max-width:760px;line-height:1.5;">Card payments that need a human look. Refund in the payment provider (Paystack / PaySuite) using the reference, then press <b>Handled</b>. Nothing is refunded from this page.</div>
+        <div class="filters">
+          <select id="pay-filter" onchange="renderPayments()">
+            <option value="all">All cases</option>
+            <option value="failed_unrefunded">Refund failed</option>
+            <option value="ended_unsettled">Charge ended, not settled</option>
+            <option value="paid_no_charge">Paid, no charge</option>
+            <option value="extra_unpaid">Extra amount unpaid</option>
+            <option value="stuck_pending">Never completed</option>
+          </select>
+          <label style="font-size:13px;color:var(--text-secondary);display:flex;align-items:center;gap:6px;"><input type="checkbox" id="pay-handled" onchange="renderPayments()"> Show handled</label>
+        </div>
+        <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);">
+          <div class="kpi"><div class="kpi-label">To return to customers</div><div class="kpi-value" id="pay-kpi-return">-</div></div>
+          <div class="kpi"><div class="kpi-label">Owed by customers</div><div class="kpi-value" id="pay-kpi-owed">-</div></div>
+          <div class="kpi"><div class="kpi-label">Open cases</div><div class="kpi-value" id="pay-kpi-open">-</div></div>
+        </div>
+        <div class="card">
+          <table>
+            <thead><tr><th>Date</th><th>Customer</th><th>Charger</th><th>Paid</th><th>What happened</th><th>Reference</th><th></th></tr></thead>
+            <tbody id="pay-body"></tbody>
           </table>
         </div>
       </div>
@@ -2198,6 +2231,8 @@ function applyRoleBasedNav(){
   if(accessNav) accessNav.style.display = (isClientAdmin && clients[0] && clients[0].guestAccess) ? '' : 'none';
   const settingsNav = document.getElementById('settings-nav');
   if(settingsNav) settingsNav.style.display = isClientAdmin ? '' : 'none';
+  const paymentsNav = document.getElementById('payments-nav');
+  if(paymentsNav) paymentsNav.style.display = (currentStaff && currentStaff.role === 'plugndrive_admin') ? '' : 'none';
   const addSiteBtn = document.querySelector('#sites-list-view button.btn-primary');
   if(addSiteBtn) addSiteBtn.style.display = isClientAdmin ? 'none' : '';
   const addChargerBtn = document.querySelector('#chargers-list-view button.btn-primary');
@@ -2269,6 +2304,7 @@ async function loadAll(){
   tariffs = (tarRes.data||[]).map(mapTariff);
   clients = (clientRes.data||[]).map(mapClient);
   updateTariffAlerts();
+  refreshPaymentAlerts();
 }
 
 // Attaches Google Places Autocomplete to an address input. Silently does
@@ -2389,7 +2425,7 @@ function showPage(id, opts){
   const parentNav = { addsite:'sites', addcharger:'chargers', addclient:'clients' };
   const navEl = document.querySelector(`.navitem[data-page="${parentNav[id] || id}"]`);
   if(navEl) navEl.classList.add('active');
-  const titles={dashboard:'Dashboard',sites:'Sites',addsite:'Add site',chargers:'Chargers',addcharger:'Add charger',sessions:'Sessions',rfid:'RFID cards',load:'Load management',tariffs:'Tariffs',clients:'Clients',addclient:'Add client',myoperators:'My operators',walletactivity:'Wallet activity',settings:'Settings',exchangerates:'Exchange rates',reporting:'Reporting',access:'Access'};
+  const titles={dashboard:'Dashboard',sites:'Sites',addsite:'Add site',chargers:'Chargers',addcharger:'Add charger',sessions:'Sessions',rfid:'RFID cards',load:'Load management',tariffs:'Tariffs',clients:'Clients',addclient:'Add client',myoperators:'My operators',walletactivity:'Wallet activity',payments:'Payments',settings:'Settings',exchangerates:'Exchange rates',reporting:'Reporting',access:'Access'};
   document.getElementById('topbar-title').textContent = titles[id];
   if(!opts.skipNav) navigate(ROUTES[id] ? ROUTES[id]() : '/'+id);
   if(id==='sites') renderSites();
@@ -2405,6 +2441,7 @@ function showPage(id, opts){
   if(id==='addclient') renderAddClient();
   if(id==='myoperators') renderMyOperators();
   if(id==='walletactivity') renderWalletActivity();
+  if(id==='payments') renderPayments();
   if(id==='settings') renderSettings();
   if(id==='exchangerates') renderExchangeRates();
   if(id==='reporting') renderReporting();
@@ -2416,7 +2453,7 @@ function showPage(id, opts){
 function routeFromLocation(){
   const parts = location.pathname.split('/').filter(Boolean); // e.g. ['sites','<id>']
   const page = parts[0] || 'dashboard';
-  const knownPages = ['dashboard','sites','addsite','chargers','addcharger','sessions','rfid','load','tariffs','clients','addclient','myoperators','walletactivity','settings','exchangerates','reporting','access'];
+  const knownPages = ['dashboard','sites','addsite','chargers','addcharger','sessions','rfid','load','tariffs','clients','addclient','myoperators','walletactivity','payments','settings','exchangerates','reporting','access'];
   if(!knownPages.includes(page)){ showPage('dashboard'); return; }
 
   showPage(page, {skipNav:true});
@@ -3447,6 +3484,105 @@ async function renderWalletActivity(){
     );
     return `<tr>${cells.join('')}</tr>`;
   }).join('') || `<tr><td colspan="${isAdmin?7:6}" class="empty">No wallet activity yet.</td></tr>`;
+}
+
+// --- Payments to check (plugndrive_admin only) ---
+// Read-only: lists card payments that need a human look; the refund itself is done in Paystack / PaySuite.
+// The only write is the "Handled" flag (admin_review_payment), which moves no money.
+let paymentIssues = [];
+const PAY_ISSUES = {
+  failed_unrefunded: { label: 'Refund failed', cls: 'faulted', why: 'The charge could not start and the automatic refund did not go through.' },
+  ended_unsettled:   { label: 'Not settled', cls: 'faulted', why: 'The charge ended but the refund or extra amount was never processed.' },
+  paid_no_charge:    { label: 'Paid, no charge', cls: 'faulted', why: 'Paid more than 24 h ago and no charge was completed.' },
+  extra_unpaid:      { label: 'Extra unpaid', cls: 'warn', why: 'An extra amount was requested and has not been paid after 24 h.' },
+  stuck_pending:     { label: 'Never completed', cls: 'offline', why: 'The payment page was opened but never completed. Usually nothing was taken.' },
+};
+function isActionablePayment(p){ return p && p.issue !== 'stuck_pending' && !p.reviewed_at; }
+async function refreshPaymentAlerts(){
+  const badge = document.getElementById('payments-badge');
+  if(!badge) return;
+  if(!(currentStaff && currentStaff.role === 'plugndrive_admin')){ badge.style.display = 'none'; badge.textContent = ''; return; }
+  try{
+    const { data, error } = await sb.rpc('admin_payment_issues', { p_include_reviewed: false });
+    if(error) throw error;
+    paymentIssues = data || [];
+    const n = paymentIssues.filter(isActionablePayment).length;
+    badge.style.display = n ? 'inline-flex' : 'none';
+    badge.textContent = n ? String(n) : '';
+  }catch(e){ /* the badge is only a hint: it must never disturb loading */ }
+}
+function payAge(min){
+  min = Number(min) || 0;
+  if(min < 60) return min + ' min ago';
+  if(min < 1440) return Math.floor(min/60) + ' h ago';
+  return Math.floor(min/1440) + ' d ' + Math.floor((min % 1440)/60) + ' h ago';
+}
+function payAction(p){
+  const prov = p.gateway === 'paysuite' ? 'PaySuite' : 'Paystack';
+  const r = p.to_refund == null ? null : Number(p.to_refund);
+  if(p.issue === 'stuck_pending') return 'Ignore unless the customer complains.';
+  if(p.issue === 'extra_unpaid') return `The customer still owes ${fmtMoney(Math.abs(r), p.currency)}.`;
+  if(p.issue === 'ended_unsettled'){
+    if(r == null) return `Check the session, then settle in ${prov}.`;
+    if(r > 0) return `Refund ${fmtMoney(r, p.currency)} in ${prov} (paid ${fmtMoney(p.amount, p.currency)}, charge cost ${fmtMoney(p.session_cost, p.currency)}).`;
+    if(r < 0) return `The customer owes ${fmtMoney(-r, p.currency)} more.`;
+    return 'Nothing to refund: just press Handled.';
+  }
+  return `Refund ${fmtMoney(r, p.currency)} in ${prov}.`;
+}
+async function renderPayments(){
+  const body = document.getElementById('pay-body');
+  if(!body) return;
+  const esc = v => String(v==null?'':v).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+  if(!(currentStaff && currentStaff.role === 'plugndrive_admin')){
+    body.innerHTML = '<tr><td colspan="7" class="empty">Only Plug n Drive administrators can see this page.</td></tr>';
+    return;
+  }
+  const showHandled = !!document.getElementById('pay-handled').checked;
+  const { data, error } = await sb.rpc('admin_payment_issues', { p_include_reviewed: showHandled });
+  if(error){ body.innerHTML = `<tr><td colspan="7" class="empty">${esc(error.message)}</td></tr>`; return; }
+  const all = data || [];
+  const sum = (rows, pos) => {
+    const t = {};
+    rows.forEach(p => { const v = Number(p.to_refund); if(!isFinite(v) || p.to_refund == null) return; if(pos ? v > 0 : v < 0) t[p.currency] = (t[p.currency] || 0) + Math.abs(v); });
+    const parts = Object.entries(t).map(([cur, amt]) => fmtMoney(amt, cur));
+    return parts.length ? parts.join(' + ') : '-';
+  };
+  const open = all.filter(isActionablePayment);
+  document.getElementById('pay-kpi-return').textContent = sum(open, true);
+  document.getElementById('pay-kpi-owed').textContent = sum(open, false);
+  document.getElementById('pay-kpi-open').textContent = String(open.length);
+  const f = document.getElementById('pay-filter').value;
+  const rows = f === 'all' ? all : all.filter(p => p.issue === f);
+  body.innerHTML = rows.map(p => {
+    const meta = PAY_ISSUES[p.issue] || { label: p.issue, cls: 'offline', why: '' };
+    const date = String(p.created_at || '').replace('T', ' ').slice(0, 16);
+    const handled = !!p.reviewed_at;
+    const btn = handled
+      ? `<button class="btn" onclick="reviewPayment('${esc(p.id)}', false)">Reopen</button>`
+      : `<button class="btn btn-primary" onclick="reviewPayment('${esc(p.id)}', true)">Handled</button>`;
+    const note = handled ? `<div class="pay-todo">Handled ${esc(String(p.reviewed_at).slice(0,10))}${p.review_note ? ' — ' + esc(p.review_note) : ''}</div>` : '';
+    return `<tr>
+      <td>${esc(date)}<div class="pay-todo">${esc(payAge(p.age_minutes))}</div></td>
+      <td>${esc(p.customer_name || '-')}<div class="pay-todo">${esc(p.customer_email || '')}${p.customer_phone ? '<br>' + esc(p.customer_phone) : ''}</div></td>
+      <td>${esc(p.charger_name || '-')}<div class="pay-todo">${esc(p.site_name || '')}</div></td>
+      <td>${esc(fmtMoney(p.amount, p.currency))}<div class="pay-todo">${esc(p.gateway)}</div></td>
+      <td><span class="badge ${meta.cls}"><span class="badge-dot"></span>${esc(meta.label)}</span><div class="pay-todo">${esc(meta.why)}</div><div class="pay-todo"><b>${esc(payAction(p))}</b></div>${note}</td>
+      <td><span class="pay-ref">${esc(p.reference)}</span></td>
+      <td>${btn}</td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="7" class="empty">${showHandled ? 'No cases.' : 'Nothing to check. All card payments are in order.'}</td></tr>`;
+}
+async function reviewPayment(id, reviewed){
+  let note = null;
+  if(reviewed){
+    note = window.prompt('Note (optional), e.g. "refunded in Paystack on 7 Oct" or "test payment":', '');
+    if(note === null) return;
+  }
+  const { error } = await sb.rpc('admin_review_payment', { p_id: id, p_note: note, p_reviewed: !!reviewed });
+  if(error){ alert(error.message); return; }
+  await renderPayments();
+  refreshPaymentAlerts();
 }
 
 // --- Exchange rates (plugndrive_admin only): the single shared source for
