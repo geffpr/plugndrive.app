@@ -880,7 +880,34 @@ tr.rowlink:hover td{background:#f0f6fc;}
 
       <!-- SHOP (plugndrive_admin only) -->
       <div class="page" id="page-shop">
-        <div class="section-title" style="margin:0 0 14px;">Delivery &amp; orders</div>
+        <div class="section-title" style="margin:0 0 14px;">Orders</div>
+        <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;max-width:1000px;margin-bottom:12px;">
+          <select id="shop-orders-filter" onchange="shopOrdersRender()" style="max-width:240px;">
+            <option value="todo">To do (paid, preparing)</option>
+            <option value="shipped">Shipped</option>
+            <option value="delivered">Delivered</option>
+            <option value="cancelled">Cancelled</option>
+            <option value="unpaid">Unpaid</option>
+            <option value="all">All</option>
+          </select>
+          <button class="btn" onclick="renderShopOrders()">Refresh</button>
+          <span id="shop-orders-msg" style="font-size:12.5px;"></span>
+        </div>
+        <div class="card card-pad" id="shop-ship-box" style="display:none;max-width:520px;margin-bottom:14px;">
+          <div style="font-weight:700;margin-bottom:12px;" id="shop-ship-title">Ship order</div>
+          <div class="form-row"><label>Tracking number</label><input type="text" id="shop-ship-tracking" maxlength="80" autocomplete="off"></div>
+          <button class="btn btn-primary" id="shop-ship-btn" onclick="shopShipConfirm()">Mark as shipped and e-mail the customer</button>
+          <button class="btn" onclick="shopShipCancel()">Cancel</button>
+          <span id="shop-ship-msg" style="font-size:12.5px;margin-left:10px;"></span>
+        </div>
+        <div class="card" style="max-width:1000px;margin-bottom:28px;">
+          <table>
+            <thead><tr><th>Order</th><th>Customer</th><th>Items &amp; delivery</th><th>Total</th><th>Status</th><th></th></tr></thead>
+            <tbody id="shop-orders-body"></tbody>
+          </table>
+        </div>
+
+        <div class="section-title" style="margin:0 0 14px;">Delivery &amp; e-mail</div>
         <div class="card card-pad" style="max-width:520px;margin-bottom:24px;">
           <div class="form-row"><label>Delivery price (R)</label><input type="number" id="shop-fee" min="0" step="0.01" inputmode="decimal"></div>
           <div class="form-row"><label>Free delivery from (R)</label><input type="number" id="shop-free" min="0" step="0.01" inputmode="decimal"><div class="hint">Leave empty if delivery is never free.</div></div>
@@ -3890,6 +3917,92 @@ async function renderShop(){
       <td style="white-space:nowrap;"><button class="btn" onclick="shopEdit('${shopEsc(p.id)}')">Edit</button> <button class="btn" onclick="shopToggle('${shopEsc(p.id)}','active')">${p.active ? 'Hide from public' : 'Publish to public'}</button> <button class="btn" onclick="shopToggle('${shopEsc(p.id)}','active_pro')">${p.active_pro ? 'Hide from pro' : 'Offer to pro'}</button></td>
     </tr>`;
   }).join('') || '<tr><td colspan="7" class="empty">No product yet. Press “Add a product”.</td></tr>';
+  await renderShopOrders();
+}
+
+// --- Shop orders (admin) ---
+let shopOrders = [];
+let shopShipId = null;
+const SHOP_STATUS = { pending_payment:'Unpaid', paid:'Paid — to prepare', preparing:'Preparing', shipped:'Shipped', delivered:'Delivered', cancelled:'Cancelled' };
+const SHOP_FILTERS = { todo:['paid','preparing'], shipped:['shipped'], delivered:['delivered'], cancelled:['cancelled'], unpaid:['pending_payment'], all:null };
+async function renderShopOrders(){
+  const body = document.getElementById('shop-orders-body');
+  if(!body || !shopIsAdmin()) return;
+  const r = await sb.from('shop_orders').select('*, shop_order_items(name,quantity), clients(name)').order('created_at', { ascending: false }).limit(300);
+  if(r.error){ body.innerHTML = `<tr><td colspan="6" class="empty">${shopEsc(r.error.message)}</td></tr>`; return; }
+  shopOrders = r.data || [];
+  shopOrdersRender();
+}
+function shopOrdersRender(){
+  const body = document.getElementById('shop-orders-body'); if(!body) return;
+  const f = document.getElementById('shop-orders-filter'), key = f && SHOP_FILTERS.hasOwnProperty(f.value) ? f.value : 'todo';
+  const allow = SHOP_FILTERS[key];
+  const rows = shopOrders.filter(o => !allow || allow.includes(o.status));
+  body.innerHTML = rows.map(o => {
+    const id = shopEsc(o.id), pro = o.channel === 'pro';
+    const who = pro
+      ? `<span class="badge active"><span class="badge-dot"></span>Pro</span> <b>${shopEsc(o.clients && o.clients.name ? o.clients.name : 'Pro client')}</b>`
+      : '<span class="badge offline"><span class="badge-dot"></span>Public</span>';
+    const items = (o.shop_order_items || []).map(i => `${shopEsc(i.quantity)} × ${shopEsc(i.name)}`).join('<br>');
+    const addr = [o.ship_address1, o.ship_address2, [o.ship_postcode, o.ship_city].filter(Boolean).join(' '), o.ship_province].filter(Boolean).map(shopEsc).join(', ');
+    const d = o.created_at ? new Date(o.created_at).toLocaleDateString('en-ZA') : '';
+    let actions = '';
+    if(o.status === 'paid') actions = `<button class="btn" onclick="shopSetStatus('${id}','preparing')">Start preparing</button> <button class="btn btn-primary" onclick="shopShipOpen('${id}')">Ship…</button> <button class="btn" onclick="shopSetStatus('${id}','cancelled')">Cancel</button>`;
+    else if(o.status === 'preparing') actions = `<button class="btn btn-primary" onclick="shopShipOpen('${id}')">Ship…</button> <button class="btn" onclick="shopSetStatus('${id}','cancelled')">Cancel</button>`;
+    else if(o.status === 'shipped') actions = `<button class="btn" onclick="shopShipOpen('${id}')">Edit tracking</button> <button class="btn btn-primary" onclick="shopSetStatus('${id}','delivered')">Mark delivered</button>`;
+    return `<tr>
+      <td><b>${shopEsc(o.number)}</b><div class="pay-todo">${shopEsc(d)}</div></td>
+      <td>${who}<div>${shopEsc(o.ship_name)}</div><div class="pay-todo">${shopEsc(o.contact_email || '')}${o.ship_phone ? ' · ' + shopEsc(o.ship_phone) : ''}</div></td>
+      <td>${items}<div class="pay-todo">${addr}</div>${o.customer_note ? `<div class="pay-todo">Note: ${shopEsc(o.customer_note)}</div>` : ''}</td>
+      <td>${shopEsc(fmtMoney(o.total, 'ZAR'))}</td>
+      <td>${shopEsc(SHOP_STATUS[o.status] || o.status)}${o.tracking_number ? `<div class="pay-todo">Tracking: ${shopEsc(o.tracking_number)}</div>` : ''}</td>
+      <td style="white-space:nowrap;">${actions}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="6" class="empty">No order here.</td></tr>';
+}
+const SHOP_NEXT = { preparing:['paid'], delivered:['shipped'], cancelled:['paid','preparing'] };
+async function shopSetStatus(id, status){
+  if(!shopIsAdmin()) return;
+  const o = shopOrders.find(x => x.id === id); if(!o) return;
+  if(!SHOP_NEXT[status] || !SHOP_NEXT[status].includes(o.status)) return;
+  if(status === 'cancelled' && !confirm(`Cancel order ${o.number}? The customer is NOT refunded automatically: refund the payment in Paystack if needed.`)) return;
+  const patch = { status };
+  if(status === 'delivered') patch.delivered_at = new Date().toISOString();
+  shopMsg('shop-orders-msg', 'Saving…');
+  const { error } = await sb.from('shop_orders').update(patch).eq('status', o.status).eq('id', id);
+  if(error){ shopMsg('shop-orders-msg', error.message, true); return; }
+  shopMsg('shop-orders-msg', '');
+  await renderShopOrders();
+}
+function shopShipOpen(id){
+  if(!shopIsAdmin()) return;
+  const o = shopOrders.find(x => x.id === id); if(!o || !['paid','preparing','shipped'].includes(o.status)) return;
+  shopShipId = id;
+  document.getElementById('shop-ship-title').textContent = `${o.status === 'shipped' ? 'Tracking for' : 'Ship'} ${o.number} — ${o.ship_name || ''}`;
+  document.getElementById('shop-ship-tracking').value = o.tracking_number || '';
+  shopMsg('shop-ship-msg', '');
+  document.getElementById('shop-ship-btn').disabled = false;
+  const box = document.getElementById('shop-ship-box'); box.style.display = 'block';
+  box.scrollIntoView && box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+function shopShipCancel(){ shopShipId = null; document.getElementById('shop-ship-box').style.display = 'none'; }
+async function shopShipConfirm(){
+  if(!shopIsAdmin() || !shopShipId) return;
+  const tracking = document.getElementById('shop-ship-tracking').value.trim();
+  if(tracking.length < 2 || tracking.length > 80){ shopMsg('shop-ship-msg', 'Please enter the tracking number.', true); return; }
+  const btn = document.getElementById('shop-ship-btn'); btn.disabled = true; shopMsg('shop-ship-msg', 'Saving…');
+  const { data, error } = await sb.functions.invoke('shop-ship', { body: { orderId: shopShipId, tracking } });
+  if(error || !data || !data.ok){
+    let m = data && data.error;
+    if(!m && error && error.context){ try { m = (await error.context.json()).error; } catch(e){ /* ignore */ } }
+    btn.disabled = false;
+    shopMsg('shop-ship-msg', m || (error && error.message) || 'Could not save.', true); return;
+  }
+  shopShipCancel();
+  if(data.mailSent) shopMsg('shop-orders-msg', 'Shipped. The customer has been e-mailed.');
+  else if(data.already) shopMsg('shop-orders-msg', 'Saved. No new e-mail (same tracking number as before).');
+  else shopMsg('shop-orders-msg', data.error || 'Shipped, but no e-mail was sent.', true);
+  await renderShopOrders();
 }
 
 async function saveShopSettings(){
