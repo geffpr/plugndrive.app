@@ -600,6 +600,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
     </div>
     <a class="navitem active" data-page="dashboard" onclick="showPage('dashboard')"><span class="ic">▦</span>Dashboard</a>
     <a class="navitem" data-page="reporting" onclick="showPage('reporting')"><span class="ic">◈</span>Reporting</a>
+    <a class="navitem" data-page="apikeys" id="apikeys-nav" onclick="showPage('apikeys')" style="display:none;"><span class="ic">&lt;/&gt;</span>API &amp; Keys</a>
     <div class="nav-section-label" id="admin-section-label" style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:rgba(255,255,255,.45);padding:14px 10px 4px;">Admin</div>
     <a class="navitem" data-page="clients" onclick="showPage('clients')"><span class="ic">▣</span>Clients</a>
     <a class="navitem" data-page="exchangerates" onclick="showPage('exchangerates')"><span class="ic">⇄</span>Exchange rates</a>
@@ -1270,6 +1271,46 @@ tr.rowlink:hover td{background:#f0f6fc;}
       </div>
 
       <!-- MY OPERATORS (client_admin only) -->
+      <!-- API & KEYS (client_admin): one key per integration, read-only access to the client's own data -->
+      <div class="page" id="page-apikeys">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+          <div class="section-title" style="margin:0;">API &amp; Keys</div>
+          <div style="display:flex;gap:8px;">
+            <a class="btn" href="https://plugndrive.co.za/api" target="_blank" rel="noopener" style="text-decoration:none;">Documentation &#8599;</a>
+            <button class="btn btn-primary" id="apikey-create-btn" onclick="openCreateApiKey()">+ Create key</button>
+          </div>
+        </div>
+        <div style="color:var(--text-muted);font-size:12px;margin:6px 0 12px;max-width:680px;">Connect your own tools (CRM, accounting, spreadsheets) to your Plug n Drive data. Keys give read-only access to your sites, chargers, charging sessions and drivers. Limit: 60 requests per minute per key, up to 10 active keys. Keep keys secret and give each tool its own key, so you can revoke one without affecting the others.</div>
+        <div id="apikey-create" class="card card-pad" style="display:none;max-width:420px;margin:12px 0;">
+          <div class="form-row"><label>Key name (what will use it?)</label><input type="text" id="apikey-name" maxlength="60" placeholder="e.g. CRM, Accounting"></div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-primary" id="apikey-submit" onclick="submitCreateApiKey()">Create key</button>
+            <button class="btn" onclick="closeCreateApiKey()">Cancel</button>
+          </div>
+          <div id="apikey-create-error" style="color:var(--red, #c0392b);font-size:12px;margin-top:8px;"></div>
+        </div>
+        <div id="apikey-reveal" class="card card-pad" style="display:none;max-width:680px;margin:12px 0;border-color:var(--amber, #b8791a);">
+          <div style="font-weight:600;margin-bottom:4px;">Copy your key now</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">For security, this key is shown only once. If you lose it, revoke it and create a new one.</div>
+          <div id="apikey-reveal-value" class="pay-ref" style="padding:10px;background:var(--surface, #f7f9fb);border:1px solid var(--border);border-radius:8px;"></div>
+          <div style="display:flex;gap:8px;margin-top:10px;align-items:center;">
+            <button class="btn btn-primary" onclick="copyApiKey()" id="apikey-copy-btn">Copy</button>
+            <button class="btn" onclick="hideApiKeyReveal()">I have copied it</button>
+          </div>
+        </div>
+        <div class="card">
+          <table>
+            <thead><tr><th>Name</th><th>Key</th><th>Created</th><th>Last used</th><th>Status</th><th></th></tr></thead>
+            <tbody id="apikeys-body"></tbody>
+          </table>
+        </div>
+        <div class="card card-pad" style="max-width:680px;margin-top:14px;">
+          <div style="font-weight:600;margin-bottom:6px;">Example</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">Replace YOUR_API_KEY with one of your keys. Endpoints: /v1/sites, /v1/chargers, /v1/sessions, /v1/drivers.</div>
+          <div class="pay-ref" id="apikey-example" style="padding:10px;background:var(--surface, #f7f9fb);border:1px solid var(--border);border-radius:8px;"></div>
+        </div>
+      </div>
+
       <div class="page" id="page-myoperators">
         <div style="display:flex;justify-content:space-between;align-items:center;">
           <div class="section-title" style="margin:0;">My operators</div>
@@ -2631,6 +2672,8 @@ function applyRoleBasedNav(){
   if(ratesNav) ratesNav.style.display = isClientAdmin ? 'none' : '';
   const adminLabel = document.getElementById('admin-section-label');
   if(adminLabel) adminLabel.style.display = isClientAdmin ? 'none' : '';
+  const apiKeysNav = document.getElementById('apikeys-nav');
+  if(apiKeysNav) apiKeysNav.style.display = isClientAdmin ? '' : 'none';
   const opsNav = document.getElementById('myoperators-nav');
   const operatorsOn = isClientAdmin && clients[0] && (clients[0].cashRecharges || clients[0].guestAccess);
   if(opsNav) opsNav.style.display = operatorsOn ? '' : 'none';
@@ -2822,6 +2865,7 @@ const ROUTES = {
   clientDetail: (id) => `/clients/${id}`,
   addclient: () => '/addclient',
   myoperators: () => '/myoperators',
+  apikeys: () => '/apikeys',
   settings: () => '/settings',
   shop: () => '/shop',
   proshop: () => '/proshop',
@@ -2844,7 +2888,7 @@ function showPage(id, opts){
   const parentNav = { addsite:'sites', addcharger:'chargers', addclient:'clients' };
   const navEl = document.querySelector(`.navitem[data-page="${parentNav[id] || id}"]`);
   if(navEl) navEl.classList.add('active');
-  const titles={dashboard:'Dashboard',sites:'Sites',addsite:'Add site',chargers:'Chargers',addcharger:'Add charger',sessions:'Sessions',rfid:'RFID cards',load:'Load management',tariffs:'Tariffs',clients:'Clients',addclient:'Add client',myoperators:'My operators',walletactivity:'Wallet activity',payments:'Payments',shop:'Shop',proshop:'Shop',photos:'Site photos',settings:'Settings',exchangerates:'Exchange rates',reporting:'Reporting',access:'Access'};
+  const titles={dashboard:'Dashboard',sites:'Sites',addsite:'Add site',chargers:'Chargers',addcharger:'Add charger',sessions:'Sessions',rfid:'RFID cards',load:'Load management',tariffs:'Tariffs',clients:'Clients',addclient:'Add client',myoperators:'My operators',apikeys:'API & Keys',walletactivity:'Wallet activity',payments:'Payments',shop:'Shop',proshop:'Shop',photos:'Site photos',settings:'Settings',exchangerates:'Exchange rates',reporting:'Reporting',access:'Access'};
   document.getElementById('topbar-title').textContent = titles[id];
   if(!opts.skipNav) navigate(ROUTES[id] ? ROUTES[id]() : '/'+id);
   if(id==='sites') renderSites();
@@ -2859,6 +2903,7 @@ function showPage(id, opts){
   if(id==='clients') renderClients();
   if(id==='addclient') renderAddClient();
   if(id==='myoperators') renderMyOperators();
+  if(id==='apikeys') renderApiKeys();
   if(id==='walletactivity') renderWalletActivity();
   if(id==='payments') renderPayments();
   if(id==='shop') renderShop();
@@ -2875,7 +2920,7 @@ function showPage(id, opts){
 function routeFromLocation(){
   const parts = location.pathname.split('/').filter(Boolean); // e.g. ['sites','<id>']
   const page = parts[0] || 'dashboard';
-  const knownPages = ['dashboard','sites','addsite','chargers','addcharger','sessions','rfid','load','tariffs','clients','addclient','myoperators','walletactivity','payments','shop','proshop','photos','settings','exchangerates','reporting','access'];
+  const knownPages = ['dashboard','sites','addsite','chargers','addcharger','sessions','rfid','load','tariffs','clients','addclient','myoperators','apikeys','walletactivity','payments','shop','proshop','photos','settings','exchangerates','reporting','access'];
   if(!knownPages.includes(page)){ showPage('dashboard'); return; }
 
   showPage(page, {skipNav:true});
@@ -5128,6 +5173,102 @@ async function saveFxRate(code){
   const { error } = await sb.from('currency_rates').upsert({ currency: code, rate_to_zar: val, updated_at: new Date().toISOString() });
   if(error){ alert(error.message); return; }
   await renderExchangeRates();
+}
+
+// ---------------- API & KEYS (client_admin) ----------------
+let apiKeysList = [];
+function akEsc(v){ return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function akDate(v){ return v ? String(v).slice(0,10) : ''; }
+function akRelative(v){
+  if(!v) return 'Never';
+  const ms = Date.now() - new Date(v).getTime();
+  if(!(ms >= 0)) return akDate(v);
+  const m = Math.floor(ms/60000);
+  if(m < 1) return 'Just now';
+  if(m < 60) return m + ' min ago';
+  const h = Math.floor(m/60);
+  if(h < 24) return h + ' h ago';
+  return akDate(v);
+}
+function akCleanMessage(msg){
+  const m = String(msg || '');
+  if(/limit of 10/i.test(m)) return 'You already have 10 active keys. Revoke one to create another.';
+  if(/not permitted/i.test(m)) return 'Only a client administrator can manage API keys.';
+  if(/name must be/i.test(m)) return 'Give the key a name of 1 to 60 characters.';
+  return 'Could not complete this action. Please try again.';
+}
+function renderApiKeyExample(){
+  const el = document.getElementById('apikey-example'); if(!el) return;
+  el.textContent = 'curl -H "Authorization: Bearer YOUR_API_KEY" \\\n  "' + SUPABASE_URL + '/functions/v1/api-v1/v1/sessions?from=2026-10-01&limit=50"';
+  el.style.whiteSpace = 'pre-wrap';
+}
+async function renderApiKeys(){
+  if(!(currentStaff && currentStaff.role === 'client_admin')){ showPage('dashboard'); return; }
+  hideApiKeyReveal();
+  closeCreateApiKey();
+  renderApiKeyExample();
+  const body = document.getElementById('apikeys-body');
+  body.innerHTML = '<tr><td colspan="6" class="empty">Loading…</td></tr>';
+  const { data, error } = await sb.rpc('list_api_keys');
+  if(error || !Array.isArray(data)){
+    body.innerHTML = '<tr><td colspan="6" class="empty">Could not load your keys. Please try again.</td></tr>';
+    return;
+  }
+  apiKeysList = data;
+  renderApiKeysTable();
+}
+function renderApiKeysTable(){
+  const body = document.getElementById('apikeys-body'); if(!body) return;
+  body.innerHTML = apiKeysList.map(k => {
+    const revoked = !!k.revoked_at;
+    return `<tr${revoked ? ' style="opacity:.55;"' : ''}><td>${akEsc(k.name)}</td><td><span class="pay-ref">${akEsc(k.prefix)}…</span></td><td>${akEsc(akDate(k.created_at))}</td><td>${akEsc(akRelative(k.last_used_at))}</td><td>${revoked ? 'Revoked ' + akEsc(akDate(k.revoked_at)) : 'Active'}</td>` +
+      `<td>${revoked ? '' : `<button class="btn btn-sm btn-danger" data-kid="${akEsc(k.id)}" onclick="revokeApiKey(this)">Revoke</button>`}</td></tr>`;
+  }).join('') || '<tr><td colspan="6" class="empty">No API keys yet. Create one to connect your own tools.</td></tr>';
+}
+function openCreateApiKey(){
+  hideApiKeyReveal();
+  document.getElementById('apikey-name').value = '';
+  document.getElementById('apikey-create-error').textContent = '';
+  document.getElementById('apikey-create').style.display = 'block';
+  document.getElementById('apikey-name').focus();
+}
+function closeCreateApiKey(){ const p = document.getElementById('apikey-create'); if(p) p.style.display = 'none'; }
+let apiKeyBusy = false;
+async function submitCreateApiKey(){
+  if(apiKeyBusy) return;
+  const errEl = document.getElementById('apikey-create-error'); errEl.textContent = '';
+  const name = document.getElementById('apikey-name').value.trim();
+  if(!name){ errEl.textContent = 'Give the key a name, for example the tool that will use it.'; return; }
+  apiKeyBusy = true; const btn = document.getElementById('apikey-submit'); btn.disabled = true;
+  const { data, error } = await sb.rpc('create_api_key', { p_name: name });
+  apiKeyBusy = false; btn.disabled = false;
+  if(error || !data || !data.key){ errEl.textContent = akCleanMessage(error && error.message); return; }
+  closeCreateApiKey();
+  document.getElementById('apikey-reveal-value').textContent = data.key;
+  document.getElementById('apikey-copy-btn').textContent = 'Copy';
+  document.getElementById('apikey-reveal').style.display = 'block';
+  const list = await sb.rpc('list_api_keys');
+  if(!list.error && Array.isArray(list.data)){ apiKeysList = list.data; renderApiKeysTable(); }
+}
+async function copyApiKey(){
+  const el = document.getElementById('apikey-reveal-value'); const btn = document.getElementById('apikey-copy-btn');
+  const text = el.textContent;
+  try { await navigator.clipboard.writeText(text); btn.textContent = 'Copied'; return; } catch(e) { /* fall back to manual selection */ }
+  try { const r = document.createRange(); r.selectNodeContents(el); const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r); btn.textContent = 'Selected: press Ctrl+C'; } catch(e) { /* nothing more to do */ }
+}
+function hideApiKeyReveal(){
+  const box = document.getElementById('apikey-reveal'); if(!box) return;
+  document.getElementById('apikey-reveal-value').textContent = '';   // the key leaves the page for good
+  box.style.display = 'none';
+}
+async function revokeApiKey(btn){
+  const id = btn.dataset.kid; const k = apiKeysList.find(x => x.id === id); if(!k) return;
+  if(!confirm(`Revoke the key "${k.name}"? Any tool using it will stop working immediately. This cannot be undone.`)) return;
+  btn.disabled = true;
+  const { error } = await sb.rpc('revoke_api_key', { p_id: id });
+  if(error){ btn.disabled = false; alert(akCleanMessage(error.message)); return; }
+  const list = await sb.rpc('list_api_keys');
+  if(!list.error && Array.isArray(list.data)){ apiKeysList = list.data; renderApiKeysTable(); }
 }
 
 async function renderMyOperators(){
