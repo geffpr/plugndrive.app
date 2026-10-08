@@ -1632,7 +1632,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
           <div class="section-title">Site tariffs</div>
           <div class="card">
             <table>
-              <thead><tr><th>Site</th><th>Currency</th><th>Day price</th><th>Night price</th><th>Monthly fee</th><th>Included kWh/mo</th></tr></thead>
+              <thead><tr><th>Site</th><th>Currency</th><th>Day price</th><th>Night price</th><th>Night hours</th><th>Monthly fee</th><th>Included kWh/mo</th></tr></thead>
               <tbody id="site-tariffs-body"></tbody>
             </table>
           </div>
@@ -1675,6 +1675,9 @@ tr.rowlink:hover td{background:#f0f6fc;}
             <div class="form-row">
               <label>Night end</label>
               <input type="time" id="tf-night-end">
+            </div>
+            <div class="form-row" style="margin-top:-6px;color:var(--text-secondary);font-size:12px;">
+              Night hours are read in the site's local time. The price in force when a charge starts applies to the whole charge, even if it runs past the change.
             </div>
             <div class="form-row">
               <label>Idle fee (per minute, once charge is done but vehicle stays plugged in)</label>
@@ -5578,6 +5581,22 @@ async function toggleLoadManagement(locationId, enabled){
 }
 
 function fmtTariffMoney(n, currency){ return n==null ? '-' : fmtMoney(n, currency); }
+function hhmm(v){ return v ? String(v).slice(0,5) : ''; }
+function fmtNightWindow(t){
+  if(!t || t.priceNight==null || t.priceNight==='') return '-';
+  const a = hhmm(t.nightStart), b = hhmm(t.nightEnd);
+  if(!a || !b || a===b) return '<span style="color:var(--red);font-weight:600;">Hours missing</span>';
+  return a + ' \u2192 ' + b;
+}
+// Returns an error message, or '' when the night part of a tariff is consistent.
+function validateNightTariff(price, start, end){
+  const hasP = price !== '' && price != null, hasS = !!start, hasE = !!end;
+  if(!hasP && !hasS && !hasE) return '';
+  if(hasP && (!hasS || !hasE)) return 'Night price needs both a night start and a night end.';
+  if(!hasP) return 'Night hours need a night price (or clear both hours).';
+  if(start === end) return 'Night start and night end cannot be the same time.';
+  return '';
+}
 
 function renderTariffs(){
   updateTariffAlerts();
@@ -5590,6 +5609,7 @@ function renderTariffs(){
       <td>${r.name}</td><td>${r.currency}</td>
       <td>${t?fmtTariffMoney(t.priceDay,t.currency):'<span style="color:var(--red);font-weight:600;">Not set</span>'}</td>
       <td>${t?fmtTariffMoney(t.priceNight,t.currency):'-'}</td>
+      <td>${t?fmtNightWindow(t):'-'}</td>
       <td>${t?fmtTariffMoney(t.monthlyFee,t.currency):'-'}</td>
       <td>${t&&t.monthlyKwhIncluded!=null?t.monthlyKwhIncluded+' kWh':'-'}</td>
     </tr>`;
@@ -5646,11 +5666,14 @@ async function saveTariff(){
   const errEl = document.getElementById('tariff-edit-error');
   const priceDay = document.getElementById('tf-price-day').value;
   if(priceDay === ''){ errEl.textContent = 'Day price is required.'; return; }
+  const nightErr = validateNightTariff(document.getElementById('tf-price-night').value, document.getElementById('tf-night-start').value, document.getElementById('tf-night-end').value);
+  if(nightErr){ errEl.textContent = nightErr; return; }
+  errEl.textContent = '';
 
   const payload = {
     currency: document.getElementById('tf-currency').value,
     price_day: Number(priceDay),
-    price_night: document.getElementById('tf-price-night').value ? Number(document.getElementById('tf-price-night').value) : null,
+    price_night: document.getElementById('tf-price-night').value !== '' ? Number(document.getElementById('tf-price-night').value) : null,
     night_start: document.getElementById('tf-night-start').value || null,
     night_end: document.getElementById('tf-night-end').value || null,
     idle_fee_per_min: document.getElementById('tf-idle-fee').value ? Number(document.getElementById('tf-idle-fee').value) : null,
