@@ -856,6 +856,10 @@ tr.rowlink:hover td{background:#f0f6fc;}
         <div class="section-title" id="site-settings-title">Site settings</div>
         <div class="card card-pad" style="max-width:520px;">
           <div class="form-row">
+            <label>Site name</label>
+            <input type="text" id="ss-name" maxlength="120">
+          </div>
+          <div class="form-row">
             <label>Client</label>
             <select id="ss-client"><option value="">— No client assigned —</option></select>
           </div>
@@ -3515,6 +3519,7 @@ function openSiteSettings(id){
   clientSel.innerHTML = '<option value="">— No client assigned —</option>' +
     clients.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
   clientSel.value = loc.clientId || '';
+  document.getElementById('ss-name').value = loc.name || '';
   document.getElementById('ss-status').value = loc.status || 'Active';
   document.getElementById('ss-address').value = loc.address || '';
   document.getElementById('ss-city').value = loc.city || '';
@@ -3556,7 +3561,16 @@ async function saveSiteSettings(){
   const errEl = document.getElementById('site-settings-error');
   const pos = readSiteCoords('ss-lat','ss-lng');
   if(pos.error){ errEl.textContent = pos.error; return; }
+  const curLoc = locations.find(l=>l.id===siteSettingsTargetId);
+  const newName = document.getElementById('ss-name').value.trim().replace(/\s+/g,' ');
+  if(!newName){ errEl.textContent = 'Site name is required.'; return; }
+  const newClientId = document.getElementById('ss-client').value || null;
+  if(curLoc && newName !== curLoc.name){
+    const dup = locations.some(l => l.id !== siteSettingsTargetId && (l.clientId||null) === newClientId && (l.name||'').trim().toLowerCase() === newName.toLowerCase());
+    if(dup){ errEl.textContent = 'Another site of this client already uses this name.'; return; }
+  }
   const payload = {
+    name: newName,
     client_id: document.getElementById('ss-client').value || null,
     status: document.getElementById('ss-status').value,
     address: document.getElementById('ss-address').value.trim() || null,
