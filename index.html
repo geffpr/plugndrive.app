@@ -336,6 +336,11 @@ tr.rowlink:hover td{background:#f0f6fc;}
   .login-lang-btn{color:#fff;}
   .login-lang-btn.active{background:#fff;color:#1a3260;}
 }
+/* Operator (reception) screen: bigger touch targets, 16px inputs (no iOS zoom) */
+#operator-placeholder-screen .btn{min-height:46px;font-size:15px;}
+#operator-placeholder-screen .btn-sm{min-height:40px;font-size:14px;}
+#operator-placeholder-screen #op-amount-buttons .btn{min-height:52px;font-size:16px;}
+#operator-placeholder-screen input,#operator-placeholder-screen select{font-size:16px;}
 </style>
 
 </head>
@@ -442,6 +447,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
       <div>
         <img id="logo-operator" alt="Plug n Drive" style="height:40px;width:auto;">
         <div id="op-site-name" style="color:var(--text-muted);font-size:13px;margin-top:4px;"></div>
+        <div id="op-staff-name" style="color:var(--text-muted);font-size:12px;margin-top:2px;"></div>
       </div>
       <a href="#" onclick="handleSignOut();return false;" style="font-size:12px;color:var(--text-muted);" id="op-signout-label">Sign out</a>
     </div>
@@ -452,7 +458,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
     </div>
 
     <div id="op-search-step">
-      <div class="form-row"><label id="op-uid-label">Card UID</label><input type="text" id="op-search-uid" autofocus></div>
+      <div class="form-row"><label id="op-uid-label">Card UID</label><input type="text" id="op-search-uid" autofocus autocomplete="off" autocapitalize="characters" spellcheck="false" onkeydown="opEnter(event,'search')"></div>
       <button class="btn btn-primary btn-block" id="op-search-btn" onclick="operatorSearchCard()">Search</button>
     </div>
 
@@ -463,7 +469,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
         <div style="font-size:12px;color:#8a5a12;margin-top:2px;" id="op-currency-note"></div>
       </div>
       <div id="op-amount-buttons" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;"></div>
-      <div class="form-row"><label id="op-amount-label">Amount</label><input type="number" id="op-amount-input"></div>
+      <div class="form-row"><label id="op-amount-label">Amount</label><input type="number" id="op-amount-input" inputmode="decimal" onkeydown="opEnter(event,'confirm')"></div>
       <button class="btn btn-primary btn-block" id="op-confirm-btn" onclick="operatorConfirmCredit()">Confirm</button>
       <button class="btn btn-block" style="margin-top:8px;" id="op-cancel-btn" onclick="operatorResetForm()">Cancel</button>
     </div>
@@ -472,7 +478,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
       <div class="form-row"><label id="opg-group-label">Group</label><select id="opg-group" onchange="opgGroupChanged()"></select></div>
       <div id="opg-group-info" style="font-size:12px;color:var(--text-muted);margin:-4px 0 10px;"></div>
       <div id="opg-body">
-        <div class="form-row"><label id="opg-uid-label">Card code</label><input type="text" id="opg-uid"></div>
+        <div class="form-row"><label id="opg-uid-label">Card code</label><input type="text" id="opg-uid" autocomplete="off" autocapitalize="characters" spellcheck="false" onkeydown="opEnter(event,'find')"></div>
         <button class="btn btn-primary btn-block" id="opg-find-btn" onclick="opgFind()">Find</button>
 
         <div id="opg-found" style="display:none;margin-top:12px;">
@@ -2106,6 +2112,37 @@ const OP_QUICK_AMOUNTS = {
   BWP: [25,50,100,250], USD: [5,10,20,50], EUR: [5,10,20,50],
 };
 let opSite = null, opLang = 'en', opFoundCard = null, opInactivityTimer = null;
+// --- Card-reader helpers: a USB reader types the UID and presses Enter ---
+// Lookups are tolerant of case and of ":" / space separators; the card that
+// is found keeps whatever UID is stored. Dashes are never stripped (TEST-001).
+function opUidVariants(raw){
+  const base = String(raw == null ? '' : raw).trim(), out = [];
+  if(!base) return out;
+  const add = v => { if(v && out.indexOf(v) < 0) out.push(v); };
+  const compact = base.replace(/[\s:]+/g, '');
+  add(base); add(base.toUpperCase()); add(compact); add(compact.toUpperCase());
+  return out;
+}
+// UID stored for a card that does not exist yet: reader output (even-length hex,
+// 8-20 chars, optional separators) is stored compact + upper-case; anything else as typed.
+function opUidForNew(raw){
+  const base = String(raw == null ? '' : raw).trim(), compact = base.replace(/[\s:]+/g, '');
+  return (/^[0-9a-fA-F]{8,20}$/.test(compact) && compact.length % 2 === 0) ? compact.toUpperCase() : base;
+}
+function opVisible(el){
+  for(let n = el; n && n !== document.body; n = n.parentElement){ if(n.style && n.style.display === 'none') return false; }
+  return true;
+}
+function opFocus(id, select){
+  setTimeout(() => { const el = document.getElementById(id); if(el && opVisible(el)){ el.focus(); if(select && el.select) el.select(); } }, 30);
+}
+function opEnter(ev, what){
+  if(!ev || ev.key !== 'Enter') return;
+  ev.preventDefault();
+  if(what === 'search') operatorSearchCard();
+  else if(what === 'find') opgFind();
+  else if(what === 'confirm') operatorConfirmCredit();
+}
 // What this operator's organization is allowed to do. Fails closed: if the
 // answer can't be read, nothing is offered rather than everything.
 let opCaps = { cash: false, guest: false, guestOps: false };
@@ -2120,6 +2157,7 @@ async function initOperatorScreen(){
   opCaps = { cash: !!(caps && caps.cash), guest: !!(caps && caps.guest), guestOps: !!(caps && caps.guest_ops) };
 
   document.getElementById('op-site-name').textContent = site ? `${site.name} (${site.currency})` : 'No site assigned';
+  document.getElementById('op-staff-name').textContent = (currentStaff && currentStaff.name) ? currentStaff.name : '';
   document.getElementById('op-signout-label').textContent = t.signout;
   document.getElementById('op-uid-label').textContent = t.uid;
   document.getElementById('op-search-btn').textContent = t.search;
@@ -2143,11 +2181,15 @@ async function operatorSearchCard(){
   msgEl.style.color = 'var(--text-muted)'; msgEl.textContent = '';
   if(!uid) return;
 
-  const { data: card } = await sb.from('rfid_cards').select('*').eq('uid', uid).maybeSingle();
-  if(!card){ msgEl.style.color = 'var(--red,#c0392b)'; msgEl.textContent = t.notFound; return; }
+  let card = null;
+  for(const v of opUidVariants(uid)){
+    const r = await sb.from('rfid_cards').select('*').eq('uid', v).maybeSingle();
+    if(r.data){ card = r.data; break; }
+  }
+  if(!card){ msgEl.style.color = 'var(--red,#c0392b)'; msgEl.textContent = t.notFound; opFocus('op-search-uid', true); return; }
   const { data: cardUser } = await sb.from('users').select('*').eq('id', card.user_id).maybeSingle();
   if(!cardUser || cardUser.client_id !== currentStaff.client_id){
-    msgEl.style.color = 'var(--red,#c0392b)'; msgEl.textContent = t.wrongNetwork; return;
+    msgEl.style.color = 'var(--red,#c0392b)'; msgEl.textContent = t.wrongNetwork; opFocus('op-search-uid', true); return;
   }
 
   opFoundCard = { uid: card.uid, user: cardUser };
@@ -2169,8 +2211,10 @@ async function operatorSearchCard(){
   document.getElementById('op-amount-input').value = '';
   document.getElementById('op-search-step').style.display = 'none';
   document.getElementById('op-credit-step').style.display = 'block';
+  opFocus('op-amount-input');
 }
 async function operatorConfirmCredit(){
+  if(!opFoundCard || document.getElementById('op-confirm-btn').disabled) return;
   const t = OP_I18N[opLang];
   const msgEl = document.getElementById('op-message');
   const amount = Number(document.getElementById('op-amount-input').value);
@@ -2210,6 +2254,7 @@ function operatorResetForm(){
   const noteEl = document.getElementById('op-currency-note');
   if(noteEl) noteEl.textContent = '';
   if(opTab === 'guest') opgReset();
+  opFocus(opTab === 'guest' ? 'opg-uid' : 'op-search-uid');
 }
 
 // --- Operator screen: guests (only when the manager has given this operator the right) ---
@@ -2252,6 +2297,7 @@ async function opgReset(){
   document.getElementById('opg-list-title').style.display = has ? '' : 'none';
   if(!has){ document.getElementById('opg-list').innerHTML = ''; document.getElementById('opg-group-info').textContent = error ? '' : t.gNoGroups; return; }
   opgGroupChanged(true);
+  opFocus('opg-uid');
 }
 function opgGroupChanged(fromReset){
   const t = OP_I18N[opLang], g = opgGroup();
@@ -2272,12 +2318,18 @@ async function opgFind(){
   opgMsg(''); opgFound = null; opgNewUid = null;
   document.getElementById('opg-found').style.display = 'none'; document.getElementById('opg-new').style.display = 'none';
   const uid = document.getElementById('opg-uid').value.trim(); if(!uid) return;
-  const { data, error } = await sb.rpc('lookup_card_for_group', { p_client_id: currentStaff.client_id, p_uid: uid });
+  let data = null, error = null;
+  for(const v of opUidVariants(uid)){
+    const r = await sb.rpc('lookup_card_for_group', { p_client_id: currentStaff.client_id, p_uid: v });
+    if(!r.error){ data = r.data; error = null; break; }
+    error = r.error;
+    if(r.error.message !== 'Card not found') break;
+  }
   if(error){
     if(error.message === 'Card not found'){
       if(g.pricing_mode === 'free'){
-        opgNewUid = uid;
-        document.getElementById('opg-new-title').textContent = t.gNewTitle(uid);
+        opgNewUid = opUidForNew(uid);
+        document.getElementById('opg-new-title').textContent = t.gNewTitle(opgNewUid);
         ['opg-n-name', 'opg-n-phone', 'opg-n-email', 'opg-n-email2', 'opg-n-ref'].forEach(id => { document.getElementById(id).value = ''; });
         accResetUntil('on');
         document.getElementById('opg-new').style.display = 'block';
@@ -2303,6 +2355,7 @@ async function opgAdd(){
   opgFound = null; document.getElementById('opg-found').style.display = 'none'; document.getElementById('opg-uid').value = '';
   await opgNotify(data && data.member_id);
   await opgLoadList();
+  opFocus('opg-uid');
 }
 async function opgRegister(){
   const t = OP_I18N[opLang], g = opgGroup(); if(!g || !opgNewUid) return;
@@ -2323,6 +2376,7 @@ async function opgRegister(){
   opgNewUid = null; document.getElementById('opg-new').style.display = 'none'; document.getElementById('opg-uid').value = '';
   await opgNotify(data && data.member_id);
   await opgLoadList();
+  opFocus('opg-uid');
 }
 // The access is already granted when this runs: a failed message is reported, never undoes anything.
 async function opgNotify(memberId){
