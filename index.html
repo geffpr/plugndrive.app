@@ -616,6 +616,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
     <a class="navitem" data-page="walletactivity" onclick="showPage('walletactivity')"><span class="ic">◐</span>Wallet activity</a>
     <a class="navitem" data-page="payments" id="payments-nav" onclick="showPage('payments')" style="display:none;"><span class="ic">◎</span>Payments<span class="nav-badge" id="payments-badge"></span></a>
     <a class="navitem" data-page="shop" id="shop-nav" onclick="showPage('shop')" style="display:none;"><span class="ic">▣</span>Shop</a>
+    <a class="navitem" id="quotes-nav" href="/quote" style="display:none;"><span class="ic">▤</span>Quotes</a>
     <a class="navitem" data-page="photos" id="photos-nav" onclick="showPage('photos')" style="display:none;"><span class="ic">▤</span>Photos<span class="nav-badge" id="photos-badge"></span></a>
     <a class="navitem" data-page="proshop" id="proshop-nav" onclick="showPage('proshop')" style="display:none;"><span class="ic">▣</span>Shop</a>
     <div style="margin-top:auto;padding-top:14px;border-top:1px solid rgba(255,255,255,.12);">
@@ -2685,6 +2686,8 @@ function applyRoleBasedNav(){
   if(paymentsNav) paymentsNav.style.display = (currentStaff && currentStaff.role === 'plugndrive_admin') ? '' : 'none';
   const shopNav = document.getElementById('shop-nav');
   if(shopNav) shopNav.style.display = (currentStaff && currentStaff.role === 'plugndrive_admin') ? '' : 'none';
+  const quotesNav = document.getElementById('quotes-nav');
+  if(quotesNav) quotesNav.style.display = (currentStaff && currentStaff.role === 'plugndrive_admin') ? '' : 'none';
   const photosNav = document.getElementById('photos-nav');
   if(photosNav) photosNav.style.display = (currentStaff && (currentStaff.role === 'plugndrive_admin' || currentStaff.role === 'client_admin')) ? '' : 'none';
   const proShopNav = document.getElementById('proshop-nav');

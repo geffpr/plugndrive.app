@@ -1,5 +1,10 @@
 {
+  "headers": [
+    { "source": "/quote", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }] },
+    { "source": "/quote.html", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }] }
+  ],
   "rewrites": [
+    { "source": "/quote", "destination": "/quote.html" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
