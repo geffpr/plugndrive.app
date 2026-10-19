@@ -1261,6 +1261,20 @@ tr.rowlink:hover td{background:#f0f6fc;}
               <tr><td style="color:var(--text-muted);">Total chargers</td><td id="cl-total-chargers" style="text-align:right;"></td></tr>
             </table>
           </div>
+          <div id="cl-selfserve-panel" class="card card-pad" style="max-width:420px;margin-bottom:20px;display:none;">
+            <div class="section-title" style="margin-top:0;">Self-serve account</div>
+            <table>
+              <tr><td style="color:var(--text-muted);">Status</td><td id="cl-ss-status" style="text-align:right;"></td></tr>
+              <tr><td style="color:var(--text-muted);">Plan</td><td id="cl-ss-plan" style="text-align:right;"></td></tr>
+              <tr><td style="color:var(--text-muted);">Trial ends</td><td id="cl-ss-trialend" style="text-align:right;"></td></tr>
+              <tr><td style="color:var(--text-muted);">Declared</td><td id="cl-ss-declared" style="text-align:right;"></td></tr>
+            </table>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px;">
+              <select id="cl-ss-plan-select"></select>
+              <button class="btn btn-primary" id="cl-ss-activate-btn" onclick="activateSelfServe()">Activate</button>
+            </div>
+            <div class="hint" id="cl-ss-hint" style="margin-top:8px;">Activating unlocks the account, restores blocked cards and starts the 5% commission.</div>
+          </div>
           <div class="section-title" title="Energy sold (commission already deducted) minus cash this client's operators have collected on site. A positive balance is what Plug n Drive owes this client; a negative one is what this client owes Plug n Drive.">Ledger balance</div>
           <div class="card card-pad" style="max-width:420px;margin-bottom:20px;">
             <div id="cl-ledger-balance">Loading…</div>
@@ -3074,7 +3088,7 @@ function describeCommission(cl){
   // is negotiated — payouts are never paused while that happens.
   return `0% <span style="color:var(--red, #c0392b);">(previous ${cl.commissionRate}% deal ended ${end} — not renegotiated)</span>`;
 }
-function mapClient(c){ return {id:c.id, name:c.name, businessType:c.business_type, contactName:c.contact_name, contactPhone:c.contact_phone, contactEmail:c.contact_email, address:c.address, commissionRate:c.commission_rate, commissionStartDate:c.commission_start_date, commissionDurationMonths:c.commission_duration_months, contractStart:c.contract_start_date, payoutBankCode:c.payout_bank_code, payoutBankName:c.payout_bank_name, payoutAccountNumber:c.payout_account_number, payoutAccountName:c.payout_account_name, paystackRecipientCode:c.paystack_recipient_code, paystackConnectedAt:c.paystack_connected_at, cashRecharges:c.cash_recharges_enabled, guestAccess:c.guest_access_enabled, accountType:c.account_type, accountStatus:c.account_status, plan:c.plan, trialStartedAt:c.trial_started_at, trialEndsAt:c.trial_ends_at}; }
+function mapClient(c){ return {id:c.id, name:c.name, businessType:c.business_type, contactName:c.contact_name, contactPhone:c.contact_phone, contactEmail:c.contact_email, address:c.address, commissionRate:c.commission_rate, commissionStartDate:c.commission_start_date, commissionDurationMonths:c.commission_duration_months, contractStart:c.contract_start_date, payoutBankCode:c.payout_bank_code, payoutBankName:c.payout_bank_name, payoutAccountNumber:c.payout_account_number, payoutAccountName:c.payout_account_name, paystackRecipientCode:c.paystack_recipient_code, paystackConnectedAt:c.paystack_connected_at, cashRecharges:c.cash_recharges_enabled, guestAccess:c.guest_access_enabled, accountType:c.account_type, accountStatus:c.account_status, plan:c.plan, trialStartedAt:c.trial_started_at, trialEndsAt:c.trial_ends_at, declaredChargers:c.declared_chargers, declaredModel:c.declared_charger_model, ocpp16jAnswer:c.ocpp16j_answer, signupCountry:c.signup_country}; }
 
 async function loadAll(){
   const [locRes, chgRes, sesRes, rfidRes, userRes, tarRes, clientRes] = await Promise.all([
@@ -4085,7 +4099,7 @@ function renderClients(){
     const siteIds = sites.map(s=>s.id);
     const chargerCount = chargers.filter(c=>{ const root=rootOf(c.locationId); return root && siteIds.includes(root.id); }).length;
     return `<tr class="rowlink" onclick="openClient('${cl.id}')">
-      <td>${cl.name}</td><td>${cl.businessType}</td><td>${sites.length}</td><td>${chargerCount}</td>
+      <td>${cl.name}${cl.accountType==='self_serve' ? ' <span class="hint">('+(cl.accountStatus==='active'?'active':cl.accountStatus==='locked'?'locked':'trial')+')</span>' : ''}</td><td>${cl.businessType}</td><td>${sites.length}</td><td>${chargerCount}</td>
     </tr>`;
   }).join('');
 }
@@ -4183,6 +4197,41 @@ async function renderSettingsLedger(clientId){
   if(error){ el.textContent = error.message; return; }
   el.innerHTML = ledgerBalancesHtml(data) + ledgerHistoryHtml(data);
 }
+async function renderSelfServePanel(cl){
+  const box = document.getElementById('cl-selfserve-panel');
+  if(!cl || cl.accountType !== 'self_serve'){ box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  const lims = await ensurePlanLimits();
+  const lab = {trial:'Trial', locked:'Locked (trial ended)', active:'Active'};
+  document.getElementById('cl-ss-status').textContent = lab[cl.accountStatus] || cl.accountStatus || '-';
+  const cur = lims.find(p=>p.plan===cl.plan);
+  document.getElementById('cl-ss-plan').textContent = cur ? cur.label : (cl.plan || '-');
+  document.getElementById('cl-ss-trialend').textContent = cl.trialEndsAt ? fmtLongDate(cl.trialEndsAt) : '-';
+  document.getElementById('cl-ss-declared').textContent = [cl.declaredChargers!=null ? cl.declaredChargers+' charger(s)' : null, cl.declaredModel, cl.ocpp16jAnswer ? 'OCPP 1.6J: '+cl.ocpp16jAnswer : null, cl.signupCountry].filter(Boolean).join(', ') || '-';
+  const sel = document.getElementById('cl-ss-plan-select');
+  const opts = lims.filter(p=>p.plan!=='trial');
+  sel.innerHTML = opts.map(p=>`<option value="${bBadge(p.plan)}">${bEsc(p.label)}${p.monthly_price_zar? ' (R'+Number(p.monthly_price_zar).toLocaleString('en-ZA')+'/mo)':''}</option>`).join('');
+  if(cl.accountStatus==='active' && cl.plan && opts.some(p=>p.plan===cl.plan)) sel.value = cl.plan;
+  document.getElementById('cl-ss-activate-btn').textContent = cl.accountStatus==='active' ? 'Change plan' : 'Activate';
+}
+function bBadge(v){ return bEsc(v); }
+async function activateSelfServe(){
+  const cl = clients.find(x=>x.id===currentClientId);
+  const plan = document.getElementById('cl-ss-plan-select').value;
+  if(!cl || !plan) return;
+  const btn = document.getElementById('cl-ss-activate-btn');
+  btn.disabled = true;
+  const { data, error } = await sb.rpc('activate_self_serve_client', { p_client: cl.id, p_plan: plan });
+  btn.disabled = false;
+  if(error){ alert(error.message); return; }
+  if(!data || !data.ok){
+    const msgs = {too_many_chargers:`This client has ${data&&data.chargers} chargers, more than this plan allows (${data&&data.max}). Pick a bigger plan.`, too_many_cards:'This client has more RFID cards than this plan allows. Pick a bigger plan.', invalid_plan:'Invalid plan.', not_self_serve:'Not a self-serve account.'};
+    alert((data && msgs[data.error]) || 'Could not activate this account.');
+    return;
+  }
+  await loadAll();
+  openClient(cl.id, {skipNav:true});
+}
 function openClient(id, opts){
   opts = opts || {};
   currentClientId = id;
@@ -4204,6 +4253,7 @@ function openClient(id, opts){
   document.getElementById('cl-guest-access-label').textContent = cl.guestAccess ? 'Enabled' : 'Disabled';
   renderClientAdminLoginPanel(id);
   renderClientLedgerBalance(id);
+  renderSelfServePanel(cl);
 
   const sites = locations.filter(l=>l.clientId===id);
   const totalChargers = sites.reduce((sum, s) => sum + chargers.filter(c=>{ const root=rootOf(c.locationId); return root && root.id===s.id; }).length, 0);
