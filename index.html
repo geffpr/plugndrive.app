@@ -2588,6 +2588,7 @@ async function handleSignOut(reason){
   await sb.auth.signOut();
   clearTimeout(opInactivityTimer);
   stopChargerLivePolling();
+  stopRealtime();
   ['click','keydown'].forEach(evt => document.removeEventListener(evt, resetOperatorInactivityTimer));
   currentStaff = null;
   document.getElementById('app-root').style.display = 'none';
@@ -2618,6 +2619,7 @@ async function enterApp(){
   await loadMyFeatures();   // also re-applies the menu
   updateSidebarIdentity();
   routeFromLocation();
+  startRealtime();
 }
 
 // --- Operator screen (card credit) ---
@@ -3328,6 +3330,105 @@ async function loadAll(){
   refreshPaymentAlerts();
   refreshPhotoAlerts();
 }
+
+// ---------------- Live updates (Supabase Realtime) ----------------
+// The dashboard and the charger page used to show what was loaded at the start, so a charger
+// that began charging stayed "Available" until the page was refreshed. The console now listens
+// to changes on chargers and sessions. Access rules (RLS) apply to every event, so a client
+// only ever receives its own rows. If the live link drops, a light refresh every 30 s takes over,
+// and the link is paused while the tab is hidden (nothing to show, nothing to pay for).
+let rtChannel = null, rtOk = false, rtFallbackTimer = null, rtRenderTimer = null, rtHiddenTimer = null;
+function rtPageIs(id){ const p = document.getElementById('page-'+id); return !!(p && p.classList.contains('active')); }
+function rtChargerDetailOpen(){ const v = document.getElementById('charger-detail-view'); return rtPageIs('chargers') && !!v && v.style.display === 'block'; }
+function rtApply(arr, mapper, payload){
+  if(payload.eventType === 'DELETE'){
+    const id = payload.old && payload.old.id;
+    const i = arr.findIndex(x=>x.id===id);
+    if(i >= 0) arr.splice(i, 1);
+    return;
+  }
+  if(!payload.new || !payload.new.id) return;
+  const row = mapper(payload.new);
+  const i = arr.findIndex(x=>x.id===row.id);
+  if(i >= 0) arr[i] = row; else arr.unshift(row);
+}
+function rtScheduleRender(){
+  clearTimeout(rtRenderTimer);
+  rtRenderTimer = setTimeout(() => {
+    try{
+      if(rtPageIs('dashboard')) renderDashboard();
+      else if(rtChargerDetailOpen()) refreshChargerDetailLive();
+    }catch(e){ console.warn('live update render failed', e); }
+  }, 300);
+}
+// Updates only the live parts of an open charger page (the form fields and tabs are left alone).
+function refreshChargerDetailLive(){
+  const c = chargers.find(x=>x.id===currentChargerId);
+  if(!c) return;
+  const st = document.getElementById('cd-status'); if(st) st.innerHTML = statusBadge(c.status);
+  const os = document.getElementById('cd-ocpp-status'); if(os && c.ocppStatus) os.textContent = c.ocppStatus;
+  const ls = document.getElementById('cd-last-seen'); if(ls && c.lastSeenAt) ls.textContent = fmtLastSeen(c.lastSeenAt);
+  // The button is left alone while a remote command is in progress ("Sending command…").
+  const btn = document.getElementById('cd-remote-btn');
+  const stable = ['Remote stop charging','Remote start charging','Charger unavailable'];
+  if(btn && stable.includes(btn.textContent.trim())){
+    btn.disabled = false;
+    if(c.status==='Charging'){ btn.textContent='Remote stop charging'; btn.className='btn btn-danger btn-block'; }
+    else if(c.status==='Available'){ btn.textContent='Remote start charging'; btn.className='btn btn-primary btn-block'; }
+    else { btn.textContent='Charger unavailable'; btn.className='btn btn-block'; btn.disabled=true; }
+  }
+  const tb = document.getElementById('cd-sessions');
+  if(tb){
+    const rows = sessions.filter(s=>s.chargerId===c.id && s.endedAt).slice(0,10);
+    tb.innerHTML = rows.length ? rows.map(s=>{
+      const u = users.find(x=>x.id===s.userId);
+      return `<tr><td>${(s.startedAt||'').slice(0,10)}</td><td>${u?u.name:'-'}</td><td>${s.kwh??'-'} kWh</td><td>${fmtMoney(s.cost, s.currency)}</td></tr>`;
+    }).join('') : '<tr><td colspan="4" class="empty">No sessions yet.</td></tr>';
+  }
+}
+// Catch-up read (used when the live link is down, and when a hidden tab comes back).
+async function rtRefresh(){
+  if(!currentStaff || currentStaff.role === 'operator') return;
+  try{
+    const [c, s] = await Promise.all([
+      sb.from('chargers').select('*'),
+      sb.from('sessions').select('*').order('started_at', {ascending:false}).limit(100),
+    ]);
+    if(!c.error && c.data) chargers.splice(0, chargers.length, ...c.data.map(mapCharger));
+    if(!s.error && s.data) s.data.map(mapSession).forEach(row => {
+      const i = sessions.findIndex(x=>x.id===row.id);
+      if(i >= 0) sessions[i] = row; else sessions.unshift(row);
+    });
+    rtScheduleRender();
+  }catch(e){ console.warn('live refresh failed', e); }
+}
+function stopRealtime(){
+  clearInterval(rtFallbackTimer); rtFallbackTimer = null;
+  clearTimeout(rtHiddenTimer); rtHiddenTimer = null;
+  rtOk = false;
+  if(rtChannel){ try{ sb.removeChannel(rtChannel); }catch(e){} rtChannel = null; }
+}
+function startRealtime(){
+  stopRealtime();
+  if(!currentStaff || currentStaff.role === 'operator') return;
+  try{
+    rtChannel = sb.channel('console-live')
+      .on('postgres_changes', {event:'*', schema:'public', table:'chargers'}, p => { rtApply(chargers, mapCharger, p); rtScheduleRender(); })
+      .on('postgres_changes', {event:'*', schema:'public', table:'sessions'}, p => { rtApply(sessions, mapSession, p); rtScheduleRender(); })
+      .subscribe(status => { rtOk = (status === 'SUBSCRIBED'); });
+  }catch(e){ rtOk = false; console.warn('live link failed', e); }
+  rtFallbackTimer = setInterval(() => { if(!rtOk && !document.hidden) rtRefresh(); }, 30000);
+}
+document.addEventListener('visibilitychange', () => {
+  if(!currentStaff || currentStaff.role === 'operator') return;
+  if(document.hidden){
+    clearTimeout(rtHiddenTimer);
+    rtHiddenTimer = setTimeout(stopRealtime, 60000);   // a short tab switch keeps the link
+  } else {
+    clearTimeout(rtHiddenTimer); rtHiddenTimer = null;
+    if(!rtChannel){ rtRefresh(); startRealtime(); }
+  }
+});
 
 // Attaches Google Places Autocomplete to an address input. Silently does
 // nothing if the Maps JS API hasn't finished loading yet (plain text input
