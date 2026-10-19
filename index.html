@@ -231,6 +231,14 @@ button,input,select{font-family:'Montserrat',sans-serif;}
 .navitem:hover{background:rgba(255,255,255,.07);}
 .navitem.active{background:var(--blue);color:#fff;font-weight:700;box-shadow:0 6px 16px -6px rgba(58,143,212,.6);}
 .nav-section-label{font-weight:700;text-transform:none !important;letter-spacing:0 !important;}
+.prem-badge{display:inline-block;margin-left:8px;padding:1px 6px;border-radius:9px;font-size:9px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;background:#f5b301;color:#3a2a00;vertical-align:middle;line-height:14px;}
+.navitem.is-locked{opacity:.78;}
+.ft-row{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border,#e5e7eb);font-size:13px;}
+.ft-row:last-child{border-bottom:none;}
+.ft-row .ft-name{flex:1;}
+.ft-row .ft-src{font-size:11px;color:var(--text-muted);min-width:58px;text-align:right;}
+.ft-row .ft-src.ov{color:#b45309;font-weight:700;}
+.ft-row input[type=number]{width:74px;}
 
 /* Top bar */
 .main{background:var(--bg);}
@@ -890,7 +898,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
             </div>
             <div id="site-detail-map" style="width:300px;height:180px;border-radius:10px;overflow:hidden;flex-shrink:0;"></div>
             <div style="display:flex;flex-direction:column;gap:8px;">
-              <button class="btn btn-primary" onclick="addChargerToCurrentSite()">+ Add charger</button>
+              <button class="btn btn-primary" data-quota="chargers" onclick="addChargerToCurrentSite()">+ Add charger</button>
               <button class="btn" onclick="openSiteSettings(currentSiteId)">⚙ Settings</button>
             </div>
           </div>
@@ -1303,6 +1311,24 @@ tr.rowlink:hover td{background:#f0f6fc;}
               <tr><td style="color:var(--text-muted);">Total chargers</td><td id="cl-total-chargers" style="text-align:right;"></td></tr>
             </table>
           </div>
+          <div id="cl-features-panel" class="card card-pad" style="max-width:520px;margin-bottom:20px;">
+            <div class="section-title" style="margin-top:0;">Features</div>
+            <div class="hint" id="ft-mode" style="margin-bottom:10px;"></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
+              <select id="ft-preset">
+                <option value="">Start from a template…</option>
+                <option value="starter">Starter</option><option value="host">Host</option><option value="operator">Operator</option><option value="cpo">CPO</option><option value="enterprise">Enterprise</option>
+              </select>
+              <button class="btn btn-sm" onclick="applyFeaturePreset()">Apply</button>
+              <button class="btn btn-sm" onclick="resetClientFeatures()">Reset to default</button>
+            </div>
+            <div id="ft-rows"></div>
+            <div style="display:flex;gap:10px;align-items:center;margin-top:12px;">
+              <button class="btn btn-primary" id="ft-save-btn" onclick="saveClientFeatures()">Save features</button>
+              <span id="ft-msg" class="hint"></span>
+            </div>
+            <div class="hint" style="margin-top:8px;">0 = not included. Unlimited = no cap. Cash recharges and Guest access above still switch the My operators and Access menus on for contract clients.</div>
+          </div>
           <div id="cl-selfserve-panel" class="card card-pad" style="max-width:420px;margin-bottom:20px;display:none;">
             <div class="section-title" style="margin-top:0;">Self-serve account</div>
             <table>
@@ -1639,7 +1665,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
               </select>
               <input class="search" type="text" id="chg-search" placeholder="Search chargers..." oninput="renderChargers()">
             </div>
-            <button class="btn btn-primary" onclick="showPage('addcharger')">+ Add charger</button>
+            <button class="btn btn-primary" data-quota="chargers" onclick="showPage('addcharger')">+ Add charger</button>
           </div>
           <div class="card">
             <table>
@@ -2585,7 +2611,7 @@ async function enterApp(){
   applyRoleBasedNav();
   document.getElementById('app-root').style.display = '';
   await loadAll();
-  applyRoleBasedNav();
+  await loadMyFeatures();   // also re-applies the menu
   updateSidebarIdentity();
   routeFromLocation();
 }
@@ -3084,13 +3110,9 @@ function applyRoleBasedNav(){
   if(ratesNav) ratesNav.style.display = isPndAdmin ? '' : 'none';
   const adminLabel = document.getElementById('admin-section-label');
   if(adminLabel) adminLabel.style.display = isPndAdmin ? '' : 'none';
-  const apiKeysNav = document.getElementById('apikeys-nav');
-  if(apiKeysNav) apiKeysNav.style.display = isClientAdmin ? '' : 'none';
-  const opsNav = document.getElementById('myoperators-nav');
-  const operatorsOn = isClientAdmin && clients[0] && (clients[0].cashRecharges || clients[0].guestAccess);
-  if(opsNav) opsNav.style.display = operatorsOn ? '' : 'none';
-  const accessNav = document.getElementById('access-nav');
-  if(accessNav) accessNav.style.display = (isClientAdmin && clients[0] && clients[0].guestAccess) ? '' : 'none';
+  // Reporting, Load management, Access, My operators and API & Keys follow the plan (self-serve) or the manual
+  // switches (contract accounts). A locked entry shows a Premium badge on paid plans, and is hidden on Neighbour.
+  applyFeatureNav();
   const settingsNav = document.getElementById('settings-nav');
   if(settingsNav) settingsNav.style.display = isClientAdmin ? '' : 'none';
   const paymentsNav = document.getElementById('payments-nav');
@@ -3120,6 +3142,97 @@ function applyRoleBasedNav(){
   if(isClientAdmin) ensurePlanLimits();
   updateNavSections();
   updateTrialBar();
+}
+// ---------- Features by plan (self-serve) or by manual switches (contract accounts) ----------
+let myFeat = null;   // result of my_features(); null until loaded or for non client accounts
+const FEAT_PAGE = { access:'access_groups', myoperators:'operator_accounts', apikeys:'api_keys', load:'load_management', reporting:'reporting' };
+const FEAT_LABEL = { reporting:'Reporting', load_management:'Load management', tariff_advanced:'Day and night tariffs and idle fee', sms_activation:'Automatic SMS activation', resident_billing:'Resident billing', white_label:'White label', max_chargers:'Chargers', api_keys:'API keys', access_groups:'Access groups', operator_accounts:'Operator accounts' };
+const PLAN_NAME = { trial:'Trial', neighbour:'Neighbour', starter:'Starter', host:'Host', operator:'Operator', cpo:'CPO', enterprise:'Enterprise' };
+async function loadMyFeatures(){
+  if(!(currentStaff && currentStaff.role === 'client_admin')){ myFeat = null; return; }
+  try { const { data, error } = await sb.rpc('my_features'); myFeat = (!error && data && data.features) ? data : null; } catch(e){ myFeat = null; }
+  applyRoleBasedNav();
+}
+function featOn(k){ const v = myFeat && myFeat.features ? myFeat.features[k] : undefined; return v === true || v === null || (typeof v === 'number' && v > 0); }
+// Access and My operators on contract accounts keep their historical switches unless a manual override is set.
+function featGoverns(k){
+  if(!(myFeat && myFeat.features)) return false;
+  if(k !== 'access_groups' && k !== 'operator_accounts') return true;
+  return myFeat.mode === 'plan' || (myFeat.source && myFeat.source[k] === 'override');
+}
+function legacyFeatOn(k){
+  const c = clients[0]; if(!c) return false;
+  if(k === 'access_groups') return !!c.guestAccess;
+  if(k === 'operator_accounts') return !!(c.cashRecharges || c.guestAccess);
+  return true;
+}
+function featState(k){   // 'on' | 'premium' | 'hidden'
+  if(!(currentStaff && currentStaff.role === 'client_admin')) return 'on';
+  if(!featGoverns(k)) return legacyFeatOn(k) ? 'on' : 'hidden';
+  if(featOn(k)) return 'on';
+  return (myFeat.mode === 'plan' && myFeat.plan !== 'neighbour') ? 'premium' : 'hidden';
+}
+function applyFeatureNav(){
+  const isCA = !!(currentStaff && currentStaff.role === 'client_admin');
+  Object.keys(FEAT_PAGE).forEach(page => {
+    const el = document.querySelector(`.navitem[data-page="${page}"]`);
+    if(!el) return;
+    const st = isCA ? featState(FEAT_PAGE[page]) : 'on';
+    const clientOnly = (page === 'access' || page === 'myoperators' || page === 'apikeys');
+    el.style.display = (clientOnly && !isCA) ? 'none' : (st === 'hidden' ? 'none' : '');
+    el.classList.toggle('is-locked', st === 'premium');
+    let b = el.querySelector('.prem-badge');
+    if(st === 'premium'){ if(!b){ b = document.createElement('span'); b.className = 'prem-badge'; b.textContent = 'Premium'; el.appendChild(b); } }
+    else if(b) b.remove();
+  });
+  refreshQuotaButtons();
+}
+function chargerQuotaReached(){
+  const lim = myFeat && myFeat.features ? myFeat.features.max_chargers : null;
+  return typeof lim === 'number' && chargers.length >= lim;
+}
+function refreshQuotaButtons(){
+  const isCA = !!(currentStaff && currentStaff.role === 'client_admin');
+  document.querySelectorAll('[data-quota="chargers"]').forEach(btn => {
+    let b = btn.querySelector('.prem-badge');
+    if(isCA && chargerQuotaReached()){ if(!b){ b = document.createElement('span'); b.className = 'prem-badge'; b.textContent = 'Premium'; btn.appendChild(b); } }
+    else if(b) b.remove();
+  });
+}
+function nextChargerPlan(){
+  const p = (planLimits || []).filter(x => x.plan !== 'trial' && x.plan !== 'neighbour' && (x.max_chargers == null || x.max_chargers > chargers.length))[0];
+  return p ? p.plan : null;
+}
+function showUpgrade(key){
+  const lbl = FEAT_LABEL[key] || key;
+  const f = myFeat || {};
+  const v = f.features ? f.features[key] : undefined;
+  const plan = f.mode === 'plan';
+  let msg;
+  if(plan){
+    if(key === 'max_chargers'){
+      const np = nextChargerPlan();
+      msg = `Your plan allows ${v} charger${v === 1 ? '' : 's'}.` + (np ? ` Move to the ${PLAN_NAME[np]} plan to add more.` : ' Contact us to add more.');
+    } else if(typeof v === 'number' && v > 0){
+      msg = `Your plan includes ${v} ${lbl.replace(/^(?!API)(\w)/, c => c.toLowerCase())}. Move to a bigger plan to add more.`;
+    } else {
+      const p = (f.min_plan || {})[key];
+      msg = `${lbl} ${p ? 'is available from the ' + (PLAN_NAME[p] || p) + ' plan.' : 'is not included in your plan.'}`;
+    }
+  } else {
+    msg = `${lbl} ${typeof v === 'number' && v > 0 ? 'is limited to ' + v + ' on your account.' : 'is not included in your current setup.'} Contact hello@plugndrive.co.za to change it.`;
+  }
+  showModal('Premium feature', msg, () => { closeModal(); if(plan) showPage('billing'); }, plan ? 'See plans' : 'OK');
+}
+// Turns a server refusal into the upgrade message. Returns true when it handled the error.
+function handleFeatureError(message){
+  const m = String(message || '');
+  let key = null, x;
+  if((x = /feature_unavailable:\s*([a-z_]+)/.exec(m))) key = x[1];
+  else if((x = /plan_limit_([a-z_]+)/.exec(m))) key = (x[1] === 'chargers') ? 'max_chargers' : x[1];
+  if(!key) return false;
+  showUpgrade(key);
+  return true;
 }
 // A section title is shown only when at least one entry under it is visible.
 function updateNavSections(){
@@ -3357,7 +3470,7 @@ async function renderBilling(){
     head = `<div style="font-weight:700;font-size:16px;">Free trial</div>
       <div style="margin-top:4px;">${d} day${d===1?'':'s'} left. Ends on ${bEsc(fmtLongDate(c.trialEndsAt))}.</div>
       <div class="bill-bar"><div style="width:${Math.min(100, Math.round((total - d) / total * 100))}%"></div></div>
-      <div style="font-size:12px;color:var(--text-secondary);">During the trial: 1 charger, up to 3 RFID cards, no commission. Activate a plan before the end to keep everything running.</div>`;
+      <div style="font-size:12px;color:var(--text-secondary);">During the trial: 1 charger, a few test RFID cards, no commission. Activate a plan before the end to keep everything running.</div>`;
   } else if(c.closedAt){
     head = `<div style="font-weight:700;font-size:16px;color:var(--red);">Account closed</div>
       <div style="margin-top:4px;">Your account is closed and your subscription is cancelled. Your data is kept for 30 days. To reopen it, contact <a href="mailto:hello@plugndrive.co.za">hello@plugndrive.co.za</a>.</div>`;
@@ -3380,7 +3493,7 @@ async function renderBilling(){
   }
   const usage = lim ? `<div class="card card-pad" style="margin-top:12px;"><div style="font-weight:600;margin-bottom:6px;">Usage</div>
       <div style="font-size:13px;">Chargers: <b>${chargers.length}</b> of ${lim.max_chargers == null ? 'unlimited' : lim.max_chargers}</div>
-      <div style="font-size:13px;margin-top:2px;">RFID cards: <b>${cards}</b> of ${lim.max_rfid_cards == null ? 'unlimited' : lim.max_rfid_cards}</div></div>` : '';
+      <div style="font-size:13px;margin-top:2px;">RFID cards: <b>${cards}</b> <span style="color:var(--text-secondary);">(cards are bought separately)</span></div></div>` : '';
   const subscribed = st === 'active' && ['active','past_due'].includes(c.subscriptionStatus);
   let subInfo = { interval: null, has_subscription: false };
   if(subscribed){ try { const { data } = await sb.rpc('my_subscription_info'); if(data) subInfo = data; } catch(e){ /* keep defaults */ } }
@@ -3390,7 +3503,7 @@ async function renderBilling(){
   const grid = c.closedAt ? '' : plans.filter(p => p.plan !== 'trial' && (p.plan !== 'neighbour' || c.plan === 'neighbour')).map(p => {
     const feats = PLAN_FEATURE_LABELS.filter(([k]) => p.features && p.features[k]).map(([,l]) => l);
     const range = p.max_chargers == null ? `${p.min_chargers}+ chargers` : (p.min_chargers === p.max_chargers ? `${p.max_chargers} charger` : `${p.min_chargers} to ${p.max_chargers} chargers`);
-    const cards = p.max_rfid_cards == null ? 'Unlimited RFID cards' : (Number(p.max_rfid_cards) === 0 ? 'No RFID cards' : `Up to ${p.max_rfid_cards} RFID cards`);
+    const cards = 'RFID cards sold separately';
     // "Current plan" = same plan AND same rhythm when we know it (accounts activated by hand have no rhythm).
     const curInterval = subscribed ? (subInfo.interval || 'monthly') : null;
     const isCur = st === 'active' && c.plan === p.plan && (!subscribed || !subInfo.has_subscription || curInterval === billingView.interval);
@@ -3540,6 +3653,16 @@ function navigate(path){
 function showPage(id, opts){
   opts = opts || {};
   if(isLockedAccount() && id !== 'billing') id = 'billing';   // a locked trial can only reach the billing page
+  // A page the plan does not include opens the "available from plan X" message instead.
+  let lockKey = null;
+  if(FEAT_PAGE[id] && featState(FEAT_PAGE[id]) !== 'on') lockKey = FEAT_PAGE[id];
+  else if(id === 'addcharger' && chargerQuotaReached()) lockKey = 'max_chargers';
+  if(lockKey){
+    if(lockKey === 'max_chargers' || featState(lockKey) === 'premium') showUpgrade(lockKey);
+    if(document.querySelector('.page.active')) return;
+    id = 'dashboard';
+  }
+  refreshQuotaButtons();
   stopChargerLivePolling();
   closeMobileSidebar();
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
@@ -4445,6 +4568,107 @@ async function importClientCards(){
   const n = mine.filter(c=>c.status==='stock').length;
   document.getElementById('cl-cards-count').textContent = `${n} in stock, ${mine.length - n} assigned.`;
 }
+// ---------- Features panel (Plug n Drive admin, on the client page) ----------
+const FT_BOOLS = [['reporting','Reporting'],['load_management','Load management'],['tariff_advanced','Day and night tariffs, idle fee'],['sms_activation','Automatic SMS activation'],['resident_billing','Resident billing (coming soon)'],['white_label','White label (coming soon)']];
+const FT_LIMITS = [['max_chargers','Chargers'],['api_keys','API keys'],['access_groups','Access groups'],['operator_accounts','Operator accounts']];
+const FT_PRESETS = {
+  starter:    { reporting:true, load_management:false, tariff_advanced:false, sms_activation:false, resident_billing:false, white_label:false, max_chargers:1,    api_keys:1,    access_groups:0,    operator_accounts:0 },
+  host:       { reporting:true, load_management:true,  tariff_advanced:true,  sms_activation:true,  resident_billing:false, white_label:false, max_chargers:5,    api_keys:2,    access_groups:3,    operator_accounts:0 },
+  operator:   { reporting:true, load_management:true,  tariff_advanced:true,  sms_activation:true,  resident_billing:true,  white_label:false, max_chargers:15,   api_keys:5,    access_groups:null, operator_accounts:3 },
+  cpo:        { reporting:true, load_management:true,  tariff_advanced:true,  sms_activation:true,  resident_billing:true,  white_label:false, max_chargers:50,   api_keys:20,   access_groups:null, operator_accounts:15 },
+  enterprise: { reporting:true, load_management:true,  tariff_advanced:true,  sms_activation:true,  resident_billing:true,  white_label:true,  max_chargers:null, api_keys:null, access_groups:null, operator_accounts:null },
+};
+let ftData = null, ftDirty = new Set();
+async function renderFeaturesPanel(cl){
+  const box = document.getElementById('cl-features-panel');
+  if(!box) return;
+  if(!(currentStaff && currentStaff.role === 'plugndrive_admin')){ box.style.display = 'none'; return; }
+  box.style.display = '';
+  ftDirty = new Set(); ftData = null;
+  document.getElementById('ft-msg').textContent = '';
+  document.getElementById('ft-rows').innerHTML = '<div class="hint">Loading…</div>';
+  const { data, error } = await sb.rpc('admin_client_features', { p_client: cl.id });
+  if(cl.id !== currentClientId) return;
+  if(error || !data){ document.getElementById('ft-rows').innerHTML = `<div class="hint" style="color:var(--red)">${bEsc(error ? error.message : 'Could not load features')}</div>`; return; }
+  ftData = data;
+  drawFeatureRows();
+}
+function ftSrcLabel(k){
+  if(ftDirty.has(k)) return ['Changed', true];
+  const s = ftData.source && ftData.source[k];
+  if(s === 'override') return ['Manual', true];
+  return [s === 'plan' ? 'Plan' : 'Default', false];
+}
+function drawFeatureRows(values){
+  const vals = values || ftData.features;
+  const planTxt = ftData.mode === 'plan' ? `Self-serve: features follow the ${PLAN_NAME[ftData.plan] || ftData.plan || 'current'} plan unless set manually below.` : 'Contract account: features are set manually here.';
+  document.getElementById('ft-mode').textContent = planTxt;
+  let h = '';
+  FT_BOOLS.forEach(([k, label]) => {
+    const [src, ov] = ftSrcLabel(k);
+    h += `<div class="ft-row"><div class="ft-name">${bEsc(label)}</div><input type="checkbox" id="ft-b-${k}" ${vals[k] ? 'checked' : ''} onchange="ftMark('${k}')"><span class="ft-src${ov ? ' ov' : ''}" id="ft-s-${k}">${src}</span></div>`;
+  });
+  FT_LIMITS.forEach(([k, label]) => {
+    const [src, ov] = ftSrcLabel(k);
+    const unl = vals[k] === null || vals[k] === undefined;
+    h += `<div class="ft-row"><div class="ft-name">${bEsc(label)}</div><input type="number" min="0" max="99999" id="ft-n-${k}" value="${unl ? '' : vals[k]}" ${unl ? 'disabled' : ''} oninput="ftMark('${k}')"><label style="font-size:12px;display:flex;align-items:center;gap:4px;"><input type="checkbox" id="ft-u-${k}" ${unl ? 'checked' : ''} onchange="ftUnl('${k}')">Unlimited</label><span class="ft-src${ov ? ' ov' : ''}" id="ft-s-${k}">${src}</span></div>`;
+  });
+  document.getElementById('ft-rows').innerHTML = h;
+}
+function ftMark(k){
+  ftDirty.add(k);
+  const s = document.getElementById('ft-s-' + k);
+  if(s){ s.textContent = 'Changed'; s.className = 'ft-src ov'; }
+}
+function ftUnl(k){
+  const n = document.getElementById('ft-n-' + k), u = document.getElementById('ft-u-' + k);
+  n.disabled = u.checked;
+  if(u.checked) n.value = ''; else if(n.value === '') n.value = '0';
+  ftMark(k);
+}
+function applyFeaturePreset(){
+  const p = FT_PRESETS[document.getElementById('ft-preset').value];
+  if(!p || !ftData) return;
+  ftDirty = new Set(Object.keys(p));
+  drawFeatureRows(p);
+  document.getElementById('ft-msg').textContent = 'Template applied. Press Save to keep it.';
+}
+function ftCollect(){
+  const out = {}, keys = new Set([...(ftData && ftData.source ? Object.keys(ftData.source).filter(k => ftData.source[k] === 'override') : []), ...ftDirty]);
+  for(const k of keys){
+    if(FT_BOOLS.some(x => x[0] === k)) out[k] = document.getElementById('ft-b-' + k).checked;
+    else {
+      if(document.getElementById('ft-u-' + k).checked) out[k] = null;
+      else {
+        const raw = document.getElementById('ft-n-' + k).value.trim();
+        if(!/^[0-9]{1,5}$/.test(raw)) return { error: 'Enter a whole number (or tick Unlimited) for ' + (FT_LIMITS.find(x => x[0] === k) || [k, k])[1] + '.' };
+        out[k] = parseInt(raw, 10);
+      }
+    }
+  }
+  return { value: out };
+}
+async function ftPush(overrides, okText){
+  const msg = document.getElementById('ft-msg'), btn = document.getElementById('ft-save-btn');
+  btn.disabled = true; msg.textContent = 'Saving…';
+  const { data, error } = await sb.rpc('admin_set_client_features', { p_client: currentClientId, p_overrides: overrides });
+  btn.disabled = false;
+  if(error){ msg.textContent = error.message; return; }
+  ftData = data; ftDirty = new Set();
+  drawFeatureRows();
+  msg.textContent = okText;
+}
+async function saveClientFeatures(){
+  if(!ftData) return;
+  const c = ftCollect();
+  if(c.error){ document.getElementById('ft-msg').textContent = c.error; return; }
+  await ftPush(c.value, 'Saved.');
+}
+async function resetClientFeatures(){
+  if(!ftData) return;
+  if(!confirm('Remove every manual setting for this client and go back to the default?')) return;
+  await ftPush({}, 'Back to the default.');
+}
 async function renderSelfServePanel(cl){
   const box = document.getElementById('cl-selfserve-panel');
   if(!cl || cl.accountType !== 'self_serve'){ box.style.display = 'none'; return; }
@@ -4500,6 +4724,7 @@ function openClient(id, opts){
   document.getElementById('cl-cash-recharges-label').textContent = cl.cashRecharges ? 'Enabled' : 'Disabled';
   document.getElementById('cl-guest-access').checked = !!cl.guestAccess;
   document.getElementById('cl-guest-access-label').textContent = cl.guestAccess ? 'Enabled' : 'Disabled';
+  renderFeaturesPanel(cl);
   renderClientAdminLoginPanel(id);
   renderClientLedgerBalance(id);
   renderSelfServePanel(cl);
@@ -5637,7 +5862,7 @@ function accScopeText(g){
   return names.map(accEsc).join(', ');
 }
 async function renderAccess(){
-  const ok = currentStaff && currentStaff.role === 'client_admin' && clients[0] && clients[0].guestAccess;
+  const ok = currentStaff && currentStaff.role === 'client_admin' && featState('access_groups') === 'on';
   if(!ok){ showPage('dashboard'); return; }   // real enforcement is in the functions
   closeAccessGroupForm(); closeAccessMembers();
   await loadAccessGroups();
@@ -5732,7 +5957,7 @@ async function saveAccessGroup(){
     p_client_id: clients[0].id, p_group_id: document.getElementById('acc-g-id').value || null, p_name: name,
     p_pricing_mode: mode, p_discount_percent: mode === 'discount' ? pct : null, p_all_sites: allSites, p_site_ids: allSites ? null : siteIds, p_max_days: maxDays, p_reception_can_add: document.getElementById('acc-g-reception').checked,
     p_set_allowance: true, p_max_minutes: maxMinutes, p_max_kwh: maxKwh });
-  if(error){ errEl.textContent = error.message; return; }
+  if(error){ if(handleFeatureError(error.message)){ errEl.textContent = ''; return; } errEl.textContent = error.message; return; }
   closeAccessGroupForm();
   await loadAccessGroups();
 }
@@ -5983,6 +6208,7 @@ async function submitCreateApiKey(){
   apiKeyBusy = true; const btn = document.getElementById('apikey-submit'); btn.disabled = true;
   const { data, error } = await sb.rpc('create_api_key', { p_name: name });
   apiKeyBusy = false; btn.disabled = false;
+  if(error && handleFeatureError(error.message)){ return; }
   if(error || !data || !data.key){ errEl.textContent = akCleanMessage(error && error.message); return; }
   closeCreateApiKey();
   document.getElementById('apikey-reveal-value').textContent = data.key;
@@ -6016,7 +6242,7 @@ async function renderMyOperators(){
   // Real enforcement is server-side (the staff policy and the manage-operators
   // function); this just avoids showing a broken page if a client_admin
   // reaches this URL while both switches are off.
-  if(currentStaff && currentStaff.role === 'client_admin' && !(clients[0] && (clients[0].cashRecharges || clients[0].guestAccess))){
+  if(currentStaff && currentStaff.role === 'client_admin' && featState('operator_accounts') !== 'on'){
     showPage('dashboard');
     return;
   }
@@ -6026,7 +6252,7 @@ async function renderMyOperators(){
     document.getElementById('operators-body').innerHTML = `<tr><td colspan="6" class="empty">${error.message}</td></tr>`;
     return;
   }
-  const guestOn = !!(clients[0] && clients[0].guestAccess);
+  const guestOn = featState('access_groups') === 'on';
   document.getElementById('operators-guest-th').style.display = guestOn ? '' : 'none';
   document.getElementById('operators-body').innerHTML = (data||[]).map(o=>{
     const site = locations.find(l=>l.id===o.location_id);
@@ -6062,6 +6288,7 @@ async function submitAddOperator(){
   if(error || data?.error){
     let msg = data?.error;
     if(!msg && error?.context){ try { msg = (await error.context.json()).error; } catch {} }
+    if(msg && handleFeatureError(msg)){ errEl.textContent = ''; return; }
     errEl.textContent = msg || error?.message || 'Failed to create operator.';
     return;
   }
@@ -6613,10 +6840,10 @@ async function sendActivationSms(cardId, phone){
 // Which clients may send the activation code automatically (SMS). Everyone else copies it and shares it themselves.
 function canAutoSms(){
   if(currentStaff && currentStaff.role === 'plugndrive_admin') return true;
+  if(myFeat && myFeat.features) return myFeat.features.sms_activation === true;
   const c = clients[0];
   if(!c) return false;
-  if(c.accountType !== 'self_serve') return true;
-  return c.accountStatus === 'active' && ['host','operator','cpo','enterprise'].includes(c.plan);
+  return c.accountType !== 'self_serve';
 }
 function stockCards(){ return rfidCards.filter(c=>c.status==='stock'); }
 function acSitesFor(ownerClientId){
@@ -6758,7 +6985,8 @@ function renderLoad(){
   }).join('');
 }
 async function toggleLoadManagement(locationId, enabled){
-  await sb.from('locations').update({ load_management_enabled: enabled }).eq('id', locationId);
+  const { error: lmErr } = await sb.from('locations').update({ load_management_enabled: enabled }).eq('id', locationId);
+  if(lmErr && !handleFeatureError(lmErr.message)) alert(lmErr.message);
   await loadAll();
   renderLoad();
 }
@@ -6877,7 +7105,7 @@ async function saveTariff(){
     ? await sb.from('tariffs').update(payload).eq('id', existing.id)
     : await sb.from('tariffs').insert(payload);
 
-  if(error){ errEl.textContent = error.message; return; }
+  if(error){ if(handleFeatureError(error.message)){ errEl.textContent = ''; return; } errEl.textContent = error.message; return; }
   await loadAll();
   backToTariffs();
   renderTariffs();
