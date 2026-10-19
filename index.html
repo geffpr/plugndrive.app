@@ -1931,7 +1931,7 @@ const LOGIN_I18N = {
     noAccount: 'No account yet? Ask your administrator.',
     forgotTitle: 'Forgot your password?', forgotSub: "Enter your email and we'll send you a code.",
     sendCode: 'Send code', backToSignIn: 'Back to sign in',
-    verifyTitle: 'Check your email', verifyHint: 'If this email has an account, we sent a code to',
+    verifyTitle: 'Check your email', verifyHint: 'If this email has an account, we sent a code to', verifyHintSignup: 'Enter the code we sent to',
     codeLabel: 'Code', verifyBtn: 'Verify', resendCode: 'Resend code', resendIn: 'Resend code in {n}s',
     useDifferentEmail: 'Use a different email',
     resetTitle: 'Choose a new password', resetSub: 'You will be signed in right after.',
@@ -1971,7 +1971,7 @@ const LOGIN_I18N = {
     noAccount: 'Ainda não tem conta? Peça ao seu administrador.',
     forgotTitle: 'Esqueceu a palavra-passe?', forgotSub: 'Indique o seu email e enviaremos um código.',
     sendCode: 'Enviar código', backToSignIn: 'Voltar a iniciar sessão',
-    verifyTitle: 'Verifique o seu email', verifyHint: 'Se este email tiver uma conta, enviámos um código para',
+    verifyTitle: 'Verifique o seu email', verifyHint: 'Se este email tiver uma conta, enviámos um código para', verifyHintSignup: 'Introduza o código que enviámos para',
     codeLabel: 'Código', verifyBtn: 'Verificar', resendCode: 'Reenviar código', resendIn: 'Reenviar código em {n}s',
     useDifferentEmail: 'Usar outro email',
     resetTitle: 'Escolha uma nova palavra-passe', resetSub: 'A sessão será iniciada logo a seguir.',
@@ -2012,7 +2012,7 @@ try {
 function lt(key) { return (LOGIN_I18N[loginLang] && LOGIN_I18N[loginLang][key]) || LOGIN_I18N.en[key] || key; }
 
 let loginNoticeKind = null;
-let lgVerifyEmail = '', lgVerifying = false, lgBusy = false;
+let lgVerifyEmail = '', lgVerifyMode = 'recovery', lgVerifying = false, lgBusy = false;
 let lgResendSeconds = 0, lgResendTimer = null, lgCodeTimer = null;
 const LOGIN_SCREENS = { signin: 'login-signin', forgot: 'login-forgot', verify: 'login-verify', reset: 'login-reset', signup: 'login-signup', trial: 'login-trial' };
 const LOGIN_FIRST_FIELD = { signin: 'auth-email', forgot: 'lg-forgot-email', verify: 'lg-code', reset: 'lg-new-password', signup: 'su-email', trial: 'tr-company' };
@@ -2098,7 +2098,12 @@ async function handleSignIn() {
   setLoginBusy('lg-signin-btn', true, 'signInBtn', 'signingIn');
   try {
     const { error } = await sb.auth.signInWithPassword({ email, password });
-    if (error) { errEl.textContent = friendlyAuthError(error); return; }
+    if (error) {
+      if (error.code === 'email_not_confirmed' || /not confirmed/i.test(error.message || '')) {   // trial sign-up never confirmed: send a fresh code
+        await sb.auth.resend({ type: 'signup', email }); showLoginVerify(email, 'signup'); return;
+      }
+      errEl.textContent = friendlyAuthError(error); return;
+    }
     await enterApp();
     document.getElementById('auth-password').value = '';
   } catch (err) {
@@ -2142,8 +2147,11 @@ function startLoginResendCooldown(seconds) {
     if (lgResendSeconds === 0) clearInterval(lgResendTimer);
   }, 1000);
 }
-function showLoginVerify(email) {
+function showLoginVerify(email, mode) {
   lgVerifyEmail = email;
+  lgVerifyMode = mode === 'signup' ? 'signup' : 'recovery';
+  const hint = document.querySelector('#login-verify [data-lt^="verifyHint"]');
+  if (hint) { hint.setAttribute('data-lt', lgVerifyMode === 'signup' ? 'verifyHintSignup' : 'verifyHint'); hint.textContent = lt(hint.getAttribute('data-lt')); }
   document.getElementById('lg-verify-email').textContent = email;
   document.getElementById('lg-code').value = '';
   showLoginScreen('verify');
@@ -2151,7 +2159,7 @@ function showLoginVerify(email) {
 }
 function cancelLoginVerify() {
   clearInterval(lgResendTimer); clearTimeout(lgCodeTimer);
-  showLoginScreen('forgot');
+  showLoginScreen(lgVerifyMode === 'signup' ? 'signup' : 'forgot');
 }
 function onLoginCodeInput(input) {
   input.value = input.value.replace(/\D/g, '').slice(0, LOGIN_OTP_MAX);
@@ -2169,13 +2177,14 @@ async function handleVerifySubmit() {
   lgVerifying = true;
   document.getElementById('lg-verify-btn').disabled = true;
   try {
-    const { data, error } = await sb.auth.verifyOtp({ email: lgVerifyEmail, token, type: 'recovery' });
+    const { data, error } = await sb.auth.verifyOtp({ email: lgVerifyEmail, token, type: lgVerifyMode === 'signup' ? 'signup' : 'recovery' });
     if (error || !data || !data.session) {
       const bad = error && (error.code === 'otp_expired' || /expired|invalid/i.test(error.message || ''));
       errEl.textContent = (error && !bad) ? friendlyAuthError(error) : lt('errInvalidCode');
       return;
     }
     clearInterval(lgResendTimer);
+    if (lgVerifyMode === 'signup') { await enterApp(); return; }
     showLoginScreen('reset');
   } catch (err) {
     errEl.textContent = lt('errNetwork');
@@ -2189,7 +2198,7 @@ async function handleResendCode() {
   const errEl = document.getElementById('lg-verify-error');
   errEl.classList.remove('ok');
   errEl.textContent = '';
-  const { error } = await sb.auth.resetPasswordForEmail(lgVerifyEmail);
+  const { error } = lgVerifyMode === 'signup' ? await sb.auth.resend({ type: 'signup', email: lgVerifyEmail }) : await sb.auth.resetPasswordForEmail(lgVerifyEmail);
   if (error) { errEl.textContent = friendlyAuthError(error); return; }
   errEl.classList.add('ok');
   errEl.textContent = lt('codeResent');
@@ -2244,7 +2253,7 @@ async function handleSignUp() {
     // An address that already has an account comes back without identities: never reveal more than that.
     if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) { errEl.textContent = lt('errEmailTaken'); return; }
     if (data.session) { document.getElementById('su-password').value = ''; await enterApp(); return; }
-    errEl.textContent = lt('suCheckEmail'); errEl.classList.add('ok');
+    showLoginVerify(email, 'signup');
   } catch (err) {
     errEl.textContent = lt('errNetwork');
   } finally {
