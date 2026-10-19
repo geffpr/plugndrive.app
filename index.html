@@ -322,6 +322,9 @@ tr.rowlink:hover td{background:#f0f6fc;}
 .login-error{min-height:1.2em;margin-top:12px;font-size:12.5px;line-height:1.45;color:#c0392b;text-align:center;}
 .login-error.ok{color:#1f8a70;}
 .ts-box{display:flex;justify-content:center;margin:0 0 14px;min-height:0;}
+.tr-phone-row{display:flex;gap:8px;}
+.tr-phone-row select{width:118px;flex:none;height:48px;background:#f5f8fc;border:1.5px solid #dde5f0;border-radius:11px;padding:0 8px;font-size:14px;color:#1a3260;}
+.tr-phone-row input{flex:1;min-width:0;}
 .login-field select{width:100%;height:48px;background:#f5f8fc;border:1.5px solid #dde5f0;border-radius:11px;padding:0 12px;font-size:14px;color:#1a3260;outline:none;}
 .login-field select:focus{border-color:#3a8fd4;background:#fff;box-shadow:0 0 0 3px rgba(58,143,212,.16);}
 .login-google{background:#fff;color:#1a3260;border:1.5px solid #dde5f0;box-shadow:none;}
@@ -511,11 +514,13 @@ tr.rowlink:hover td{background:#f0f6fc;}
           <input type="text" id="tr-company" maxlength="120" autocomplete="organization"></div>
         <div class="login-field"><label for="tr-name" data-lt="trName">Your name</label>
           <input type="text" id="tr-name" maxlength="120" autocomplete="name"></div>
-        <div class="login-field"><label for="tr-phone" data-lt="trPhone">Phone (optional)</label>
-          <input type="tel" id="tr-phone" maxlength="40" autocomplete="tel"></div>
         <div class="login-field"><label for="tr-country" data-lt="trCountry">Country</label>
-          <input type="text" id="tr-country" maxlength="60" list="tr-countries" autocomplete="country-name">
-          <datalist id="tr-countries"><option value="South Africa"><option value="Mozambique"><option value="Namibia"><option value="Botswana"><option value="Zimbabwe"><option value="Zambia"><option value="Eswatini"><option value="Lesotho"><option value="Angola"><option value="Kenya"><option value="Mauritius"></datalist></div>
+          <select id="tr-country"></select></div>
+        <div class="login-field" id="tr-other-wrap" style="display:none"><label for="tr-other" data-lt="trOther">Your country</label>
+          <input type="text" id="tr-other" maxlength="60" autocomplete="country-name"></div>
+        <div class="login-field"><label for="tr-phone" data-lt="trPhone">Phone number (we will call you)</label>
+          <div class="tr-phone-row"><select id="tr-dial" aria-label="Country code"></select>
+          <input type="tel" id="tr-phone" maxlength="20" inputmode="tel" autocomplete="tel-national" placeholder="82 123 4567"></div></div>
         <div class="login-field"><label for="tr-count" data-lt="trCount">How many chargers do you have (or plan to have)?</label>
           <input type="number" id="tr-count" min="0" max="1000" inputmode="numeric"></div>
         <div class="login-field"><label for="tr-ocpp" data-lt="trOcpp">Does your charger support OCPP 1.6J?</label>
@@ -527,8 +532,6 @@ tr.rowlink:hover td{background:#f0f6fc;}
           </select></div>
         <div class="login-field"><label for="tr-model" data-lt="trModel">Charger brand and model (optional)</label>
           <input type="text" id="tr-model" maxlength="120"></div>
-        <div class="login-field" id="tr-invite-wrap"><label for="tr-invite" data-lt="trInvite">Invitation code</label>
-          <input type="text" id="tr-invite" maxlength="40" autocapitalize="none" spellcheck="false"></div>
         <button type="submit" class="login-btn" id="lg-trial-btn" data-lt="trBtn">Start my free trial</button>
         <div class="login-error" id="lg-trial-error" role="alert"></div>
         <div class="login-box" id="lg-trial-nocompat" style="display:none"></div>
@@ -1959,11 +1962,14 @@ const LOGIN_I18N = {
     suBtn: 'Create my account', suCheckEmail: 'Account created. Check your email to confirm it, then sign in here.',
     errShortPw: 'Your password needs at least 8 characters.', errEmailTaken: 'This email already has an account. Sign in instead.',
     trTitle: 'Tell us about your chargers', trSub: 'Last step. Your trial starts as soon as you continue.',
-    trCompany: 'Company or site name', trName: 'Your name', trPhone: 'Phone (optional)', trCountry: 'Country',
+    trCompany: 'Company or site name', trName: 'Your name', trPhone: 'Phone number (we will call you)', trCountry: 'Country', trOther: 'Your country', trOtherOpt: 'Other',
     trCount: 'How many chargers do you have (or plan to have)?', trOcpp: 'Does your charger support OCPP 1.6J?',
     trChoose: 'Choose…', trYes: 'Yes', trUnsure: 'I am not sure', trNo: 'No', trModel: 'Charger brand and model (optional)',
     trInvite: 'Invitation code', trBtn: 'Start my free trial', trCancel: 'Sign out',
-    errTrialFields: 'Please fill in company, country, number of chargers and the OCPP question.',
+    errTrialFields: 'Please fill in company, country, phone, number of chargers and the OCPP question.',
+    errPhone: 'Enter a valid phone number without the country code (digits only).',
+    errDisposable: 'Please use your professional or personal email address, not a temporary one.',
+    errDuplicate: 'A trial already exists for this company or phone number. Contact hello@plugndrive.co.za.',
     errInvite: 'This invitation code is not valid or has expired.', errTrialGeneric: 'We could not create your trial. Please try again.',
     errStaffAccount: 'This email already belongs to a Plug n Drive team account.',
     noCompat: 'Your charger needs OCPP 1.6J to work with our platform. We have compatible chargers.',
@@ -2000,11 +2006,14 @@ const LOGIN_I18N = {
     suBtn: 'Criar a minha conta', suCheckEmail: 'Conta criada. Confirme o email que enviámos e inicie sessão aqui.',
     errShortPw: 'A palavra-passe precisa de pelo menos 8 caracteres.', errEmailTaken: 'Este email já tem uma conta. Inicie sessão.',
     trTitle: 'Fale-nos dos seus carregadores', trSub: 'Último passo. O teste começa assim que continuar.',
-    trCompany: 'Empresa ou nome do local', trName: 'O seu nome', trPhone: 'Telefone (opcional)', trCountry: 'País',
+    trCompany: 'Empresa ou nome do local', trName: 'O seu nome', trPhone: 'Número de telefone (vamos ligar-lhe)', trCountry: 'País', trOther: 'O seu país', trOtherOpt: 'Outro',
     trCount: 'Quantos carregadores tem (ou planeia ter)?', trOcpp: 'O seu carregador suporta OCPP 1.6J?',
     trChoose: 'Escolha…', trYes: 'Sim', trUnsure: 'Não tenho a certeza', trNo: 'Não', trModel: 'Marca e modelo do carregador (opcional)',
     trInvite: 'Código de convite', trBtn: 'Começar o meu teste gratuito', trCancel: 'Terminar sessão',
-    errTrialFields: 'Preencha empresa, país, número de carregadores e a pergunta OCPP.',
+    errTrialFields: 'Preencha empresa, país, telefone, número de carregadores e a pergunta OCPP.',
+    errPhone: 'Indique um número de telefone válido, sem o indicativo do país (só dígitos).',
+    errDisposable: 'Use o seu email profissional ou pessoal, não um email temporário.',
+    errDuplicate: 'Já existe um teste para esta empresa ou este telefone. Contacte hello@plugndrive.co.za.',
     errInvite: 'Este código de convite não é válido ou expirou.', errTrialGeneric: 'Não foi possível criar o teste. Tente novamente.',
     errStaffAccount: 'Este email já pertence a uma conta da equipa Plug n Drive.',
     noCompat: 'O seu carregador precisa de OCPP 1.6J para funcionar na nossa plataforma. Temos carregadores compatíveis.',
@@ -2294,14 +2303,38 @@ async function handleSignUp() {
     tsReset('signup');
   }
 }
+const TRIAL_COUNTRIES = [['South Africa','+27'],['Mozambique','+258'],['Namibia','+264'],['Botswana','+267'],['Zimbabwe','+263'],['Zambia','+260'],['Eswatini','+268'],['Lesotho','+266'],['Angola','+244'],['Mauritius','+230'],['Kenya','+254'],['France','+33'],['Portugal','+351'],['United Kingdom','+44'],['United States','+1']];
+const TRIAL_DIALS_EXTRA = [['+31','Netherlands'],['+32','Belgium'],['+34','Spain'],['+39','Italy'],['+41','Switzerland'],['+49','Germany'],['+55','Brazil'],['+61','Australia'],['+91','India'],['+971','UAE']];
+function initTrialPhoneUi() {
+  const cs = document.getElementById('tr-country'), ds = document.getElementById('tr-dial');
+  if (!cs || cs.options.length) return;
+  TRIAL_COUNTRIES.forEach(([n, d]) => { cs.add(new Option(n, n)); });
+  cs.add(new Option(lt('trOtherOpt'), '__other'));
+  const seen = new Set();
+  TRIAL_COUNTRIES.forEach(([n, d]) => { if (!seen.has(d)) { seen.add(d); ds.add(new Option(d + ' ' + n, d)); } });
+  TRIAL_DIALS_EXTRA.forEach(([d, n]) => { if (!seen.has(d)) { seen.add(d); ds.add(new Option(d + ' ' + n, d)); } });
+  cs.addEventListener('change', () => {
+    const hit = TRIAL_COUNTRIES.find(c => c[0] === cs.value);
+    if (hit) ds.value = hit[1];
+    document.getElementById('tr-other-wrap').style.display = cs.value === '__other' ? '' : 'none';
+  });
+  cs.value = 'South Africa'; ds.value = '+27';
+}
+function trialPhoneE164() {
+  const dial = document.getElementById('tr-dial').value;
+  let n = document.getElementById('tr-phone').value.replace(/[\s().-]/g, '');
+  if (n.startsWith('+')) return /^\+\d{8,15}$/.test(n) ? n : null;   // typed in full: accepted as is
+  if (!/^\d+$/.test(n)) return null;
+  n = n.replace(/^0+/, '');
+  return (n.length >= 7 && n.length <= 12) ? dial + n : null;
+}
 async function showTrialQuestions(user) {
   document.getElementById('auth-screen').style.display = 'flex';
   document.getElementById('app-root').style.display = 'none';
   const meta = (user && user.user_metadata) || {};
   const nameEl = document.getElementById('tr-name');
   if (!nameEl.value) nameEl.value = meta.full_name || meta.name || '';
-  const invEl = document.getElementById('tr-invite');
-  if (!invEl.value) invEl.value = savedInvite();
+  initTrialPhoneUi();
   document.getElementById('lg-trial-nocompat').style.display = 'none';
   showLoginScreen('trial');
 }
@@ -2311,12 +2344,15 @@ async function handleTrialSubmit() {
   const errEl = document.getElementById('lg-trial-error'); errEl.textContent = '';
   const box = document.getElementById('lg-trial-nocompat'); box.style.display = 'none';
   const count = parseInt(v('tr-count'), 10);
-  if (v('tr-company').length < 2 || !v('tr-country') || !Number.isInteger(count) || count < 0 || !v('tr-ocpp')) { errEl.textContent = lt('errTrialFields'); return; }
+  const countryName = v('tr-country') === '__other' ? v('tr-other') : v('tr-country');
+  if (v('tr-company').length < 2 || !countryName || !v('tr-phone') || !Number.isInteger(count) || count < 0 || !v('tr-ocpp')) { errEl.textContent = lt('errTrialFields'); return; }
+  const phoneE164 = trialPhoneE164();
+  if (!phoneE164) { errEl.textContent = lt('errPhone'); return; }
   setLoginBusy('lg-trial-btn', true, 'trBtn', 'working');
   try {
     const { data, error } = await sb.functions.invoke('trial-signup', { body: {
-      company: v('tr-company'), name: v('tr-name'), phone: v('tr-phone'), country: v('tr-country'),
-      declaredChargers: count, ocpp16j: v('tr-ocpp'), chargerModel: v('tr-model'), invite: v('tr-invite') } });
+      company: v('tr-company'), name: v('tr-name'), phone: phoneE164, country: countryName,
+      declaredChargers: count, ocpp16j: v('tr-ocpp'), chargerModel: v('tr-model'), invite: savedInvite() } });
     if (error || !data) { errEl.textContent = lt('errTrialGeneric'); return; }
     if (data.ok) { try { localStorage.removeItem('pnd_invite'); } catch { /* ignore */ } await enterApp(); return; }
     if (data.error === 'ocpp_incompatible') {
@@ -2325,6 +2361,9 @@ async function handleTrialSubmit() {
       const a = document.createElement('a'); a.href = 'https://www.plugndrive.co.za/chargers'; a.target = '_blank'; a.rel = 'noopener'; a.textContent = lt('noCompatLink');
       box.appendChild(a); box.style.display = '';
     } else if (data.error === 'invite_invalid') errEl.textContent = lt('errInvite');
+    else if (data.error === 'phone_invalid') errEl.textContent = lt('errPhone');
+    else if (data.error === 'email_disposable') errEl.textContent = lt('errDisposable');
+    else if (data.error === 'duplicate') errEl.textContent = lt('errDuplicate');
     else if (data.error === 'staff_account') errEl.textContent = lt('errStaffAccount');
     else errEl.textContent = lt('errTrialGeneric');
   } catch (err) {
