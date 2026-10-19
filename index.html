@@ -3281,7 +3281,10 @@ async function renderBilling(){
     if(c.subscriptionStatus === 'cancelling') sub = `<div style="margin-top:6px;color:var(--red);">Subscription cancelled. Your plan stays active until ${when || 'the end of the paid period'}, then the account is switched off.</div>`;
     else if(c.subscriptionStatus === 'past_due') sub = `<div style="margin-top:6px;color:var(--red);">Your last payment did not go through. Please contact us to update your card.</div>`;
     else if(c.subscriptionStatus === 'active' && when) sub = `<div style="margin-top:6px;color:var(--text-secondary);">Next payment on ${when}.</div>`;
-    head = `<div style="font-weight:700;font-size:16px;">${bEsc(cur ? cur.label : 'Active')} plan</div>
+    head = c.plan === 'neighbour'
+      ? `<div style="font-weight:700;font-size:16px;">Neighbour Host</div>
+      <div style="margin-top:4px;">No monthly fee. Plug n Drive keeps 15% of each charging payment, payment fees included. Need RFID cards, tariffs by time of day or a business account? Move to Starter below.</div>`
+      : `<div style="font-weight:700;font-size:16px;">${bEsc(cur ? cur.label : 'Active')} plan</div>
       <div style="margin-top:4px;">${cur && cur.monthly_price_zar ? 'R ' + Number(cur.monthly_price_zar).toLocaleString('en-ZA') + ' per month, plus a 5% transaction fee.' : 'Active.'}</div>${sub}`;
   }
   const usage = lim ? `<div class="card card-pad" style="margin-top:12px;"><div style="font-weight:600;margin-bottom:6px;">Usage</div>
@@ -3293,7 +3296,7 @@ async function renderBilling(){
   if(!billingView.set){ billingView.interval = subInfo.interval || 'monthly'; billingView.set = true; }
   const annualView = billingView.interval === 'annual';
   const money = v => 'R ' + Number(v).toLocaleString('en-ZA');
-  const grid = c.closedAt ? '' : plans.filter(p => p.plan !== 'trial').map(p => {
+  const grid = c.closedAt ? '' : plans.filter(p => p.plan !== 'trial' && (p.plan !== 'neighbour' || c.plan === 'neighbour')).map(p => {
     const feats = PLAN_FEATURE_LABELS.filter(([k]) => p.features && p.features[k]).map(([,l]) => l);
     const range = p.max_chargers == null ? `${p.min_chargers}+ chargers` : (p.min_chargers === p.max_chargers ? `${p.max_chargers} charger` : `${p.min_chargers} to ${p.max_chargers} chargers`);
     const cards = p.max_rfid_cards == null ? 'Unlimited RFID cards' : `Up to ${p.max_rfid_cards} RFID cards`;
@@ -3302,7 +3305,8 @@ async function renderBilling(){
     const isCur = st === 'active' && c.plan === p.plan && (!subscribed || !subInfo.has_subscription || curInterval === billingView.interval);
     const hasAnnual = p.annual_price_zar != null;
     let price;
-    if(!p.monthly_price_zar) price = 'On quote';
+    if(p.plan === 'neighbour') price = '15%<small> per charge, no monthly fee</small>';
+    else if(!p.monthly_price_zar) price = 'On quote';
     else if(annualView && hasAnnual) price = `${money(p.annual_price_zar)}<small> / year</small><div style="font-size:11.5px;font-weight:500;color:var(--text-secondary);">${money(Math.round(p.annual_price_zar / 12))} / month, 10% off</div>`;
     else price = `${money(p.monthly_price_zar)}<small> / month</small>`;
     const mail = `mailto:hello@plugndrive.co.za?subject=${encodeURIComponent('Activate the ' + p.label + ' plan')}&body=${encodeURIComponent('Hello, I would like to activate the ' + p.label + ' plan for ' + c.name + '.')}`;
@@ -3324,7 +3328,7 @@ async function renderBilling(){
     ${c.closedAt ? '' : '<div class="section-title">Plans</div>' + toggle + '<div class="plan-grid">' + grid + '</div>'}
     ${c.closedAt ? '' : '<div id="bill-plan-msg" style="font-size:13px;margin-top:10px;"></div>'}
     ${manage}
-    <div style="font-size:12px;color:var(--text-secondary);margin-top:12px;">All prices in South African rand, plus a 5% fee on charging payments. Yearly plans are paid once a year and cost 10% less than 12 months. Secure card payment by Paystack. Cancel any time: your plan stays active until the end of the paid period.</div>`;
+    <div style="font-size:12px;color:var(--text-secondary);margin-top:12px;">All prices in South African rand, plus a 5% fee on charging payments (15% on Neighbour Host, which has no monthly fee). Yearly plans are paid once a year and cost 10% less than 12 months. Secure card payment by Paystack. Cancel any time: your plan stays active until the end of the paid period.</div>`;
   billingAfterPayment();
 }
 async function billingCall(action, extra){
