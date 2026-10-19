@@ -938,6 +938,22 @@ tr.rowlink:hover td{background:#f0f6fc;}
             <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">Filled automatically when you pick an address suggestion. Otherwise: in Google Maps, right-click the exact spot and click the numbers to copy them (you can paste both into the Latitude box).</div>
           </div>
           <div class="form-row">
+            <label>Description for drivers (optional, shown only to signed-in drivers)</label>
+            <textarea id="new-site-desc" maxlength="500" rows="3" placeholder="e.g. Blue gate, park on the left. Please do not block the driveway."></textarea>
+          </div>
+          <div class="form-row">
+            <label>Access</label>
+            <select id="new-site-access">
+              <option value="">Not set</option>
+              <option value="open">Open: drivers can come and charge</option>
+              <option value="by_arrangement">By arrangement: drivers contact the host first</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label>Host phone (optional, shown only to signed-in drivers)</label>
+            <input type="tel" id="new-site-hostphone" maxlength="30" placeholder="+27 82 123 4567" autocomplete="off">
+          </div>
+          <div class="form-row">
             <label>Timezone</label>
             <select id="new-site-timezone">
               <option value="Africa/Johannesburg">Africa/Johannesburg (SAST, UTC+2)</option>
@@ -1001,6 +1017,22 @@ tr.rowlink:hover td{background:#f0f6fc;}
               <input type="text" id="ss-lng" inputmode="decimal" placeholder="Longitude e.g. 28.1280" autocomplete="off">
             </div>
             <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">Filled automatically when you pick an address suggestion. Otherwise: in Google Maps, right-click the exact spot and click the numbers to copy them (you can paste both into the Latitude box). Leave both empty to hide the site from the map.</div>
+          </div>
+          <div class="form-row">
+            <label>Description for drivers (optional, shown only to signed-in drivers)</label>
+            <textarea id="ss-desc" maxlength="500" rows="3" placeholder="e.g. Blue gate, park on the left. Please do not block the driveway."></textarea>
+          </div>
+          <div class="form-row">
+            <label>Access</label>
+            <select id="ss-access">
+              <option value="">Not set</option>
+              <option value="open">Open: drivers can come and charge</option>
+              <option value="by_arrangement">By arrangement: drivers contact the host first</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label>Host phone (optional, shown only to signed-in drivers)</label>
+            <input type="tel" id="ss-hostphone" maxlength="30" placeholder="+27 82 123 4567" autocomplete="off">
           </div>
           <div class="form-row">
             <label>Timezone</label>
@@ -3078,7 +3110,7 @@ let users = [];
 let tariffs = [];
 let clients = [];
 
-function mapLocation(l){ return {id:l.id, name:l.name, type:l.type, parentId:l.parent_id, city:l.city, address:l.address, capacityKVA:l.capacity_kva, currency:l.currency, clientId:l.client_id, timezone:l.timezone, contactName:l.contact_name, contactPhone:l.contact_phone, contactEmail:l.contact_email, status:l.status, loadManagementEnabled:l.load_management_enabled, latitude:l.latitude, longitude:l.longitude}; }
+function mapLocation(l){ return {id:l.id, name:l.name, type:l.type, parentId:l.parent_id, city:l.city, address:l.address, capacityKVA:l.capacity_kva, currency:l.currency, clientId:l.client_id, timezone:l.timezone, contactName:l.contact_name, contactPhone:l.contact_phone, contactEmail:l.contact_email, status:l.status, loadManagementEnabled:l.load_management_enabled, latitude:l.latitude, longitude:l.longitude, siteDescription:l.site_description, accessMode:l.access_mode, hostPhone:l.host_phone}; }
 function mapCharger(c){ return {id:c.id, locationId:c.location_id, name:c.name, ocppId:c.ocpp_id, vendor:c.vendor, connector:c.connector, powerKW:c.power_kw, ocpp:c.ocpp_version, status:c.status, currentKW:c.current_kw, ocppPassword:c.ocpp_password, lastSeenAt:c.last_seen_at, ocppStatus:c.ocpp_status, listedPublicly:c.listed_publicly}; }
 function mapSession(s){ return {id:s.id, chargerId:s.charger_id, userId:s.user_id, rfidCardId:s.rfid_card_id, kwh:s.kwh, cost:s.cost, currency:s.currency, startedAt:s.started_at, endedAt:s.ended_at, paymentStatus:s.payment_status, payment:s.payment_method, groupId:s.access_group_id, groupMode:s.group_pricing_mode, groupPercent:s.group_discount_percent, offered:s.offered_value}; }
 function mapRfid(r){ return {id:r.id, uid:r.uid, userId:r.user_id, complexId:r.location_id, status:r.status}; }
@@ -3325,7 +3357,7 @@ async function renderBilling(){
   const grid = c.closedAt ? '' : plans.filter(p => p.plan !== 'trial' && (p.plan !== 'neighbour' || c.plan === 'neighbour')).map(p => {
     const feats = PLAN_FEATURE_LABELS.filter(([k]) => p.features && p.features[k]).map(([,l]) => l);
     const range = p.max_chargers == null ? `${p.min_chargers}+ chargers` : (p.min_chargers === p.max_chargers ? `${p.max_chargers} charger` : `${p.min_chargers} to ${p.max_chargers} chargers`);
-    const cards = p.max_rfid_cards == null ? 'Unlimited RFID cards' : `Up to ${p.max_rfid_cards} RFID cards`;
+    const cards = p.max_rfid_cards == null ? 'Unlimited RFID cards' : (Number(p.max_rfid_cards) === 0 ? 'No RFID cards' : `Up to ${p.max_rfid_cards} RFID cards`);
     // "Current plan" = same plan AND same rhythm when we know it (accounts activated by hand have no rhythm).
     const curInterval = subscribed ? (subInfo.interval || 'monthly') : null;
     const isCur = st === 'active' && c.plan === p.plan && (!subscribed || !subInfo.has_subscription || curInterval === billingView.interval);
@@ -4111,6 +4143,9 @@ function renderAddSite(){
   document.getElementById('new-site-lat').value = '';
   document.getElementById('new-site-lng').value = '';
   document.getElementById('new-site-capacity').value = '';
+  document.getElementById('new-site-desc').value = '';
+  document.getElementById('new-site-access').value = '';
+  document.getElementById('new-site-hostphone').value = (isSelfServe() && clients[0] && clients[0].plan === 'neighbour' && clients[0].contactPhone) ? clients[0].contactPhone : '';
   document.getElementById('new-site-error').textContent = '';
   const addrInput = document.getElementById('new-site-address');
   attachPlacesAutocomplete(addrInput, ({address, city, lat, lng}) => {
@@ -4137,7 +4172,10 @@ async function submitNewSite(){
 
   const { error } = await sb.from('locations').insert({
     name, type, parent_id: parentId, client_id: clientId, city, address, timezone, capacity_kva: capacity, currency,
-    latitude: pos.lat, longitude: pos.lng
+    latitude: pos.lat, longitude: pos.lng,
+    site_description: document.getElementById('new-site-desc').value.trim() || null,
+    access_mode: document.getElementById('new-site-access').value || null,
+    host_phone: document.getElementById('new-site-hostphone').value.trim() || null
   });
   if(error){ errEl.textContent = error.message; return; }
 
@@ -4176,6 +4214,9 @@ function openSiteSettings(id){
   document.getElementById('ss-contact-name').value = loc.contactName || '';
   document.getElementById('ss-contact-phone').value = loc.contactPhone || '';
   document.getElementById('ss-contact-email').value = loc.contactEmail || '';
+  document.getElementById('ss-desc').value = loc.siteDescription || '';
+  document.getElementById('ss-access').value = loc.accessMode || '';
+  document.getElementById('ss-hostphone').value = loc.hostPhone || '';
   document.getElementById('site-settings-error').textContent = '';
 
   const currencySel = document.getElementById('ss-currency');
@@ -4229,6 +4270,9 @@ async function saveSiteSettings(){
     currency: document.getElementById('ss-currency').value,
     latitude: pos.lat,
     longitude: pos.lng,
+    site_description: document.getElementById('ss-desc').value.trim() || null,
+    access_mode: document.getElementById('ss-access').value || null,
+    host_phone: document.getElementById('ss-hostphone').value.trim() || null,
   };
   const { error } = await sb.from('locations').update(payload).eq('id', siteSettingsTargetId);
   if(error){ errEl.textContent = error.message; return; }
