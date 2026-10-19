@@ -109,6 +109,26 @@ tr.rowlink:hover td{background:var(--blue-light);}
 .filters select, .filters input[type=text]{border:1px solid var(--border);border-radius:8px;padding:7px 10px;background:#fff;color:var(--text);}
 .filters .search{min-width:200px;}
 
+.trial-bar{display:none;align-items:center;gap:12px;flex-wrap:wrap;background:var(--blue-light);border:1px solid var(--blue-mid);color:var(--navy);border-radius:10px;padding:10px 14px;margin-bottom:16px;font-size:13px;}
+.trial-bar.locked{background:#fdecec;border-color:var(--red);color:var(--red);}
+.trial-bar .tb-text{flex:1;min-width:200px;}
+.trial-bar .tb-btn{flex:none;background:var(--blue);color:#fff;border:none;border-radius:8px;padding:7px 14px;font-weight:600;font-size:12px;cursor:pointer;}
+.onb-card{display:none;margin-bottom:16px;}
+.onb-step{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--border);font-size:13px;}
+.onb-step:first-of-type{border-top:none;}
+.onb-dot{width:20px;height:20px;border-radius:50%;border:2px solid var(--blue-mid);flex:none;display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff;}
+.onb-step.done .onb-dot{background:var(--blue);border-color:var(--blue);}
+.onb-step.done .onb-label{color:var(--text-muted);text-decoration:line-through;}
+.onb-label{flex:1;}
+.plan-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px;}
+.plan-card{border:1px solid var(--border);border-radius:10px;padding:14px 16px;background:#fff;display:flex;flex-direction:column;gap:6px;}
+.plan-card.current{border-color:var(--blue);box-shadow:0 0 0 2px var(--blue-light);}
+.plan-card .pc-name{font-weight:700;font-size:15px;}
+.plan-card .pc-price{font-size:20px;font-weight:800;color:var(--navy);}
+.plan-card .pc-price small{font-size:12px;font-weight:500;color:var(--text-secondary);}
+.plan-card ul{margin:4px 0 8px;padding-left:18px;font-size:12.5px;color:var(--text-secondary);flex:1;}
+.bill-bar{height:8px;background:var(--surface);border-radius:6px;overflow:hidden;margin:8px 0 4px;}
+.bill-bar>div{height:100%;background:var(--blue);}
 .btn{border:1px solid var(--border);background:#fff;color:var(--navy);padding:8px 14px;border-radius:8px;font-size:13px;font-weight:500;}
 .btn:hover{background:var(--surface);}
 .btn-primary{background:var(--blue);border-color:var(--blue);color:#fff;}
@@ -670,6 +690,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
     <a class="navitem" data-page="myoperators" id="myoperators-nav" onclick="showPage('myoperators')" style="display:none;"><span class="ic">◉</span>My operators</a>
     <a class="navitem" data-page="access" id="access-nav" onclick="showPage('access')" style="display:none;"><span class="ic">◇</span>Access</a>
     <a class="navitem" data-page="settings" id="settings-nav" onclick="showPage('settings')" style="display:none;"><span class="ic">⚙</span>Settings</a>
+    <a class="navitem" data-page="billing" id="billing-nav" onclick="showPage('billing')" style="display:none;"><span class="ic">◈</span>Billing</a>
     <a class="navitem" data-page="sites" onclick="showPage('sites')"><span class="ic">◫</span>Sites</a>
     <a class="navitem" data-page="chargers" onclick="showPage('chargers')"><span class="ic">⛽</span>Chargers</a>
     <a class="navitem" data-page="sessions" onclick="showPage('sessions')"><span class="ic">◷</span>Sessions</a>
@@ -699,12 +720,18 @@ tr.rowlink:hover td{background:#f0f6fc;}
 
     <div class="content">
 
+      <div class="trial-bar" id="trial-bar" role="status"><div class="tb-text" id="trial-bar-text"></div><button class="tb-btn" onclick="showPage('billing')">Billing</button></div>
+
+      <!-- BILLING -->
+      <div class="page" id="page-billing"><div id="billing-root"></div></div>
+
       <!-- DASHBOARD -->
       <div class="page active" id="page-dashboard">
         <div class="alert-banner" id="tariff-banner" role="alert">
           <div class="alert-body" id="tariff-banner-text"></div>
           <button class="alert-btn" onclick="showPage('tariffs')">Set tariffs</button>
         </div>
+        <div class="card card-pad onb-card" id="onboarding-card"></div>
         <div class="kpi-grid">
           <div class="kpi"><div class="kpi-label">Sites</div><div class="kpi-value" id="kpi-sites">-</div></div>
           <div class="kpi"><div class="kpi-label">Chargers</div><div class="kpi-value" id="kpi-chargers">-</div></div>
@@ -2912,6 +2939,7 @@ function updateSidebarIdentity(){
   }
 }
 function applyRoleBasedNav(){
+  document.querySelectorAll('[data-lock-hidden]').forEach(n => { n.style.display = ''; n.removeAttribute('data-lock-hidden'); });   // undo a previous lock before recomputing
   const isClientAdmin = currentStaff && currentStaff.role === 'client_admin';
   const clientsNav = document.querySelector('.navitem[data-page="clients"]');
   if(clientsNav) clientsNav.style.display = isClientAdmin ? 'none' : '';
@@ -2942,6 +2970,18 @@ function applyRoleBasedNav(){
   if(addSiteBtn) addSiteBtn.style.display = isClientAdmin ? 'none' : '';
   const addChargerBtn = document.querySelector('#chargers-list-view button.btn-primary');
   if(addChargerBtn) addChargerBtn.style.display = isClientAdmin ? 'none' : '';
+  // Self-serve (trial) accounts build their own sites and chargers.
+  if(isSelfServe() && !isLockedAccount()){
+    if(addSiteBtn) addSiteBtn.style.display = '';
+    if(addChargerBtn) addChargerBtn.style.display = '';
+  }
+  const billingNav = document.getElementById('billing-nav');
+  if(billingNav) billingNav.style.display = isClientAdmin ? '' : 'none';
+  if(isLockedAccount()){
+    document.querySelectorAll('.navitem, #bottom-nav .bn-item').forEach(n => { if(n.dataset.page !== 'billing'){ n.style.display = 'none'; n.setAttribute('data-lock-hidden', '1'); } });
+  }
+  if(isClientAdmin) ensurePlanLimits();
+  updateTrialBar();
 }
 
 let locations = [];
@@ -2989,7 +3029,7 @@ function describeCommission(cl){
   // is negotiated — payouts are never paused while that happens.
   return `0% <span style="color:var(--red, #c0392b);">(previous ${cl.commissionRate}% deal ended ${end} — not renegotiated)</span>`;
 }
-function mapClient(c){ return {id:c.id, name:c.name, businessType:c.business_type, contactName:c.contact_name, contactPhone:c.contact_phone, contactEmail:c.contact_email, address:c.address, commissionRate:c.commission_rate, commissionStartDate:c.commission_start_date, commissionDurationMonths:c.commission_duration_months, contractStart:c.contract_start_date, payoutBankCode:c.payout_bank_code, payoutBankName:c.payout_bank_name, payoutAccountNumber:c.payout_account_number, payoutAccountName:c.payout_account_name, paystackRecipientCode:c.paystack_recipient_code, paystackConnectedAt:c.paystack_connected_at, cashRecharges:c.cash_recharges_enabled, guestAccess:c.guest_access_enabled}; }
+function mapClient(c){ return {id:c.id, name:c.name, businessType:c.business_type, contactName:c.contact_name, contactPhone:c.contact_phone, contactEmail:c.contact_email, address:c.address, commissionRate:c.commission_rate, commissionStartDate:c.commission_start_date, commissionDurationMonths:c.commission_duration_months, contractStart:c.contract_start_date, payoutBankCode:c.payout_bank_code, payoutBankName:c.payout_bank_name, payoutAccountNumber:c.payout_account_number, payoutAccountName:c.payout_account_name, paystackRecipientCode:c.paystack_recipient_code, paystackConnectedAt:c.paystack_connected_at, cashRecharges:c.cash_recharges_enabled, guestAccess:c.guest_access_enabled, accountType:c.account_type, accountStatus:c.account_status, plan:c.plan, trialStartedAt:c.trial_started_at, trialEndsAt:c.trial_ends_at}; }
 
 async function loadAll(){
   const [locRes, chgRes, sesRes, rfidRes, userRes, tarRes, clientRes] = await Promise.all([
@@ -3096,6 +3136,105 @@ function residentFor(chargerId){
   return u ? {name:u.name, unit:u.unit} : {name:'Remote start', unit:'-'};
 }
 
+// ---------- Self-serve trial: billing page, banner, onboarding checklist ----------
+let planLimits = null;
+async function ensurePlanLimits(){
+  if(planLimits) return planLimits;
+  try { const { data } = await sb.from('plan_limits').select('*').order('sort_order'); planLimits = data || []; } catch(e){ planLimits = []; }
+  return planLimits;
+}
+function myClient(){ return (currentStaff && currentStaff.role === 'client_admin') ? (clients[0] || null) : null; }
+function isSelfServe(){ const c = myClient(); return !!c && c.accountType === 'self_serve'; }
+function accountState(){ const c = myClient(); return (c && c.accountType === 'self_serve') ? c.accountStatus : null; }
+function isLockedAccount(){ return accountState() === 'locked'; }
+function bEsc(v){ return String(v==null?'':v).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
+function trialDaysLeft(c){ return Math.max(0, Math.ceil((new Date(c.trialEndsAt) - Date.now()) / 86400000)); }
+function fmtLongDate(ts){ return new Date(ts).toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' }); }
+function updateTrialBar(){
+  const bar = document.getElementById('trial-bar'), txt = document.getElementById('trial-bar-text');
+  if(!bar) return;
+  const st = accountState(), c = myClient();
+  if(st === 'trial'){
+    const d = trialDaysLeft(c);
+    bar.className = 'trial-bar'; bar.style.display = 'flex';
+    txt.innerHTML = `<b>Free trial</b>: ${d} day${d===1?'':'s'} left (ends ${bEsc(fmtLongDate(c.trialEndsAt))}). Pick a plan any time to keep your setup.`;
+  } else if(st === 'locked'){
+    bar.className = 'trial-bar locked'; bar.style.display = 'flex';
+    txt.innerHTML = '<b>Your trial has ended.</b> Choose a plan to switch your account back on. Your data is kept for 30 days.';
+  } else { bar.style.display = 'none'; }
+}
+function renderOnboarding(){
+  const card = document.getElementById('onboarding-card');
+  if(!card) return;
+  if(accountState() !== 'trial'){ card.style.display = 'none'; return; }
+  const connected = chargers.some(c => c.lastSeenAt || (c.status && c.status !== 'Offline'));
+  const steps = [
+    ['Create your site', locations.length > 0, 'addsite', 'Add site'],
+    ['Add your charger and generate its connection details', chargers.length > 0, 'addcharger', 'Add charger'],
+    ['Enter the URL, Charge ID and password in your charger', connected, 'chargers', 'Check status'],
+    ['Set your tariff', tariffs.length > 0, 'tariffs', 'Set tariff'],
+  ];
+  const done = steps.filter(x => x[1]).length;
+  if(done === steps.length){ card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  card.innerHTML = `<div style="font-weight:700;margin-bottom:4px;">Get started: ${done} of ${steps.length} done</div>` +
+    steps.map(([label, ok, page, btn]) => `<div class="onb-step${ok?' done':''}"><div class="onb-dot">${ok?'✓':''}</div><div class="onb-label">${bEsc(label)}</div>${ok?'':`<button class="btn btn-sm" onclick="showPage('${page}')">${bEsc(btn)}</button>`}</div>`).join('');
+}
+const PLAN_FEATURE_LABELS = [
+  ['rfid_cards','RFID cards'],['qr_payments','QR code payments'],['live_monitoring','Live monitoring'],['session_reporting','Session reporting'],
+  ['load_management','Load management'],['night_tariff','Day and night tariffs'],['idle_fee','Idle fee'],['resident_billing','Resident billing'],
+  ['multi_site','Multi-site'],['branded_app','Branded app'],['multi_currency','Multi-currency'],['operator_roles','Operator roles'],
+  ['multi_client','Multi-client'],['white_label_app','White-label app'],['priority_support','Priority support'],['dedicated_onboarding','Dedicated onboarding'],
+];
+async function renderBilling(){
+  const root = document.getElementById('billing-root');
+  if(!root) return;
+  const c = myClient();
+  if(!c){ root.innerHTML = '<div class="card card-pad">Billing is available to client accounts.</div>'; return; }
+  if(c.accountType !== 'self_serve'){
+    root.innerHTML = '<div class="card card-pad"><div style="font-weight:700;margin-bottom:6px;">Under contract</div>Your account is managed under a Plug n Drive agreement. For any change, contact <a href="mailto:hello@plugndrive.co.za">hello@plugndrive.co.za</a>.</div>';
+    return;
+  }
+  const plans = await ensurePlanLimits();
+  const st = c.accountStatus;
+  const cards = rfidCards.filter(r => !/^(WEB|TRIAL)-/i.test(r.uid || '') && (r.status === 'active' || r.status === 'pending' || !r.status)).length;
+  const limitKey = st === 'trial' ? 'trial' : c.plan;
+  const lim = plans.find(p => p.plan === limitKey);
+  let head;
+  if(st === 'trial'){
+    const d = trialDaysLeft(c), total = Math.max(1, Math.round((new Date(c.trialEndsAt) - new Date(c.trialStartedAt || c.trialEndsAt)) / 86400000));
+    head = `<div style="font-weight:700;font-size:16px;">Free trial</div>
+      <div style="margin-top:4px;">${d} day${d===1?'':'s'} left. Ends on ${bEsc(fmtLongDate(c.trialEndsAt))}.</div>
+      <div class="bill-bar"><div style="width:${Math.min(100, Math.round((total - d) / total * 100))}%"></div></div>
+      <div style="font-size:12px;color:var(--text-secondary);">During the trial: 1 charger, up to 3 RFID cards, no commission. Activate a plan before the end to keep everything running.</div>`;
+  } else if(st === 'locked'){
+    head = `<div style="font-weight:700;font-size:16px;color:var(--red);">Trial ended</div>
+      <div style="margin-top:4px;">Your account is switched off. Choose a plan below to turn it back on. Your sites, chargers and settings are kept for 30 days.</div>`;
+  } else {
+    const cur = plans.find(p => p.plan === c.plan);
+    head = `<div style="font-weight:700;font-size:16px;">${bEsc(cur ? cur.label : 'Active')} plan</div>
+      <div style="margin-top:4px;">${cur && cur.monthly_price_zar ? 'R ' + Number(cur.monthly_price_zar).toLocaleString('en-ZA') + ' per month, plus a 5% transaction fee.' : 'Active.'}</div>`;
+  }
+  const usage = lim ? `<div class="card card-pad" style="margin-top:12px;"><div style="font-weight:600;margin-bottom:6px;">Usage</div>
+      <div style="font-size:13px;">Chargers: <b>${chargers.length}</b> of ${lim.max_chargers == null ? 'unlimited' : lim.max_chargers}</div>
+      <div style="font-size:13px;margin-top:2px;">RFID cards: <b>${cards}</b> of ${lim.max_rfid_cards == null ? 'unlimited' : lim.max_rfid_cards}</div></div>` : '';
+  const grid = plans.filter(p => p.plan !== 'trial').map(p => {
+    const feats = PLAN_FEATURE_LABELS.filter(([k]) => p.features && p.features[k]).map(([,l]) => l);
+    const range = p.max_chargers == null ? `${p.min_chargers}+ chargers` : (p.min_chargers === p.max_chargers ? `${p.max_chargers} charger` : `${p.min_chargers} to ${p.max_chargers} chargers`);
+    const cards = p.max_rfid_cards == null ? 'Unlimited RFID cards' : `Up to ${p.max_rfid_cards} RFID cards`;
+    const isCur = st === 'active' && c.plan === p.plan;
+    const price = p.monthly_price_zar ? `R ${Number(p.monthly_price_zar).toLocaleString('en-ZA')}<small> / month</small>` : 'On quote';
+    const mail = `mailto:hello@plugndrive.co.za?subject=${encodeURIComponent('Activate the ' + p.label + ' plan')}&body=${encodeURIComponent('Hello, I would like to activate the ' + p.label + ' plan for ' + c.name + '.')}`;
+    return `<div class="plan-card${isCur?' current':''}"><div class="pc-name">${bEsc(p.label)}</div><div class="pc-price">${price}</div>
+      <div style="font-size:12.5px;">${bEsc(range)}</div><div style="font-size:12.5px;">${bEsc(cards)}</div>
+      <ul>${feats.slice(0,8).map(f => `<li>${bEsc(f)}</li>`).join('')}</ul>
+      ${isCur ? '<span class="badge avail">Current plan</span>' : `<a class="btn btn-primary" style="text-align:center;text-decoration:none;" href="${mail}">${p.monthly_price_zar ? 'Choose ' + bEsc(p.label) : 'Talk to us'}</a>`}</div>`;
+  }).join('');
+  root.innerHTML = `<div class="card card-pad">${head}</div>${usage}
+    <div class="section-title">Plans</div><div class="plan-grid">${grid}</div>
+    <div style="font-size:12px;color:var(--text-secondary);margin-top:12px;">All prices in South African rand, per month, plus a 5% fee on charging payments. Secure card payment for plans is being switched on: until then, choose a plan and we activate it with you by email.</div>`;
+}
+
 const ROUTES = {
   dashboard: () => '/dashboard',
   sites: () => '/sites',
@@ -3122,6 +3261,7 @@ const ROUTES = {
   exchangerates: () => '/exchangerates',
   reporting: () => '/reporting',
   access: () => '/access',
+  billing: () => '/billing',
 };
 function navigate(path){
   if(location.pathname !== path) history.pushState({}, '', path);
@@ -3129,6 +3269,7 @@ function navigate(path){
 
 function showPage(id, opts){
   opts = opts || {};
+  if(isLockedAccount() && id !== 'billing') id = 'billing';   // a locked trial can only reach the billing page
   stopChargerLivePolling();
   closeMobileSidebar();
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
@@ -3137,7 +3278,7 @@ function showPage(id, opts){
   const parentNav = { addsite:'sites', addcharger:'chargers', addclient:'clients' };
   const navEl = document.querySelector(`.navitem[data-page="${parentNav[id] || id}"]`);
   if(navEl) navEl.classList.add('active');
-  const titles={dashboard:'Dashboard',sites:'Sites',addsite:'Add site',chargers:'Chargers',addcharger:'Add charger',sessions:'Sessions',rfid:'RFID cards',load:'Load management',tariffs:'Tariffs',clients:'Clients',addclient:'Add client',myoperators:'My operators',apikeys:'API & Keys',walletactivity:'Wallet activity',payments:'Payments',shop:'Shop',proshop:'Shop',photos:'Site photos',settings:'Settings',exchangerates:'Exchange rates',reporting:'Reporting',access:'Access'};
+  const titles={billing:'Billing',dashboard:'Dashboard',sites:'Sites',addsite:'Add site',chargers:'Chargers',addcharger:'Add charger',sessions:'Sessions',rfid:'RFID cards',load:'Load management',tariffs:'Tariffs',clients:'Clients',addclient:'Add client',myoperators:'My operators',apikeys:'API & Keys',walletactivity:'Wallet activity',payments:'Payments',shop:'Shop',proshop:'Shop',photos:'Site photos',settings:'Settings',exchangerates:'Exchange rates',reporting:'Reporting',access:'Access'};
   document.getElementById('topbar-title').textContent = titles[id];
   if(!opts.skipNav) navigate(ROUTES[id] ? ROUTES[id]() : '/'+id);
   if(id==='sites') renderSites();
@@ -3148,7 +3289,8 @@ function showPage(id, opts){
   if(id==='tariffs') renderTariffs();
   if(id==='addcharger') renderAddCharger();
   if(id==='addsite') renderAddSite();
-  if(id==='dashboard') renderDashboard();
+  if(id==='dashboard'){ renderDashboard(); renderOnboarding(); }
+  if(id==='billing') renderBilling();
   if(id==='clients') renderClients();
   if(id==='addclient') renderAddClient();
   if(id==='myoperators') renderMyOperators();
@@ -3169,7 +3311,7 @@ function showPage(id, opts){
 function routeFromLocation(){
   const parts = location.pathname.split('/').filter(Boolean); // e.g. ['sites','<id>']
   const page = parts[0] || 'dashboard';
-  const knownPages = ['dashboard','sites','addsite','chargers','addcharger','sessions','rfid','load','tariffs','clients','addclient','myoperators','apikeys','walletactivity','payments','shop','proshop','photos','settings','exchangerates','reporting','access'];
+  const knownPages = ['dashboard','sites','addsite','chargers','addcharger','sessions','rfid','load','tariffs','clients','addclient','myoperators','apikeys','walletactivity','payments','shop','proshop','photos','settings','exchangerates','reporting','access','billing'];
   if(!knownPages.includes(page)){ showPage('dashboard'); return; }
 
   showPage(page, {skipNav:true});
@@ -3753,6 +3895,11 @@ function renderAddSite(){
   const clientSel = document.getElementById('new-site-client');
   clientSel.innerHTML = '<option value="">— No client assigned —</option>' +
     clients.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+  if(isSelfServe()){
+    clientSel.innerHTML = `<option value="${clients[0].id}">${clients[0].name}</option>`;
+    clientSel.value = clients[0].id;
+    clientSel.closest('.form-row').style.display = 'none';
+  } else { clientSel.closest('.form-row').style.display = ''; }
   document.getElementById('new-site-name').value = '';
   document.getElementById('new-site-city').value = '';
   document.getElementById('new-site-address').value = '';
@@ -5594,6 +5741,12 @@ function renderAddCharger(){
   document.getElementById('gen-auth').textContent = '-';
   document.getElementById('test-conn-btn').disabled = true;
   document.getElementById('new-charger-public').checked = false;
+  const ocppSel = document.getElementById('new-charger-ocpp');
+  const selfServe = isSelfServe();
+  Array.from(ocppSel.options).forEach(o => { o.hidden = selfServe && o.value !== '1.6J' && o.text !== '1.6J'; o.disabled = o.hidden; });
+  if(selfServe) ocppSel.value = '1.6J';
+  const pubRow = document.getElementById('new-charger-public').closest('.form-row');
+  if(pubRow) pubRow.style.display = (selfServe && accountState() === 'trial') ? 'none' : '';
   document.getElementById('new-charger-power').value = '11';
   document.getElementById('new-charger-power-error').textContent = '';
   createdChargerId = null;
@@ -5698,7 +5851,16 @@ async function runConnectionTest(){
         listed_publicly: listedChoice
       }).select().single();
       if(!live()) return;
-      if(error || !data){ mark(0,'warn','Could not save the charger'); finish(error?.message || 'Unknown error', false); return; }
+      if(error || !data){
+        const m = error?.message || 'Unknown error';
+        if(/plan_limit_chargers|account_locked|plan_required/.test(m)){
+          mark(0,'warn','Your plan does not allow another charger');
+          finish(m.replace(/^[a-z_]+:\s*/,'') + ' Open Billing to upgrade.', false);
+          const b = document.createElement('button'); b.className = 'btn btn-sm btn-primary'; b.textContent = 'Go to Billing'; b.onclick = () => showPage('billing');
+          document.getElementById('conn-result').appendChild(document.createElement('br')); document.getElementById('conn-result').appendChild(b);
+        } else { mark(0,'warn','Could not save the charger'); finish(m, false); }
+        return;
+      }
       createdChargerId = data.id;
       pendingNewCharger = null;
       createdWasListed = listedChoice;
