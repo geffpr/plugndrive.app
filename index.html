@@ -1475,7 +1475,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
           <div class="section-title" style="margin:0;">API &amp; Keys</div>
           <div style="display:flex;gap:8px;">
             <a class="btn" href="https://plugndrive.co.za/api" target="_blank" rel="noopener" style="text-decoration:none;">Documentation &#8599;</a>
-            <button class="btn btn-primary" id="apikey-create-btn" onclick="openCreateApiKey()">+ Create key</button>
+            <button class="btn btn-primary" id="apikey-create-btn" data-quota="api_keys" onclick="openCreateApiKey()">+ Create key</button>
           </div>
         </div>
         <div style="color:var(--text-muted);font-size:12px;margin:6px 0 12px;max-width:680px;">Connect your own tools (CRM, accounting, spreadsheets) to your Plug n Drive data. Keys give read-only access to your sites, chargers, charging sessions and drivers. Limit: 60 requests per minute per key, up to 10 active keys. Keep keys secret and give each tool its own key, so you can revoke one without affecting the others.</div>
@@ -1512,7 +1512,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
       <div class="page" id="page-myoperators">
         <div style="display:flex;justify-content:space-between;align-items:center;">
           <div class="section-title" style="margin:0;">My operators</div>
-          <button class="btn btn-primary" onclick="openAddOperator()">+ Add operator</button>
+          <button class="btn btn-primary" data-quota="operator_accounts" onclick="openAddOperator()">+ Add operator</button>
         </div>
         <div id="add-operator-panel" class="card card-pad" style="display:none;max-width:420px;margin:12px 0;">
           <div class="form-row"><label>Name</label><input type="text" id="op-name"></div>
@@ -1537,7 +1537,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
       <div class="page" id="page-access">
         <div style="display:flex;justify-content:space-between;align-items:center;">
           <div class="section-title" style="margin:0;">Access groups</div>
-          <button class="btn btn-primary" onclick="openAccessGroupForm()">+ New group</button>
+          <button class="btn btn-primary" data-quota="access_groups" onclick="openAccessGroupForm()">+ New group</button>
         </div>
         <div style="color:var(--text-muted);font-size:12px;margin:6px 0 12px;max-width:640px;">A group gives its members free or discounted charging on your own chargers only (for example staff, guests or residents). It has no value on anyone else's chargers.</div>
         <div id="acc-group-form" class="card card-pad" style="display:none;max-width:480px;margin:12px 0;">
@@ -1982,6 +1982,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
               <label>Day price (per kWh)</label>
               <input type="number" step="0.01" id="tf-price-day">
             </div>
+            <div class="form-row" id="tf-adv-note" style="display:none;"></div>
             <div class="form-row">
               <label>Night price (per kWh) — leave blank for no night rate</label>
               <input type="number" step="0.01" id="tf-price-night">
@@ -3187,15 +3188,24 @@ function applyFeatureNav(){
   });
   refreshQuotaButtons();
 }
-function chargerQuotaReached(){
-  const lim = myFeat && myFeat.features ? myFeat.features.max_chargers : null;
-  return typeof lim === 'number' && chargers.length >= lim;
+function quotaCount(key){
+  if(key === 'max_chargers') return chargers.length;
+  if(key === 'api_keys') return apiKeysList.filter(k => !k.revoked_at).length;
+  if(key === 'access_groups') return accGroups.length;
+  if(key === 'operator_accounts') return window.opsCount || 0;
+  return 0;
 }
+function quotaReached(key){
+  const lim = myFeat && myFeat.features ? myFeat.features[key] : null;
+  return typeof lim === 'number' && quotaCount(key) >= lim;
+}
+function chargerQuotaReached(){ return quotaReached('max_chargers'); }
 function refreshQuotaButtons(){
   const isCA = !!(currentStaff && currentStaff.role === 'client_admin');
-  document.querySelectorAll('[data-quota="chargers"]').forEach(btn => {
+  document.querySelectorAll('[data-quota]').forEach(btn => {
+    const qk = btn.dataset.quota === 'chargers' ? 'max_chargers' : btn.dataset.quota;
     let b = btn.querySelector('.prem-badge');
-    if(isCA && chargerQuotaReached()){ if(!b){ b = document.createElement('span'); b.className = 'prem-badge'; b.textContent = 'Premium'; btn.appendChild(b); } }
+    if(isCA && quotaReached(qk)){ if(!b){ b = document.createElement('span'); b.className = 'prem-badge'; b.textContent = 'Premium'; btn.appendChild(b); } }
     else if(b) b.remove();
   });
 }
@@ -5872,6 +5882,7 @@ async function loadAccessGroups(){
   const { data, error } = await sb.rpc('list_access_groups', { p_client_id: clients[0].id });
   if(error){ errEl.textContent = error.message; return; }
   accGroups = data || [];
+  refreshQuotaButtons();
   const el = document.getElementById('acc-groups-list');
   if(!accGroups.length){ el.innerHTML = '<div class="card card-pad" style="color:var(--text-muted);">No groups yet. Create one to give your staff or guests access.</div>'; return; }
   el.innerHTML = accGroups.map(g => `
@@ -5909,6 +5920,7 @@ function accAllowText(g){
 }
 function accScopeChanged(){ document.getElementById('acc-g-sites').style.display = document.getElementById('acc-g-scope').value === 'some' ? 'block' : 'none'; }
 function openAccessGroupForm(groupId){
+  if(!groupId && quotaReached('access_groups')){ showUpgrade('access_groups'); return; }
   const g = groupId ? accGroups.find(x => x.id === groupId) : null;
   document.getElementById('acc-g-id').value = g ? g.id : '';
   document.getElementById('acc-g-name').value = g ? g.name : '';
@@ -6181,6 +6193,7 @@ async function renderApiKeys(){
     return;
   }
   apiKeysList = data;
+  refreshQuotaButtons();
   renderApiKeysTable();
 }
 function renderApiKeysTable(){
@@ -6192,6 +6205,7 @@ function renderApiKeysTable(){
   }).join('') || '<tr><td colspan="6" class="empty">No API keys yet. Create one to connect your own tools.</td></tr>';
 }
 function openCreateApiKey(){
+  if(quotaReached('api_keys')){ showUpgrade('api_keys'); return; }
   hideApiKeyReveal();
   document.getElementById('apikey-name').value = '';
   document.getElementById('apikey-create-error').textContent = '';
@@ -6215,7 +6229,7 @@ async function submitCreateApiKey(){
   document.getElementById('apikey-copy-btn').textContent = 'Copy';
   document.getElementById('apikey-reveal').style.display = 'block';
   const list = await sb.rpc('list_api_keys');
-  if(!list.error && Array.isArray(list.data)){ apiKeysList = list.data; renderApiKeysTable(); }
+  if(!list.error && Array.isArray(list.data)){ apiKeysList = list.data; renderApiKeysTable(); refreshQuotaButtons(); }
 }
 async function copyApiKey(){
   const el = document.getElementById('apikey-reveal-value'); const btn = document.getElementById('apikey-copy-btn');
@@ -6235,7 +6249,7 @@ async function revokeApiKey(btn){
   const { error } = await sb.rpc('revoke_api_key', { p_id: id });
   if(error){ btn.disabled = false; alert(akCleanMessage(error.message)); return; }
   const list = await sb.rpc('list_api_keys');
-  if(!list.error && Array.isArray(list.data)){ apiKeysList = list.data; renderApiKeysTable(); }
+  if(!list.error && Array.isArray(list.data)){ apiKeysList = list.data; renderApiKeysTable(); refreshQuotaButtons(); }
 }
 
 async function renderMyOperators(){
@@ -6252,6 +6266,7 @@ async function renderMyOperators(){
     document.getElementById('operators-body').innerHTML = `<tr><td colspan="6" class="empty">${error.message}</td></tr>`;
     return;
   }
+  window.opsCount = (data || []).length; refreshQuotaButtons();
   const guestOn = featState('access_groups') === 'on';
   document.getElementById('operators-guest-th').style.display = guestOn ? '' : 'none';
   document.getElementById('operators-body').innerHTML = (data||[]).map(o=>{
@@ -6267,6 +6282,7 @@ async function setOperatorGuestRight(staffId, enabled, box){
   if(error){ alert(error.message || 'Could not change this right.'); if(box) box.checked = !enabled; }
 }
 function openAddOperator(){
+  if(quotaReached('operator_accounts')){ showUpgrade('operator_accounts'); return; }
   document.getElementById('op-name').value = '';
   document.getElementById('op-email').value = '';
   document.getElementById('op-password').value = '';
@@ -7062,10 +7078,26 @@ function openTariffEdit(kind, id, opts){
   document.getElementById('tf-monthly-kwh').value = existing?.monthlyKwhIncluded ?? '';
   document.getElementById('tf-overage-price').value = existing?.overagePrice ?? '';
 
+  applyTariffGating();
   // Currency only makes sense to edit at site level — a charger inherits its site's currency.
   document.getElementById('tf-currency').disabled = (kind === 'charger');
   document.getElementById('tf-remove-override-btn').style.display = (kind === 'charger' && existing) ? 'inline-block' : 'none';
   if(!opts.skipNav) navigate(kind==='location' ? ROUTES.tariffSite(id) : ROUTES.tariffCharger(id));
+}
+// Night rate and idle fee follow the plan: when they are not included, the fields are greyed out with the reason.
+function applyTariffGating(){
+  const ids = ['tf-price-night','tf-night-start','tf-night-end','tf-idle-fee','tf-idle-grace'];
+  const locked = !!(currentStaff && currentStaff.role === 'client_admin') && featState('tariff_advanced') !== 'on';
+  ids.forEach(i => { const el = document.getElementById(i); el.disabled = locked; el.style.opacity = locked ? '.5' : ''; });
+  const note = document.getElementById('tf-adv-note');
+  if(!locked){ note.style.display = 'none'; note.innerHTML = ''; return; }
+  const f = myFeat || {};
+  const p = (f.min_plan || {}).tariff_advanced;
+  const txt = f.mode === 'plan'
+    ? `Night price and idle fee are available from the ${bEsc(PLAN_NAME[p] || 'Host')} plan.`
+    : 'Night price and idle fee are not included in your current setup. Contact hello@plugndrive.co.za.';
+  note.style.display = '';
+  note.innerHTML = `<span class="prem-badge" style="margin:0 8px 0 0;">Premium</span><span style="font-size:13px;">${txt}</span>` + (f.mode === 'plan' ? ` <a href="#" onclick="event.preventDefault();showPage('billing')">See plans</a>` : '');
 }
 function backToTariffs(){
   document.getElementById('tariffs-list-view').style.display = 'block';
