@@ -3076,12 +3076,14 @@ function updateSidebarIdentity(){
 function applyRoleBasedNav(){
   document.querySelectorAll('[data-lock-hidden]').forEach(n => { n.style.display = ''; n.removeAttribute('data-lock-hidden'); });   // undo a previous lock before recomputing
   const isClientAdmin = currentStaff && currentStaff.role === 'client_admin';
+  // Clients and Exchange rates are Plug n Drive admin tools: nobody else sees them.
+  const isPndAdmin = currentStaff && currentStaff.role === 'plugndrive_admin';
   const clientsNav = document.querySelector('.navitem[data-page="clients"]');
-  if(clientsNav) clientsNav.style.display = isClientAdmin ? 'none' : '';
+  if(clientsNav) clientsNav.style.display = isPndAdmin ? '' : 'none';
   const ratesNav = document.querySelector('.navitem[data-page="exchangerates"]');
-  if(ratesNav) ratesNav.style.display = isClientAdmin ? 'none' : '';
+  if(ratesNav) ratesNav.style.display = isPndAdmin ? '' : 'none';
   const adminLabel = document.getElementById('admin-section-label');
-  if(adminLabel) adminLabel.style.display = isClientAdmin ? 'none' : '';
+  if(adminLabel) adminLabel.style.display = isPndAdmin ? '' : 'none';
   const apiKeysNav = document.getElementById('apikeys-nav');
   if(apiKeysNav) apiKeysNav.style.display = isClientAdmin ? '' : 'none';
   const opsNav = document.getElementById('myoperators-nav');
