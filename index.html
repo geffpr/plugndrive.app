@@ -342,9 +342,20 @@ tr.rowlink:hover td{background:#f0f6fc;}
 .login-error{min-height:1.2em;margin-top:12px;font-size:12.5px;line-height:1.45;color:#c0392b;text-align:center;}
 .login-error.ok{color:#1f8a70;}
 .ts-box{display:flex;justify-content:center;margin:0 0 14px;min-height:0;}
-.tr-phone-row{display:flex;gap:8px;}
-.tr-phone-row select{width:118px;flex:none;height:48px;background:#f5f8fc;border:1.5px solid #dde5f0;border-radius:11px;padding:0 8px;font-size:14px;color:#1a3260;}
-.tr-phone-row input{flex:1;min-width:0;}
+.tr-phone-row{display:flex;gap:8px;align-items:stretch;}
+.tr-phone-row>input{flex:1 1 auto;width:auto;min-width:0;}
+.dial-wrap{position:relative;flex:none;}
+.dial-btn{display:flex;align-items:center;gap:6px;height:48px;padding:0 10px;background:#f5f8fc;border:1.5px solid #dde5f0;border-radius:11px;font-size:14px;font-weight:600;color:#1a3260;cursor:pointer;white-space:nowrap;}
+.dial-btn:focus{outline:none;border-color:#3a8fd4;box-shadow:0 0 0 3px rgba(58,143,212,.16);}
+.dial-btn img{border-radius:2px;box-shadow:0 0 0 1px rgba(0,0,0,.12);object-fit:cover;}
+.dial-caret{font-size:10px;color:#6b7a9a;}
+.dial-list{position:absolute;z-index:20;top:calc(100% + 4px);left:0;width:260px;max-width:calc(100vw - 64px);max-height:260px;overflow:auto;background:#fff;border:1px solid #dde5f0;border-radius:11px;box-shadow:0 14px 34px -10px rgba(17,31,69,.35);padding:4px;}
+.dial-list[hidden]{display:none;}
+.dial-item{display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px;border:none;background:none;border-radius:8px;font-size:13.5px;color:#1a3260;cursor:pointer;text-align:left;}
+.dial-item:hover,.dial-item:focus{background:#eaf5fc;outline:none;}
+.dial-item .dn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.dial-item .dc{color:#6b7a9a;font-weight:600;}
+.dial-item img{border-radius:2px;box-shadow:0 0 0 1px rgba(0,0,0,.12);object-fit:cover;flex:none;}
 .login-field select{width:100%;height:48px;background:#f5f8fc;border:1.5px solid #dde5f0;border-radius:11px;padding:0 12px;font-size:14px;color:#1a3260;outline:none;}
 .login-field select:focus{border-color:#3a8fd4;background:#fff;box-shadow:0 0 0 3px rgba(58,143,212,.16);}
 .login-google{background:#fff;color:#1a3260;border:1.5px solid #dde5f0;box-shadow:none;}
@@ -539,8 +550,14 @@ tr.rowlink:hover td{background:#f0f6fc;}
         <div class="login-field" id="tr-other-wrap" style="display:none"><label for="tr-other" data-lt="trOther">Your country</label>
           <input type="text" id="tr-other" maxlength="60" autocomplete="country-name"></div>
         <div class="login-field"><label for="tr-phone" data-lt="trPhone">Phone number (we will call you)</label>
-          <div class="tr-phone-row"><select id="tr-dial" aria-label="Country code"></select>
-          <input type="tel" id="tr-phone" maxlength="20" inputmode="tel" autocomplete="tel-national" placeholder="82 123 4567"></div></div>
+          <div class="tr-phone-row">
+            <div class="dial-wrap">
+              <input type="hidden" id="tr-dial" value="+27">
+              <button type="button" class="dial-btn" id="tr-dial-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Country code"><img id="tr-dial-flag" alt="" width="22" height="16"><span id="tr-dial-code">+27</span><span class="dial-caret">&#9662;</span></button>
+              <div class="dial-list" id="tr-dial-list" role="listbox" hidden></div>
+            </div>
+            <input type="tel" id="tr-phone" maxlength="20" inputmode="tel" autocomplete="tel-national" placeholder="82 123 4567">
+          </div></div>
         <div class="login-field"><label for="tr-count" data-lt="trCount">How many chargers do you have (or plan to have)?</label>
           <input type="number" id="tr-count" min="0" max="1000" inputmode="numeric"></div>
         <div class="login-field"><label for="tr-ocpp" data-lt="trOcpp">Does your charger support OCPP 1.6J?</label>
@@ -2338,22 +2355,42 @@ async function handleSignUp() {
     tsReset('signup');
   }
 }
-const TRIAL_COUNTRIES = [['South Africa','+27'],['Mozambique','+258'],['Namibia','+264'],['Botswana','+267'],['Zimbabwe','+263'],['Zambia','+260'],['Eswatini','+268'],['Lesotho','+266'],['Angola','+244'],['Mauritius','+230'],['Kenya','+254'],['France','+33'],['Portugal','+351'],['United Kingdom','+44'],['United States','+1']];
-const TRIAL_DIALS_EXTRA = [['+31','Netherlands'],['+32','Belgium'],['+34','Spain'],['+39','Italy'],['+41','Switzerland'],['+49','Germany'],['+55','Brazil'],['+61','Australia'],['+91','India'],['+971','UAE']];
+const TRIAL_COUNTRIES = [['South Africa','+27','za'],['Mozambique','+258','mz'],['Namibia','+264','na'],['Botswana','+267','bw'],['Zimbabwe','+263','zw'],['Zambia','+260','zm'],['Eswatini','+268','sz'],['Lesotho','+266','ls'],['Angola','+244','ao'],['Mauritius','+230','mu'],['Kenya','+254','ke'],['France','+33','fr'],['Portugal','+351','pt'],['United Kingdom','+44','gb'],['United States','+1','us']];
+const TRIAL_DIALS_EXTRA = [['Netherlands','+31','nl'],['Belgium','+32','be'],['Spain','+34','es'],['Italy','+39','it'],['Switzerland','+41','ch'],['Germany','+49','de'],['Brazil','+55','br'],['Australia','+61','au'],['India','+91','in'],['United Arab Emirates','+971','ae']];
+const flagUrl = iso => 'https://flagcdn.com/w40/' + iso + '.png';
+function setTrialDial(code, iso) {
+  document.getElementById('tr-dial').value = code;
+  document.getElementById('tr-dial-code').textContent = code;
+  const img = document.getElementById('tr-dial-flag'); img.src = flagUrl(iso); img.dataset.iso = iso;
+}
+function closeDialList() {
+  const l = document.getElementById('tr-dial-list'), b = document.getElementById('tr-dial-btn');
+  if (l) l.hidden = true; if (b) b.setAttribute('aria-expanded', 'false');
+}
 function initTrialPhoneUi() {
-  const cs = document.getElementById('tr-country'), ds = document.getElementById('tr-dial');
+  const cs = document.getElementById('tr-country');
   if (!cs || cs.options.length) return;
-  TRIAL_COUNTRIES.forEach(([n, d]) => { cs.add(new Option(n, n)); });
+  TRIAL_COUNTRIES.forEach(([n]) => cs.add(new Option(n, n)));
   cs.add(new Option(lt('trOtherOpt'), '__other'));
+  const list = document.getElementById('tr-dial-list'), btn = document.getElementById('tr-dial-btn');
   const seen = new Set();
-  TRIAL_COUNTRIES.forEach(([n, d]) => { if (!seen.has(d)) { seen.add(d); ds.add(new Option(d + ' ' + n, d)); } });
-  TRIAL_DIALS_EXTRA.forEach(([d, n]) => { if (!seen.has(d)) { seen.add(d); ds.add(new Option(d + ' ' + n, d)); } });
+  TRIAL_COUNTRIES.concat(TRIAL_DIALS_EXTRA).forEach(([n, d, iso]) => {
+    if (seen.has(d)) return; seen.add(d);
+    const it = document.createElement('button'); it.type = 'button'; it.className = 'dial-item'; it.setAttribute('role', 'option');
+    it.innerHTML = '<img width="22" height="16" alt="" loading="lazy" src="' + flagUrl(iso) + '"><span class="dn"></span><span class="dc"></span>';
+    it.querySelector('.dn').textContent = n; it.querySelector('.dc').textContent = d;
+    it.addEventListener('click', () => { setTrialDial(d, iso); closeDialList(); document.getElementById('tr-phone').focus(); });
+    list.appendChild(it);
+  });
+  btn.addEventListener('click', e => { e.stopPropagation(); const open = list.hidden; list.hidden = !open; btn.setAttribute('aria-expanded', open ? 'true' : 'false'); });
+  document.addEventListener('click', e => { if (!e.target.closest('.dial-wrap')) closeDialList(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDialList(); });
   cs.addEventListener('change', () => {
     const hit = TRIAL_COUNTRIES.find(c => c[0] === cs.value);
-    if (hit) ds.value = hit[1];
+    if (hit) setTrialDial(hit[1], hit[2]);
     document.getElementById('tr-other-wrap').style.display = cs.value === '__other' ? '' : 'none';
   });
-  cs.value = 'South Africa'; ds.value = '+27';
+  cs.value = 'South Africa'; setTrialDial('+27', 'za');
 }
 function trialPhoneE164() {
   const dial = document.getElementById('tr-dial').value;
