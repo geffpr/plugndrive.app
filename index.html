@@ -1700,11 +1700,14 @@ tr.rowlink:hover td{background:#f0f6fc;}
                     </span>
                     <div id="cd-power-note" style="font-size:11px;margin-top:3px;"></div>
                   </td></tr>
-                  <tr id="cd-ws-row"><td style="color:var(--text-muted);">WebSocket URL</td><td id="cd-ws" style="text-align:right;font-size:11px;color:var(--blue-dark);"></td></tr>
+                  <tr id="cd-ws-row"><td style="color:var(--text-muted);">WebSocket URL</td><td style="text-align:right;font-size:11px;"><span id="cd-ws" style="color:var(--blue-dark);word-break:break-all;"></span><a href="#" onclick="copyChargerField('ws', this);return false;" style="margin-left:6px;">Copy</a></td></tr>
+                  <tr id="cd-id-row"><td style="color:var(--text-muted);">Charge ID</td><td style="text-align:right;font-size:12px;"><span id="cd-chargeid" style="font-family:monospace;"></span><a href="#" onclick="copyChargerField('id', this);return false;" style="margin-left:6px;">Copy</a></td></tr>
                   <tr id="cd-password-row"><td style="color:var(--text-muted);">Auth password</td><td style="text-align:right;">
                     <span id="cd-password" style="font-family:monospace;"></span>
                     <a href="#" onclick="toggleChargerPasswordVisibility();return false;" id="cd-password-eye" style="margin-left:6px;">👁</a>
+                    <a href="#" onclick="copyChargerField('pw', this);return false;" id="cd-password-copy" style="margin-left:6px;">Copy</a>
                   </td></tr>
+                  <tr id="cd-help-row" style="display:none;"><td colspan="2" style="font-size:12px;color:var(--text-secondary);padding-top:6px;">Enter the URL, the Charge ID and the password in your charger's OCPP settings (Charge ID is also the user name if your charger asks for one). The status turns to Connected within a minute.</td></tr>
                   <tr><td style="color:var(--text-muted);">Public site</td><td style="text-align:right;">
                     <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
                       <input type="checkbox" id="cd-listed" onchange="toggleChargerListing(this.checked)">
@@ -3953,6 +3956,7 @@ function renderChargerDetail(){
   document.getElementById('cd-connector').textContent = c.connector;
   document.getElementById('cd-power').textContent = c.powerKW + ' kW';
   document.getElementById('cd-ws').textContent = `wss://ocpp.plugndrive.co.za/${c.ocppId}`;
+  document.getElementById('cd-chargeid').textContent = c.ocppId;
   renderChargerPasswordDisplay(c);
   renderChargerPublicInfo(c);
   renderChargerPowerEdit(c);
@@ -4056,8 +4060,13 @@ const PUBLIC_SITE_BASE = 'https://charge.plugndrive.co.za';
 function renderChargerAdminOnlySections(){
   const isAdmin = currentStaff && currentStaff.role === 'plugndrive_admin';
   const display = isAdmin ? '' : 'none';
-  document.getElementById('cd-ws-row').style.display = display;
-  document.getElementById('cd-password-row').style.display = display;
+  // Self-serve owners wire their own chargers, so they see the connection details too (copyable).
+  const showConn = isAdmin || (currentStaff && currentStaff.role === 'client_admin' && isSelfServe());
+  const connDisplay = showConn ? '' : 'none';
+  document.getElementById('cd-ws-row').style.display = connDisplay;
+  document.getElementById('cd-id-row').style.display = connDisplay;
+  document.getElementById('cd-password-row').style.display = connDisplay;
+  document.getElementById('cd-help-row').style.display = (!isAdmin && showConn) ? '' : 'none';
   document.getElementById('cd-password-actions').style.display = isAdmin ? 'flex' : 'none';
   document.getElementById('cd-unpair-btn').style.display = display;
 }
@@ -4088,16 +4097,28 @@ async function copyPublicLink(){
   catch { link.textContent = 'Copy failed'; }
   setTimeout(()=>{ link.textContent = 'Copy'; }, 1800);
 }
+async function copyChargerField(kind, link){
+  const c = chargers.find(x=>x.id===currentChargerId);
+  if(!c) return;
+  const text = kind === 'ws' ? `wss://ocpp.plugndrive.co.za/${c.ocppId}` : kind === 'id' ? c.ocppId : (c.ocppPassword || '');
+  if(!text) return;
+  try { await navigator.clipboard.writeText(text); link.textContent = 'Copied'; }
+  catch { link.textContent = 'Copy failed'; }
+  setTimeout(()=>{ link.textContent = 'Copy'; }, 1800);
+}
 let chargerPasswordVisible = false;
 function renderChargerPasswordDisplay(c){
   const el = document.getElementById('cd-password');
   const eye = document.getElementById('cd-password-eye');
+  const pwCopy = document.getElementById('cd-password-copy');
   if(!c.ocppPassword){
     el.textContent = 'None (open — any charger can connect without auth)';
     eye.style.display = 'none';
+    if(pwCopy) pwCopy.style.display = 'none';
     return;
   }
   eye.style.display = '';
+  if(pwCopy) pwCopy.style.display = '';
   el.textContent = chargerPasswordVisible ? c.ocppPassword : '••••••••';
   eye.textContent = chargerPasswordVisible ? '🙈' : '👁';
 }
