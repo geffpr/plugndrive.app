@@ -2105,6 +2105,14 @@ function tsMount(screen, tries) {
     tsWidgets[id] = window.turnstile.render('#' + id, { sitekey: TURNSTILE_SITEKEY, action: 'auth_' + screen, theme: 'light', language: loginLang === 'pt' ? 'pt-br' : 'en' });
   } catch (e) { /* the widget is optional until CAPTCHA is enforced */ }
 }
+// Waits (up to ~8 s) for the security check to hand out a token, instead of sending the request without one.
+async function tsWait(screen, ms) {
+  tsMount(screen);
+  const end = Date.now() + (ms || 8000);
+  let tok = tsToken(screen);
+  while (!tok && Date.now() < end) { await new Promise(r => setTimeout(r, 250)); tok = tsToken(screen); }
+  return tok;
+}
 function tsToken(screen) {
   const id = TS_FOR_SCREEN[screen];
   try { return (id && tsWidgets[id] != null && window.turnstile.getResponse(tsWidgets[id])) || undefined; } catch { return undefined; }
@@ -2163,10 +2171,10 @@ async function handleSignIn() {
   if (!email || !password) { errEl.textContent = lt('errAllFields'); return; }
   setLoginBusy('lg-signin-btn', true, 'signInBtn', 'signingIn');
   try {
-    const { error } = await sb.auth.signInWithPassword({ email, password, options: { captchaToken: tsToken('signin') } });
+    const { error } = await sb.auth.signInWithPassword({ email, password, options: { captchaToken: await tsWait('signin') } });
     if (error) {
       if (error.code === 'email_not_confirmed' || /not confirmed/i.test(error.message || '')) {   // trial sign-up never confirmed: send a fresh code
-        await sb.auth.resend({ type: 'signup', email, options: { captchaToken: tsToken('signin') } }); showLoginVerify(email, 'signup'); return;
+        await sb.auth.resend({ type: 'signup', email, options: { captchaToken: await tsWait('signin') } }); showLoginVerify(email, 'signup'); return;
       }
       errEl.textContent = friendlyAuthError(error); return;
     }
@@ -2189,7 +2197,7 @@ async function handleForgotSubmit() {
   if (!email) { errEl.textContent = lt('errAllFields'); return; }
   setLoginBusy('lg-forgot-btn', true, 'sendCode', 'working');
   try {
-    const { error } = await sb.auth.resetPasswordForEmail(email, { captchaToken: tsToken('forgot') });
+    const { error } = await sb.auth.resetPasswordForEmail(email, { captchaToken: await tsWait('forgot') });
     if (error) { errEl.textContent = friendlyAuthError(error); return; }
     showLoginVerify(email);
   } catch (err) {
@@ -2266,7 +2274,7 @@ async function handleResendCode() {
   const errEl = document.getElementById('lg-verify-error');
   errEl.classList.remove('ok');
   errEl.textContent = '';
-  const { error } = lgVerifyMode === 'signup' ? await sb.auth.resend({ type: 'signup', email: lgVerifyEmail, options: { captchaToken: tsToken('verify') } }) : await sb.auth.resetPasswordForEmail(lgVerifyEmail, { captchaToken: tsToken('verify') });
+  const { error } = lgVerifyMode === 'signup' ? await sb.auth.resend({ type: 'signup', email: lgVerifyEmail, options: { captchaToken: await tsWait('verify') } }) : await sb.auth.resetPasswordForEmail(lgVerifyEmail, { captchaToken: await tsWait('verify') });
   if (error) { errEl.textContent = friendlyAuthError(error); return; }
   errEl.classList.add('ok');
   errEl.textContent = lt('codeResent');
@@ -2317,7 +2325,7 @@ async function handleSignUp() {
   if (password.length < 8) { errEl.textContent = lt('errShortPw'); return; }
   setLoginBusy('lg-signup-btn', true, 'suBtn', 'working');
   try {
-    const { data, error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: location.origin + '/', captchaToken: tsToken('signup') } });
+    const { data, error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: location.origin + '/', captchaToken: await tsWait('signup') } });
     if (error) { errEl.textContent = friendlyAuthError(error); return; }
     // An address that already has an account comes back without identities: never reveal more than that.
     if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) { errEl.textContent = lt('errEmailTaken'); return; }
