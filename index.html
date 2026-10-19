@@ -91,6 +91,7 @@ tr.rowlink:hover td{background:var(--blue-light);}
 .badge.offline .badge-dot{background:#b3b3b3;}
 .badge.active{background:var(--blue-light);color:var(--blue-dark);}
 .badge.blocked{background:var(--red-light);color:var(--red);}
+.badge.stock{background:#eef2f8;color:#4b5a78;}
 .badge.warn{background:#fff4e0;color:#b36b00;}
 .shop-thumb{width:52px;height:52px;border-radius:10px;object-fit:cover;background:var(--bg);border:1px solid var(--border);display:block;}
 .shop-thumb.none{display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:11px;}
@@ -429,7 +430,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
   <div class="card card-pad" style="width:320px;max-width:100%;">
     <img id="logo-activate" alt="Plug n Drive" style="height:56px;width:auto;margin-bottom:8px;">
     <div style="color:var(--text-muted);font-size:13px;margin-bottom:16px;">Activate your RFID card</div>
-    <div class="form-row"><label>Activation code (sent by SMS)</label><input type="text" id="activate-code" inputmode="numeric" placeholder="e.g. 482913"></div>
+    <div class="form-row"><label>Activation code</label><input type="text" id="activate-code" inputmode="numeric" placeholder="e.g. 482913"></div>
     <button class="btn btn-primary btn-block" onclick="submitActivation()">Activate card</button>
     <div id="activate-message" style="font-size:13px;margin-top:10px;"></div>
   </div>
@@ -1314,6 +1315,13 @@ tr.rowlink:hover td{background:#f0f6fc;}
             </div>
             <div class="hint" id="cl-ss-hint" style="margin-top:8px;">Activating unlocks the account, restores blocked cards and starts the 5% commission.</div>
           </div>
+          <div id="cl-cards-panel" class="card card-pad" style="max-width:420px;margin-bottom:20px;display:none;">
+            <div class="section-title" style="margin-top:0;">RFID cards in stock</div>
+            <div class="hint" id="cl-cards-count" style="margin-bottom:8px;"></div>
+            <div class="form-row"><label>Add delivered cards (one UID per line)</label><textarea id="cl-cards-uids" rows="4" placeholder="A3F2190C&#10;B7E10455" style="width:100%;"></textarea></div>
+            <button class="btn btn-primary" onclick="importClientCards()">Add to this client's stock</button>
+            <div id="cl-cards-result" style="font-size:12px;margin-top:8px;"></div>
+          </div>
           <div class="section-title" title="Energy sold (commission already deducted) minus cash this client's operators have collected on site. A positive balance is what Plug n Drive owes this client; a negative one is what this client owes Plug n Drive.">Ledger balance</div>
           <div class="card card-pad" style="max-width:420px;margin-bottom:20px;">
             <div id="cl-ledger-balance">Loading…</div>
@@ -1834,27 +1842,32 @@ tr.rowlink:hover td{background:#f0f6fc;}
               <option value="all">All statuses</option>
               <option value="active">Active</option>
               <option value="pending">Pending activation</option>
+              <option value="stock">In stock</option>
               <option value="blocked">Blocked</option>
             </select>
             <div style="margin-left:auto;">
-              <button class="btn btn-primary" onclick="openAssignCard()">+ Assign new card</button>
+              <button class="btn btn-primary" onclick="openAssignCard()">Assign a card</button>
             </div>
           </div>
-          <div id="assign-card-panel" class="card card-pad" style="display:none;max-width:420px;margin-bottom:16px;">
-            <div style="font-weight:600;margin-bottom:8px;">Assign a new RFID card</div>
-            <div class="form-row"><label>Card UID (printed on the card, or scanned via NFC reader)</label><input type="text" id="ac-uid" placeholder="e.g. A3:F2:19:0C"></div>
+          <div id="assign-card-panel" class="card card-pad" style="display:none;max-width:460px;margin-bottom:16px;">
+            <div style="font-weight:600;margin-bottom:8px;">Assign a card to a resident</div>
+            <div class="form-row"><label>Card (from the cards delivered to your account)</label><select id="ac-card" onchange="onAcCardChange()"></select>
+              <div class="hint" id="ac-stock-hint" style="margin-top:6px;"></div></div>
             <div class="form-row"><label>Site</label><select id="ac-site"></select></div>
             <div class="form-row"><label>Resident name</label><input type="text" id="ac-name"></div>
-            <div class="form-row"><label>Resident phone (for the activation SMS)</label><input type="text" id="ac-phone" placeholder="+27..."></div>
-            <div style="display:flex;gap:8px;">
-              <button class="btn btn-primary" onclick="submitAssignCard()">Send activation code</button>
-              <button class="btn" onclick="closeAssignCard()">Cancel</button>
+            <div class="form-row"><label>Resident phone (international format)</label><input type="text" id="ac-phone" placeholder="+27..."></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="btn btn-primary" id="ac-code-btn" onclick="submitAssignCard('copy')">Get activation code</button>
+              <button class="btn" id="ac-sms-btn" onclick="submitAssignCard('sms')">Send code by SMS</button>
+              <button class="btn" onclick="closeAssignCard()">Close</button>
             </div>
+            <div class="hint" id="ac-sms-hint" style="margin-top:8px;"></div>
             <div id="assign-card-error" style="color:var(--red, #c0392b);font-size:12px;margin-top:8px;"></div>
+            <div id="assign-card-result" style="display:none;margin-top:12px;"></div>
           </div>
           <div class="card">
             <table>
-              <thead><tr><th>Card UID</th><th>Resident</th><th>Unit</th><th>Complex</th><th>Status</th><th>Balance</th></tr></thead>
+              <thead><tr><th>Card</th><th>Resident</th><th>Unit</th><th>Complex</th><th>Status</th><th>Balance</th></tr></thead>
               <tbody id="rfid-body"></tbody>
             </table>
           </div>
@@ -1887,7 +1900,8 @@ tr.rowlink:hover td{background:#f0f6fc;}
               <div class="section-title">Actions</div>
               <div class="card card-pad" style="display:flex;flex-direction:column;gap:8px;">
                 <button class="btn btn-block" id="cad-toggle-btn" onclick="toggleCardFromDetail()"></button>
-                <button class="btn btn-block" id="cad-resend-btn" onclick="resendActivationFromDetail()" style="display:none;">Resend code</button>
+                <button class="btn btn-block" id="cad-resend-btn" onclick="resendActivationFromDetail()" style="display:none;">New activation code</button>
+                <div id="cad-code-box" style="display:none;"></div>
                 <button class="btn btn-primary btn-block" id="cad-credit-btn" onclick="openAdminCredit(currentCardUid)" style="display:none;">Credit card</button>
               </div>
             </div>
@@ -3113,7 +3127,7 @@ let clients = [];
 function mapLocation(l){ return {id:l.id, name:l.name, type:l.type, parentId:l.parent_id, city:l.city, address:l.address, capacityKVA:l.capacity_kva, currency:l.currency, clientId:l.client_id, timezone:l.timezone, contactName:l.contact_name, contactPhone:l.contact_phone, contactEmail:l.contact_email, status:l.status, loadManagementEnabled:l.load_management_enabled, latitude:l.latitude, longitude:l.longitude, siteDescription:l.site_description, accessMode:l.access_mode, hostPhone:l.host_phone}; }
 function mapCharger(c){ return {id:c.id, locationId:c.location_id, name:c.name, ocppId:c.ocpp_id, vendor:c.vendor, connector:c.connector, powerKW:c.power_kw, ocpp:c.ocpp_version, status:c.status, currentKW:c.current_kw, ocppPassword:c.ocpp_password, lastSeenAt:c.last_seen_at, ocppStatus:c.ocpp_status, listedPublicly:c.listed_publicly}; }
 function mapSession(s){ return {id:s.id, chargerId:s.charger_id, userId:s.user_id, rfidCardId:s.rfid_card_id, kwh:s.kwh, cost:s.cost, currency:s.currency, startedAt:s.started_at, endedAt:s.ended_at, paymentStatus:s.payment_status, payment:s.payment_method, groupId:s.access_group_id, groupMode:s.group_pricing_mode, groupPercent:s.group_discount_percent, offered:s.offered_value}; }
-function mapRfid(r){ return {id:r.id, uid:r.uid, userId:r.user_id, complexId:r.location_id, status:r.status}; }
+function mapRfid(r){ return {id:r.id, uid:r.uid, userId:r.user_id, complexId:r.location_id, status:r.status, number:r.card_number||null, ownerClientId:r.owner_client_id||null}; }
 function mapUser(u){ return {id:u.id, name:u.name, unit:u.unit, locationId:u.location_id, role:u.role, phone:u.phone, email:u.email, balance:u.balance, balanceCurrency:u.balance_currency}; }
 function mapTariff(t){ return {id:t.id, locationId:t.location_id, chargerId:t.charger_id, priceDay:t.price_day, priceNight:t.price_night, nightStart:t.night_start, nightEnd:t.night_end, idleFeePerMin:t.idle_fee_per_min, idleGraceMinutes:t.idle_grace_minutes, monthlyFee:t.monthly_ocpp_fee, monthlyKwhIncluded:t.monthly_kwh_included, overagePrice:t.overage_price, currency:t.currency}; }
 // Whether a client's negotiated commission is currently in force is always
@@ -4388,6 +4402,31 @@ async function renderSettingsLedger(clientId){
   if(error){ el.textContent = error.message; return; }
   el.innerHTML = ledgerBalancesHtml(data) + ledgerHistoryHtml(data);
 }
+function renderCardStockPanel(cl){
+  const box = document.getElementById('cl-cards-panel');
+  const isAdmin = currentStaff && currentStaff.role === 'plugndrive_admin';
+  if(!cl || !isAdmin){ box.style.display = 'none'; return; }
+  const mine = rfidCards.filter(c=>c.ownerClientId===cl.id);
+  const n = mine.filter(c=>c.status==='stock').length;
+  document.getElementById('cl-cards-count').textContent = `${n} in stock, ${mine.length - n} assigned.`;
+  document.getElementById('cl-cards-uids').value = '';
+  document.getElementById('cl-cards-result').textContent = '';
+  box.style.display = 'block';
+}
+async function importClientCards(){
+  const out = document.getElementById('cl-cards-result');
+  const uids = document.getElementById('cl-cards-uids').value.split(/[\n,;]+/).map(x=>x.trim()).filter(Boolean);
+  if(!uids.length){ out.textContent = 'Paste at least one UID.'; return; }
+  const { data, error } = await sb.rpc('admin_import_cards', { p_client: currentClientId, p_uids: uids });
+  if(error){ out.textContent = error.message; return; }
+  const sk = (data.skipped||[]).map(x=>`${x.uid} (${x.reason})`).join(', ');
+  out.textContent = `${data.inserted} card(s) added.` + (sk ? ' Skipped: ' + sk : '');
+  await loadAll();
+  const cl = clients.find(x=>x.id===currentClientId);
+  const mine = rfidCards.filter(c=>c.ownerClientId===currentClientId);
+  const n = mine.filter(c=>c.status==='stock').length;
+  document.getElementById('cl-cards-count').textContent = `${n} in stock, ${mine.length - n} assigned.`;
+}
 async function renderSelfServePanel(cl){
   const box = document.getElementById('cl-selfserve-panel');
   if(!cl || cl.accountType !== 'self_serve'){ box.style.display = 'none'; return; }
@@ -4446,6 +4485,7 @@ function openClient(id, opts){
   renderClientAdminLoginPanel(id);
   renderClientLedgerBalance(id);
   renderSelfServePanel(cl);
+  renderCardStockPanel(cl);
 
   const sites = locations.filter(l=>l.clientId===id);
   const totalChargers = sites.reduce((sum, s) => sum + chargers.filter(c=>{ const root=rootOf(c.locationId); return root && root.id===s.id; }).length, 0);
@@ -6272,7 +6312,7 @@ function ensureSessionGroupNames(rows){
   });
 }
 
-const RFID_STATUS_LABEL = { active: 'Active', blocked: 'Blocked', pending: 'Pending activation' };
+const RFID_STATUS_LABEL = { active: 'Active', blocked: 'Blocked', pending: 'Pending activation', stock: 'In stock' };
 // A card with no wallet currency is untracked — it charges for free today
 // (see cardBalanceLabel's own note). Shown plainly so it's never mistaken
 // for a real zero balance.
@@ -6293,7 +6333,7 @@ function renderRfid(){
   document.getElementById('rfid-body').innerHTML = rows.map(r=>{
     const u = users.find(x=>x.id===r.userId);
     const complexName = (locations.find(l=>l.id===r.complexId)||{}).name || '-';
-    return `<tr class="rowlink" onclick="openCardDetail('${r.uid}')"><td>${r.uid}</td><td>${u?u.name:'-'}</td><td>${u?u.unit:'-'}</td><td>${complexName}</td>
+    return `<tr class="rowlink" onclick="openCardDetail('${r.uid}')"><td>${r.number ? r.number + ' <span style="color:var(--text-muted);font-size:12px;">' + r.uid + '</span>' : r.uid}</td><td>${u?u.name:'-'}</td><td>${u?u.unit:'-'}</td><td>${complexName}</td>
       <td><span class="badge ${r.status}">${RFID_STATUS_LABEL[r.status] || r.status}</span></td>
       <td>${cardBalanceLabel(u)}</td></tr>`;
   }).join('');
@@ -6321,7 +6361,11 @@ function openCardDetail(uid){
 
   const toggleBtn = document.getElementById('cad-toggle-btn');
   const resendBtn = document.getElementById('cad-resend-btn');
-  if(card.status === 'pending'){
+  document.getElementById('cad-code-box').style.display = 'none';
+  if(card.status === 'stock'){
+    toggleBtn.style.display = 'none';
+    resendBtn.style.display = 'none';
+  } else if(card.status === 'pending'){
     toggleBtn.style.display = 'none';
     resendBtn.style.display = '';
   } else {
@@ -6548,65 +6592,127 @@ async function sendActivationSms(cardId, phone){
   }
   return result;
 }
+// Which clients may send the activation code automatically (SMS). Everyone else copies it and shares it themselves.
+function canAutoSms(){
+  if(currentStaff && currentStaff.role === 'plugndrive_admin') return true;
+  const c = clients[0];
+  if(!c) return false;
+  if(c.accountType !== 'self_serve') return true;
+  return c.accountStatus === 'active' && ['host','operator','cpo','enterprise'].includes(c.plan);
+}
+function stockCards(){ return rfidCards.filter(c=>c.status==='stock'); }
+function acSitesFor(ownerClientId){
+  return locations.filter(l=>!l.parentId && (!ownerClientId || (l.clientId || (rootOf(l.id)||{}).clientId) === ownerClientId));
+}
+function onAcCardChange(){
+  const card = rfidCards.find(c=>c.id===document.getElementById('ac-card').value);
+  const sites = acSitesFor(card ? card.ownerClientId : null);
+  document.getElementById('ac-site').innerHTML = sites.map(l=>`<option value="${l.id}">${l.name}</option>`).join('');
+}
 function openAssignCard(){
-  const siteSel = document.getElementById('ac-site');
-  siteSel.innerHTML = locations.filter(l=>!l.parentId).map(l=>`<option value="${l.id}">${l.name}</option>`).join('');
-  document.getElementById('ac-uid').value = '';
+  const stock = stockCards();
+  const sel = document.getElementById('ac-card');
+  sel.innerHTML = stock.map(c=>`<option value="${c.id}">${c.number || ''} ${c.uid}</option>`).join('');
+  document.getElementById('ac-stock-hint').textContent = stock.length
+    ? `${stock.length} card${stock.length>1?'s':''} available. Cards are added to your account when your order ships.`
+    : 'You have no cards in stock yet. Cards appear here when your order ships.';
+  onAcCardChange();
   document.getElementById('ac-name').value = '';
   document.getElementById('ac-phone').value = '';
   document.getElementById('assign-card-error').textContent = '';
+  document.getElementById('assign-card-result').style.display = 'none';
+  const auto = canAutoSms();
+  document.getElementById('ac-sms-btn').style.display = auto ? '' : 'none';
+  document.getElementById('ac-sms-hint').textContent = auto ? '' : 'Copy the code and send it to the resident yourself (WhatsApp link provided). Automatic SMS starts at the Host plan.';
+  document.getElementById('ac-code-btn').disabled = !stock.length;
+  document.getElementById('ac-sms-btn').disabled = !stock.length;
   document.getElementById('assign-card-panel').style.display = 'block';
 }
 function closeAssignCard(){
   document.getElementById('assign-card-panel').style.display = 'none';
 }
-async function submitAssignCard(){
+function escHtml(t){ return String(t==null?'':t).replace(/[&<>"]/g, ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch])); }
+function activationShareText(code, hours){
+  return `Your Plug n Drive card activation code is ${code}. Activate your card here: https://app.plugndrive.co.za/activate?code=${code} (valid for ${hours} hours).`;
+}
+function codeBoxHtml(code, phone, note){
+  const digits = String(phone||'').replace(/\D/g,'');
+  const wa = `https://wa.me/${digits}?text=${encodeURIComponent(activationShareText(code, 24))}`;
+  return `<div style="border:1px solid var(--border);border-radius:10px;padding:12px;">
+    <div style="font-size:12px;color:var(--text-muted);">Activation code</div>
+    <div style="font-size:26px;font-weight:700;letter-spacing:3px;margin:2px 0 8px;">${escHtml(code)}</div>
+    ${note ? `<div class="hint" style="margin-bottom:8px;">${escHtml(note)}</div>` : ''}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn btn-sm" onclick="copyActivationText('${escHtml(code)}', this)">Copy message</button>
+      <a class="btn btn-sm" href="${wa}" target="_blank" rel="noopener">Send via WhatsApp</a>
+    </div></div>`;
+}
+async function copyActivationText(code, btn){
+  try { await navigator.clipboard.writeText(activationShareText(code, 24)); btn.textContent = 'Copied'; }
+  catch(e) { window.prompt('Copy this message:', activationShareText(code, 24)); }
+}
+const CARD_ERR = {
+  card_not_in_stock: 'This card is not in your stock.',
+  site_not_yours: 'This site does not belong to the card owner.',
+  forbidden: 'You are not allowed to do this.',
+  unknown_site: 'Unknown site.',
+};
+function cardErrMsg(e){
+  const m = (e && e.message) || '';
+  for(const k of Object.keys(CARD_ERR)) if(m.includes(k)) return CARD_ERR[k];
+  if(m.startsWith('invalid_holder')) return 'Enter the resident name and a phone number in international format (+27...).';
+  if(m.startsWith('account_locked')) return 'This account is locked. Activate a plan to continue.';
+  return m || 'Something went wrong.';
+}
+async function submitAssignCard(mode){
   const errEl = document.getElementById('assign-card-error');
-  const uid = document.getElementById('ac-uid').value.trim();
+  const resEl = document.getElementById('assign-card-result');
+  errEl.textContent = ''; resEl.style.display = 'none';
+  const cardId = document.getElementById('ac-card').value;
   const siteId = document.getElementById('ac-site').value;
   const name = document.getElementById('ac-name').value.trim();
   const phone = document.getElementById('ac-phone').value.trim();
-  if(!uid || !name || !phone){ errEl.textContent = 'UID, name and phone are all required.'; return; }
-
-  let { data: existingUser } = await sb.from('users').select('*').eq('phone', phone).maybeSingle();
-  let userId = existingUser?.id;
-  if(!userId){
-    const site = locations.find(l=>l.id===siteId);
-    const clientId = site ? (site.clientId || (rootOf(siteId)||{}).clientId || null) : null;
-    // A wallet is set up from the start, in the site's currency, at a zero
-    // balance. That means the card is Blocked (not free/unlimited) until
-    // someone credits it — the OCPP server refuses to start a session for a
-    // wallet-tracked cardholder with no balance.
-    const { data: newUser, error: userErr } = await sb.from('users').insert({ name, phone, location_id: siteId, role: 'resident', client_id: clientId, balance: 0, balance_currency: site ? site.currency : null }).select().single();
-    if(userErr){ errEl.textContent = userErr.message; return; }
-    userId = newUser.id;
+  if(!cardId){ errEl.textContent = 'No card in stock.'; return; }
+  if(!siteId || !name || !phone){ errEl.textContent = 'Site, name and phone are all required.'; return; }
+  const sms = mode === 'sms';
+  const { data, error } = await sb.rpc('assign_stock_card', { p_card: cardId, p_site: siteId, p_name: name, p_phone: phone, p_valid_minutes: sms ? 15 : 1440 });
+  if(error){ errEl.textContent = cardErrMsg(error); return; }
+  let note = sms ? 'Valid for 15 minutes.' : 'Valid for 24 hours.';
+  if(sms){
+    const { error: smsError } = await sendActivationSms(data.card_id, data.phone);
+    note = smsError ? ('The SMS could not be sent (' + smsError.message + '). Share the code yourself. Valid for 15 minutes.') : 'SMS sent. Valid for 15 minutes.';
   }
-
-  const code = generateActivationCode();
-  const expiresAt = new Date(Date.now() + 15*60*1000).toISOString();
-  const { data: newCard, error: cardErr } = await sb.from('rfid_cards').insert({
-    uid, user_id: userId, location_id: siteId, status: 'pending',
-    activation_code: code, activation_code_expires_at: expiresAt,
-  }).select('id').single();
-  if(cardErr){ errEl.textContent = cardErr.message; return; }
-
-  const { error: smsError } = await sendActivationSms(newCard.id, phone);
-  if(smsError){ errEl.textContent = 'Card created, but the SMS failed to send: ' + smsError.message; }
-
+  resEl.innerHTML = codeBoxHtml(data.code, data.phone, note);
+  resEl.style.display = 'block';
   await loadAll();
-  closeAssignCard();
   renderRfid();
+  // keep the result box and panel open after the list refreshes
+  document.getElementById('assign-card-panel').style.display = 'block';
+  document.getElementById('assign-card-result').innerHTML = codeBoxHtml(data.code, data.phone, note);
+  document.getElementById('assign-card-result').style.display = 'block';
+  const stock = stockCards();
+  document.getElementById('ac-card').innerHTML = stock.map(c=>`<option value="${c.id}">${c.number || ''} ${c.uid}</option>`).join('');
+  document.getElementById('ac-stock-hint').textContent = stock.length ? `${stock.length} card${stock.length>1?'s':''} left in stock.` : 'No cards left in stock.';
+  document.getElementById('ac-code-btn').disabled = !stock.length;
+  document.getElementById('ac-sms-btn').disabled = !stock.length;
+  document.getElementById('ac-name').value = ''; document.getElementById('ac-phone').value = '';
+  onAcCardChange();
 }
 async function resendActivation(cardId){
   const card = rfidCards.find(r=>r.id===cardId);
   const u = users.find(x=>x.id===card.userId);
   if(!u || !u.phone){ alert('No phone number on file for this card\'s resident.'); return; }
-  const code = generateActivationCode();
-  const expiresAt = new Date(Date.now() + 15*60*1000).toISOString();
-  await sb.from('rfid_cards').update({ activation_code: code, activation_code_expires_at: expiresAt }).eq('id', cardId);
-  const { error } = await sendActivationSms(cardId, u.phone);
-  if(error){ alert('Failed to send SMS: ' + error.message); return; }
-  alert('A new activation code has been sent.');
+  const auto = canAutoSms();
+  const { data, error } = await sb.rpc('regenerate_card_code', { p_card: cardId, p_valid_minutes: auto ? 15 : 1440 });
+  if(error){ alert(cardErrMsg(error)); return; }
+  let note = auto ? 'Valid for 15 minutes.' : 'Valid for 24 hours.';
+  if(auto){
+    const { error: smsError } = await sendActivationSms(cardId, data.phone);
+    note = smsError ? ('The SMS could not be sent (' + smsError.message + '). Share the code yourself. Valid for 15 minutes.') : 'SMS sent. Valid for 15 minutes.';
+  }
+  const box = document.getElementById('cad-code-box');
+  box.innerHTML = codeBoxHtml(data.code, data.phone, note);
+  box.style.display = 'block';
 }
 
 function renderLoad(){
@@ -6808,6 +6914,7 @@ async function submitActivation(){
 (async function init(){
   if(location.pathname.startsWith('/activate')){
     document.getElementById('activate-screen').style.display = 'flex';
+    try { const qc = new URLSearchParams(location.search).get('code'); if(qc && /^\d{4,10}$/.test(qc)) document.getElementById('activate-code').value = qc; } catch(e) {}
     return;
   }
   const { data: { session } } = await sb.auth.getSession();
