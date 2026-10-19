@@ -540,8 +540,14 @@ tr.rowlink:hover td{background:#f0f6fc;}
       <!-- Free trial: a few questions once signed in -->
       <form id="login-trial" class="login-screen" novalidate>
         <h1 data-lt="trTitle">Tell us about your chargers</h1>
-        <p class="login-sub" data-lt="trSub">Last step. Your trial starts as soon as you continue.</p>
-        <div class="login-field"><label for="tr-company" data-lt="trCompany">Company or site name</label>
+        <p class="login-sub" id="tr-sub" data-lt="trSub">Last step. Your trial starts as soon as you continue.</p>
+        <div class="login-field"><label for="tr-kind" data-lt="trKind">I am</label>
+          <select id="tr-kind">
+            <option value="business" data-lt="trKindBiz">A business (free 14-day trial)</option>
+            <option value="individual" data-lt="trKindInd">An individual sharing my home charger (Neighbour Host)</option>
+          </select></div>
+        <div class="login-box" id="tr-ind-note" style="display:none" data-lt="trIndNote">Neighbour Host: no monthly fee, Plug n Drive keeps 15% of each charge, payment fees included. One charger, for personal use only, paid by QR code. Your spot appears on the Plug n Drive network with an approximate position.</div>
+        <div class="login-field"><label for="tr-company" id="tr-company-lbl" data-lt="trCompany">Company or site name</label>
           <input type="text" id="tr-company" maxlength="120" autocomplete="organization"></div>
         <div class="login-field"><label for="tr-name" data-lt="trName">Your name</label>
           <input type="text" id="tr-name" maxlength="120" autocomplete="name"></div>
@@ -558,7 +564,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
             </div>
             <input type="tel" id="tr-phone" maxlength="20" inputmode="tel" autocomplete="tel-national" placeholder="82 123 4567">
           </div></div>
-        <div class="login-field"><label for="tr-count" data-lt="trCount">How many chargers do you have (or plan to have)?</label>
+        <div class="login-field" id="tr-count-wrap"><label for="tr-count" data-lt="trCount">How many chargers do you have (or plan to have)?</label>
           <input type="number" id="tr-count" min="0" max="1000" inputmode="numeric"></div>
         <div class="login-field"><label for="tr-ocpp" data-lt="trOcpp">Does your charger support OCPP 1.6J?</label>
           <select id="tr-ocpp">
@@ -2023,6 +2029,9 @@ const LOGIN_I18N = {
     trTitle: 'Tell us about your chargers', trSub: 'Last step. Your trial starts as soon as you continue.',
     trCompany: 'Company or site name', trName: 'Your name', trPhone: 'Phone number (we will call you)', trCountry: 'Country', trOther: 'Your country', trOtherOpt: 'Other',
     trCount: 'How many chargers do you have (or plan to have)?', trOcpp: 'Does your charger support OCPP 1.6J?',
+    trKind: 'I am', trKindBiz: 'A business (free 14-day trial)', trKindInd: 'An individual sharing my home charger (Neighbour Host)',
+    trIndNote: 'Neighbour Host: no monthly fee, Plug n Drive keeps 15% of each charge, payment fees included. One charger, for personal use only, paid by QR code. Your spot appears on the Plug n Drive network with an approximate position.',
+    trSite: 'Name of your charging spot (for example "Thandi\'s driveway")', trSubInd: 'Last step. Your account is ready as soon as you continue. No trial, no monthly fee.', trBtnInd: 'Create my Neighbour Host account',
     trChoose: 'Choose…', trYes: 'Yes', trUnsure: 'I am not sure', trNo: 'No', trModel: 'Charger brand and model (optional)',
     trInvite: 'Invitation code', trBtn: 'Start my free trial', trCancel: 'Sign out',
     errTrialFields: 'Please fill in company, country, phone, number of chargers and the OCPP question.',
@@ -2067,6 +2076,9 @@ const LOGIN_I18N = {
     trTitle: 'Fale-nos dos seus carregadores', trSub: 'Último passo. O teste começa assim que continuar.',
     trCompany: 'Empresa ou nome do local', trName: 'O seu nome', trPhone: 'Número de telefone (vamos ligar-lhe)', trCountry: 'País', trOther: 'O seu país', trOtherOpt: 'Outro',
     trCount: 'Quantos carregadores tem (ou planeia ter)?', trOcpp: 'O seu carregador suporta OCPP 1.6J?',
+    trKind: 'Sou', trKindBiz: 'Uma empresa (teste gratuito de 14 dias)', trKindInd: 'Um particular que partilha o seu carregador (Neighbour Host)',
+    trIndNote: 'Neighbour Host: sem mensalidade, a Plug n Drive fica com 15% de cada carga, taxas de pagamento incluídas. Um carregador, só para uso pessoal, pago por código QR. O seu local aparece na rede Plug n Drive com uma posição aproximada.',
+    trSite: 'Nome do seu local de carregamento (por exemplo "Garagem da Thandi")', trSubInd: 'Último passo. A conta fica pronta assim que continuar. Sem teste, sem mensalidade.', trBtnInd: 'Criar a minha conta Neighbour Host',
     trChoose: 'Escolha…', trYes: 'Sim', trUnsure: 'Não tenho a certeza', trNo: 'Não', trModel: 'Marca e modelo do carregador (opcional)',
     trInvite: 'Código de convite', trBtn: 'Começar o meu teste gratuito', trCancel: 'Terminar sessão',
     errTrialFields: 'Preencha empresa, país, telefone, número de carregadores e a pergunta OCPP.',
@@ -2186,6 +2198,7 @@ function resetLoginUi() {
   document.querySelectorAll('.login-eye[aria-pressed="true"]').forEach(toggleEye);   // never leave a password revealed
   clearTimeout(lgResendTimer); clearTimeout(lgCodeTimer);
   lgVerifying = false; lgBusy = false;
+  document.getElementById('tr-kind').value = 'business'; applyTrialKind();
   [['lg-signin-btn', 'signInBtn'], ['lg-forgot-btn', 'sendCode'], ['lg-verify-btn', 'verifyBtn'], ['lg-reset-btn', 'savePassword'], ['lg-signup-btn', 'suBtn'], ['lg-trial-btn', 'trBtn']].forEach(([id, key]) => {
     const b = document.getElementById(id); b.disabled = false; b.textContent = lt(key);
   });
@@ -2407,6 +2420,17 @@ function initTrialPhoneUi() {
   });
   cs.value = 'South Africa'; setTrialDial('+27', 'za');
 }
+function trialIsIndividual() { return document.getElementById('tr-kind').value === 'individual'; }
+function trBtnKey() { return trialIsIndividual() ? 'trBtnInd' : 'trBtn'; }
+function applyTrialKind() {
+  const ind = trialIsIndividual();
+  document.getElementById('tr-company-lbl').setAttribute('data-lt', ind ? 'trSite' : 'trCompany');
+  document.getElementById('tr-sub').setAttribute('data-lt', ind ? 'trSubInd' : 'trSub');
+  document.getElementById('lg-trial-btn').setAttribute('data-lt', trBtnKey());
+  document.getElementById('tr-ind-note').style.display = ind ? '' : 'none';
+  document.getElementById('tr-count-wrap').style.display = ind ? 'none' : '';
+  applyLoginLang();
+}
 function trialPhoneE164() {
   const dial = document.getElementById('tr-dial').value;
   let n = document.getElementById('tr-phone').value.replace(/[\s().-]/g, '');
@@ -2430,16 +2454,17 @@ async function handleTrialSubmit() {
   const v = id => document.getElementById(id).value.trim();
   const errEl = document.getElementById('lg-trial-error'); errEl.textContent = '';
   const box = document.getElementById('lg-trial-nocompat'); box.style.display = 'none';
-  const count = parseInt(v('tr-count'), 10);
+  const ind = trialIsIndividual();
+  const count = ind ? 1 : parseInt(v('tr-count'), 10);
   const countryName = v('tr-country') === '__other' ? v('tr-other') : v('tr-country');
   if (v('tr-company').length < 2 || !countryName || !v('tr-phone') || !Number.isInteger(count) || count < 0 || !v('tr-ocpp')) { errEl.textContent = lt('errTrialFields'); return; }
   const phoneE164 = trialPhoneE164();
   if (!phoneE164) { errEl.textContent = lt('errPhone'); return; }
-  setLoginBusy('lg-trial-btn', true, 'trBtn', 'working');
+  setLoginBusy('lg-trial-btn', true, trBtnKey(), 'working');
   try {
     const { data, error } = await sb.functions.invoke('trial-signup', { body: {
       company: v('tr-company'), name: v('tr-name'), phone: phoneE164, country: countryName,
-      declaredChargers: count, ocpp16j: v('tr-ocpp'), chargerModel: v('tr-model'), invite: savedInvite() } });
+      declaredChargers: count, ocpp16j: v('tr-ocpp'), chargerModel: v('tr-model'), invite: savedInvite(), accountKind: ind ? 'individual' : 'business' } });
     if (error || !data) { errEl.textContent = lt('errTrialGeneric'); return; }
     if (data.ok) { try { localStorage.removeItem('pnd_invite'); } catch { /* ignore */ } await enterApp(); return; }
     if (data.error === 'ocpp_incompatible') {
@@ -2456,7 +2481,7 @@ async function handleTrialSubmit() {
   } catch (err) {
     errEl.textContent = lt('errNetwork');
   } finally {
-    setLoginBusy('lg-trial-btn', false, 'trBtn', 'working');
+    setLoginBusy('lg-trial-btn', false, trBtnKey(), 'working');
   }
 }
 async function cancelTrialSignup() { await handleSignOut(); }
@@ -2469,6 +2494,7 @@ function initLoginUi() {
   bindSubmit('login-reset', handleResetSubmit);
   bindSubmit('login-signup', handleSignUp);
   bindSubmit('login-trial', handleTrialSubmit);
+  document.getElementById('tr-kind').addEventListener('change', applyTrialKind);
   document.getElementById('lg-google-btn').addEventListener('click', handleGoogleSignUp);
   document.querySelectorAll('.login-eye').forEach(b => b.addEventListener('click', () => toggleEye(b)));
   document.getElementById('ll-en').addEventListener('click', () => setLoginLang('en'));
