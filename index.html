@@ -1732,7 +1732,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
               </div>
               <div class="form-row">
                 <label>Location</label>
-                <select id="new-charger-location"></select>
+                <select id="new-charger-location" onchange="refreshNewChargerPublic()"></select>
               </div>
               <div class="form-row">
                 <label>Connector type</label>
@@ -1764,7 +1764,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
                   <input type="checkbox" id="new-charger-public">
                   <span>Show on the public site (charge.plugndrive.co.za)</span>
                 </label>
-                <div class="check-hint">Off by default. A hidden charger stays reachable through its own QR code or link, handy for demos.</div>
+                <div class="check-hint" id="new-charger-public-hint">Off by default. A hidden charger stays reachable through its own QR code or link, handy for demos.</div>
               </div>
               <button class="btn btn-primary btn-block" onclick="generateCharger()">Generate connection details</button>
             </div>
@@ -3910,7 +3910,7 @@ async function toggleChargerListing(checked){
   if(!c) return;
   const { data, error } = await sb.from('chargers').update({ listed_publicly: checked }).eq('id', c.id).select();
   if(error || !data || !data.length){
-    alert(error?.message || 'Could not change the visibility.');
+    alert(/tariff_required/.test(error?.message || '') ? 'Set a tariff for this charger or its site first (Tariffs page), then turn this on.' : (error?.message || 'Could not change the visibility.'));
   }
   await loadAll();
   renderChargerDetail();   // shows what is really saved, so a failed change never looks applied
@@ -6020,6 +6020,18 @@ async function deleteOperator(staffId){
 }
 
 let addChargerPresetLocation = null;
+function siteHasTariff(locationId){
+  const root = rootOf(locationId);
+  return !!root && tariffs.some(t => t.locationId === root.id);
+}
+function refreshNewChargerPublic(){
+  const cb = document.getElementById('new-charger-public'), hint = document.getElementById('new-charger-public-hint');
+  const ok = siteHasTariff(document.getElementById('new-charger-location').value);
+  cb.disabled = !ok;
+  if(!ok) cb.checked = false;
+  hint.textContent = ok ? 'Off by default. A hidden charger stays reachable through its own QR code or link, handy for demos.'
+    : 'Set a tariff for this site first (Tariffs page), then you can show this charger on the public site.';
+}
 function renderAddCharger(){
   const sel = document.getElementById('new-charger-location');
   sel.innerHTML = locations.map(l=>`<option value="${l.id}">${pathOf(l.id)}</option>`).join('');
@@ -6028,6 +6040,7 @@ function renderAddCharger(){
   document.getElementById('gen-auth').textContent = '-';
   document.getElementById('test-conn-btn').disabled = true;
   document.getElementById('new-charger-public').checked = false;
+  refreshNewChargerPublic();
   const ocppSel = document.getElementById('new-charger-ocpp');
   const selfServe = isSelfServe();
   Array.from(ocppSel.options).forEach(o => { o.hidden = selfServe && o.value !== '1.6J' && o.text !== '1.6J'; o.disabled = o.hidden; });
@@ -6123,7 +6136,7 @@ async function runConnectionTest(){
     mark(0,'active');
     if(!createdChargerId){
       const p = pendingNewCharger;
-      const listedChoice = document.getElementById('new-charger-public').checked;
+      const listedChoice = document.getElementById('new-charger-public').checked && siteHasTariff(p.location_id);
       const { data, error } = await sb.from('chargers').insert({
         location_id: p.location_id,
         name: p.name,
