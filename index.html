@@ -321,6 +321,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
 .login-linkbtn:disabled{color:#6b7a9a;cursor:default;}
 .login-error{min-height:1.2em;margin-top:12px;font-size:12.5px;line-height:1.45;color:#c0392b;text-align:center;}
 .login-error.ok{color:#1f8a70;}
+.ts-box{display:flex;justify-content:center;margin:0 0 14px;min-height:0;}
 .login-field select{width:100%;height:48px;background:#f5f8fc;border:1.5px solid #dde5f0;border-radius:11px;padding:0 12px;font-size:14px;color:#1a3260;outline:none;}
 .login-field select:focus{border-color:#3a8fd4;background:#fff;box-shadow:0 0 0 3px rgba(58,143,212,.16);}
 .login-google{background:#fff;color:#1a3260;border:1.5px solid #dde5f0;box-shadow:none;}
@@ -434,6 +435,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
           </div>
         </div>
         <a href="#" class="login-forgot" onclick="showLoginScreen('forgot');return false;" data-lt="forgot">Forgot password?</a>
+        <div class="ts-box" id="ts-signin"></div>
         <button type="submit" class="login-btn" id="lg-signin-btn" data-lt="signInBtn">Sign in</button>
         <div class="login-error" id="auth-error" role="alert"></div>
         <div class="login-note" data-lt="noAccount">No account yet? Ask your administrator.</div>
@@ -446,6 +448,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
         <p class="login-sub" data-lt="forgotSub">Enter your email and we'll send you a code.</p>
         <div class="login-field"><label for="lg-forgot-email" data-lt="email">Email</label>
           <input type="email" id="lg-forgot-email" autocomplete="username" autocapitalize="none" spellcheck="false"></div>
+        <div class="ts-box" id="ts-forgot"></div>
         <button type="submit" class="login-btn" id="lg-forgot-btn" data-lt="sendCode">Send code</button>
         <div class="login-error" id="lg-forgot-error" role="alert"></div>
         <a href="#" class="login-link" onclick="showLoginScreen('signin');return false;" data-lt="backToSignIn">Back to sign in</a>
@@ -458,6 +461,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
         <div class="login-field"><label for="lg-code" data-lt="codeLabel">Code</label>
           <input type="text" id="lg-code" class="login-code" inputmode="numeric" autocomplete="one-time-code" maxlength="10"></div>
         <button type="submit" class="login-btn" id="lg-verify-btn" data-lt="verifyBtn">Verify</button>
+        <div class="ts-box" id="ts-verify"></div>
         <button type="button" class="login-linkbtn" id="lg-resend"></button>
         <div class="login-error" id="lg-verify-error" role="alert"></div>
         <a href="#" class="login-link" onclick="cancelLoginVerify();return false;" data-lt="useDifferentEmail">Use a different email</a>
@@ -493,6 +497,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
           <input type="email" id="su-email" autocomplete="username" autocapitalize="none" spellcheck="false"></div>
         <div class="login-field"><label for="su-password" data-lt="suPassword">Choose a password (8 characters minimum)</label>
           <input type="password" id="su-password" autocomplete="new-password"></div>
+        <div class="ts-box" id="ts-signup"></div>
         <button type="submit" class="login-btn" id="lg-signup-btn" data-lt="suBtn">Create my account</button>
         <div class="login-error" id="lg-signup-error" role="alert"></div>
         <a href="#" class="login-link" onclick="showLoginScreen('signin');return false;" data-lt="backToSignIn">Back to sign in</a>
@@ -1894,6 +1899,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
 <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCwYc0gYAxn29lpnte38It_HkozV24VXD0&libraries=places" async defer></script>
 <script>
 const SUPABASE_URL = 'https://ozlnxhtguaoeuhjeejxq.supabase.co';
@@ -1942,6 +1948,7 @@ const LOGIN_I18N = {
     errNotConfirmed: "This account isn't verified yet. Ask your administrator.",
     errNetwork: 'Could not reach the server. Check your connection and try again.',
     errRate: 'Too many attempts. Please wait a moment and try again.',
+    errCaptcha: 'Security check failed. Wait for the check above to finish, or reload the page, then try again.',
     errMismatch: "Passwords don't match.",
     errInvalidCode: 'That code is incorrect or has expired.',
     codeResent: 'A new code has been sent. Earlier codes no longer work.',
@@ -1982,6 +1989,7 @@ const LOGIN_I18N = {
     errNotConfirmed: 'Esta conta ainda não foi verificada. Fale com o seu administrador.',
     errNetwork: 'Não foi possível contactar o servidor. Verifique a ligação e tente novamente.',
     errRate: 'Demasiadas tentativas. Aguarde um momento e tente novamente.',
+    errCaptcha: 'A verificação de segurança falhou. Aguarde que a verificação acima termine, ou recarregue a página, e tente novamente.',
     errMismatch: 'As palavras-passe não coincidem.',
     errInvalidCode: 'Código incorreto ou expirado.',
     codeResent: 'Novo código enviado. Os códigos anteriores deixam de funcionar.',
@@ -2049,10 +2057,31 @@ function clearLoginErrors() {
     const el = document.getElementById(id); el.textContent = ''; el.classList.remove('ok');
   });
 }
+// --- Cloudflare Turnstile (bot protection). The token is always sent; Supabase only checks it once CAPTCHA is switched on in Auth settings. ---
+const TURNSTILE_SITEKEY = '0x4AAAAAAFbUSCF_Yi8d7-9W';
+const TS_FOR_SCREEN = { signin: 'ts-signin', forgot: 'ts-forgot', signup: 'ts-signup', verify: 'ts-verify' };
+const tsWidgets = {};
+function tsMount(screen, tries) {
+  const id = TS_FOR_SCREEN[screen];
+  if (!id || tsWidgets[id] != null) return;
+  if (!window.turnstile) { if ((tries || 0) < 25) setTimeout(() => tsMount(screen, (tries || 0) + 1), 400); return; }
+  try {
+    tsWidgets[id] = window.turnstile.render('#' + id, { sitekey: TURNSTILE_SITEKEY, action: 'auth_' + screen, theme: 'light', language: loginLang === 'pt' ? 'pt-br' : 'en' });
+  } catch (e) { /* the widget is optional until CAPTCHA is enforced */ }
+}
+function tsToken(screen) {
+  const id = TS_FOR_SCREEN[screen];
+  try { return (id && tsWidgets[id] != null && window.turnstile.getResponse(tsWidgets[id])) || undefined; } catch { return undefined; }
+}
+function tsReset(screen) {
+  const id = TS_FOR_SCREEN[screen];
+  try { if (id && tsWidgets[id] != null) window.turnstile.reset(tsWidgets[id]); } catch { /* ignore */ }
+}
 function showLoginScreen(name) {
   Object.values(LOGIN_SCREENS).forEach(id => document.getElementById(id).classList.remove('active'));
   document.getElementById(LOGIN_SCREENS[name]).classList.add('active');
   clearLoginErrors();
+  tsMount(name);
   if (window.matchMedia && window.matchMedia('(pointer:fine)').matches) document.getElementById(LOGIN_FIRST_FIELD[name]).focus();
 }
 function renderLoginNotice() {
@@ -2072,6 +2101,7 @@ function friendlyAuthError(error) {
   if (error && (error.code === 'invalid_credentials' || /invalid login credentials/i.test(msg))) return lt('errWrongCreds');
   if (error && (error.code === 'email_not_confirmed' || /not confirmed/i.test(msg))) return lt('errNotConfirmed');
   if (error && (error.code === 'over_request_rate_limit' || error.code === 'over_email_send_rate_limit' || /rate limit|after \d+ seconds/i.test(msg))) return lt('errRate');
+  if (error && (error.code === 'captcha_failed' || /captcha/i.test(msg))) return lt('errCaptcha');
   if (/failed to fetch|network|load failed/i.test(msg)) return lt('errNetwork');
   return msg || lt('errNetwork');
 }
@@ -2097,10 +2127,10 @@ async function handleSignIn() {
   if (!email || !password) { errEl.textContent = lt('errAllFields'); return; }
   setLoginBusy('lg-signin-btn', true, 'signInBtn', 'signingIn');
   try {
-    const { error } = await sb.auth.signInWithPassword({ email, password });
+    const { error } = await sb.auth.signInWithPassword({ email, password, options: { captchaToken: tsToken('signin') } });
     if (error) {
       if (error.code === 'email_not_confirmed' || /not confirmed/i.test(error.message || '')) {   // trial sign-up never confirmed: send a fresh code
-        await sb.auth.resend({ type: 'signup', email }); showLoginVerify(email, 'signup'); return;
+        await sb.auth.resend({ type: 'signup', email, options: { captchaToken: tsToken('signin') } }); showLoginVerify(email, 'signup'); return;
       }
       errEl.textContent = friendlyAuthError(error); return;
     }
@@ -2110,6 +2140,7 @@ async function handleSignIn() {
     errEl.textContent = lt('errNetwork');
   } finally {
     setLoginBusy('lg-signin-btn', false, 'signInBtn', 'signingIn');
+    tsReset('signin');
   }
 }
 
@@ -2122,13 +2153,14 @@ async function handleForgotSubmit() {
   if (!email) { errEl.textContent = lt('errAllFields'); return; }
   setLoginBusy('lg-forgot-btn', true, 'sendCode', 'working');
   try {
-    const { error } = await sb.auth.resetPasswordForEmail(email);
+    const { error } = await sb.auth.resetPasswordForEmail(email, { captchaToken: tsToken('forgot') });
     if (error) { errEl.textContent = friendlyAuthError(error); return; }
     showLoginVerify(email);
   } catch (err) {
     errEl.textContent = lt('errNetwork');
   } finally {
     setLoginBusy('lg-forgot-btn', false, 'sendCode', 'working');
+    tsReset('forgot');
   }
 }
 function renderLoginResend() {
@@ -2198,10 +2230,11 @@ async function handleResendCode() {
   const errEl = document.getElementById('lg-verify-error');
   errEl.classList.remove('ok');
   errEl.textContent = '';
-  const { error } = lgVerifyMode === 'signup' ? await sb.auth.resend({ type: 'signup', email: lgVerifyEmail }) : await sb.auth.resetPasswordForEmail(lgVerifyEmail);
+  const { error } = lgVerifyMode === 'signup' ? await sb.auth.resend({ type: 'signup', email: lgVerifyEmail, options: { captchaToken: tsToken('verify') } }) : await sb.auth.resetPasswordForEmail(lgVerifyEmail, { captchaToken: tsToken('verify') });
   if (error) { errEl.textContent = friendlyAuthError(error); return; }
   errEl.classList.add('ok');
   errEl.textContent = lt('codeResent');
+  tsReset('verify');
   startLoginResendCooldown(60);
 }
 async function handleResetSubmit() {
@@ -2248,7 +2281,7 @@ async function handleSignUp() {
   if (password.length < 8) { errEl.textContent = lt('errShortPw'); return; }
   setLoginBusy('lg-signup-btn', true, 'suBtn', 'working');
   try {
-    const { data, error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: location.origin + '/' } });
+    const { data, error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: location.origin + '/', captchaToken: tsToken('signup') } });
     if (error) { errEl.textContent = friendlyAuthError(error); return; }
     // An address that already has an account comes back without identities: never reveal more than that.
     if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) { errEl.textContent = lt('errEmailTaken'); return; }
@@ -2258,6 +2291,7 @@ async function handleSignUp() {
     errEl.textContent = lt('errNetwork');
   } finally {
     setLoginBusy('lg-signup-btn', false, 'suBtn', 'working');
+    tsReset('signup');
   }
 }
 async function showTrialQuestions(user) {
@@ -6277,6 +6311,7 @@ async function submitActivation(){
   const { data: { session } } = await sb.auth.getSession();
   if(session){ await enterApp(); }
   else if(/[?&](signup|invite)=/.test(location.search)){ showLoginScreen('signup'); }
+  else { tsMount('signin'); }
 })();
 </script>
 <script>
