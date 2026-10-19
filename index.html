@@ -3284,13 +3284,14 @@ function updateTrialBar(){
 function renderOnboarding(){
   const card = document.getElementById('onboarding-card');
   if(!card) return;
-  if(accountState() !== 'trial'){ card.style.display = 'none'; return; }
+  const nbHost = accountState() === 'active' && myClient() && myClient().plan === 'neighbour';
+  if(accountState() !== 'trial' && !nbHost){ card.style.display = 'none'; return; }
   const connected = chargers.some(c => c.lastSeenAt || (c.status && c.status !== 'Offline'));
   const steps = [
     ['Create your site', locations.length > 0, 'addsite', 'Add site'],
     ['Add your charger and generate its connection details', chargers.length > 0, 'addcharger', 'Add charger'],
     ['Enter the URL, Charge ID and password in your charger', connected, 'chargers', 'Check status'],
-    ['Set your tariff', tariffs.length > 0, 'tariffs', 'Set tariff'],
+    [nbHost ? 'Set your price per kWh (your spot is shown on the map once it has a price)' : 'Set your tariff', tariffs.length > 0, 'tariffs', 'Set tariff'],
   ];
   const done = steps.filter(x => x[1]).length;
   if(done === steps.length){ card.style.display = 'none'; return; }
