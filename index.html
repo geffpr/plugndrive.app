@@ -6535,9 +6535,10 @@ async function toggleCard(uid){
 function generateActivationCode(){
   return String(Math.floor(100000 + Math.random()*900000));
 }
-async function sendActivationSms(phone, code){
+async function sendActivationSms(cardId, phone){
+  // The message text is built on the server: only the card and the holder's phone are sent.
   const result = await sb.functions.invoke('send-card-activation-sms', {
-    body: { phone, message: `Your Plug n Drive card activation code is ${code}. Valid for 15 minutes. Activate at app.plugndrive.co.za/activate` }
+    body: { card_id: cardId, phone }
   });
   if(result.error && result.error.context){
     try {
@@ -6583,13 +6584,13 @@ async function submitAssignCard(){
 
   const code = generateActivationCode();
   const expiresAt = new Date(Date.now() + 15*60*1000).toISOString();
-  const { error: cardErr } = await sb.from('rfid_cards').insert({
+  const { data: newCard, error: cardErr } = await sb.from('rfid_cards').insert({
     uid, user_id: userId, location_id: siteId, status: 'pending',
     activation_code: code, activation_code_expires_at: expiresAt,
-  });
+  }).select('id').single();
   if(cardErr){ errEl.textContent = cardErr.message; return; }
 
-  const { error: smsError } = await sendActivationSms(phone, code);
+  const { error: smsError } = await sendActivationSms(newCard.id, phone);
   if(smsError){ errEl.textContent = 'Card created, but the SMS failed to send: ' + smsError.message; }
 
   await loadAll();
@@ -6603,7 +6604,7 @@ async function resendActivation(cardId){
   const code = generateActivationCode();
   const expiresAt = new Date(Date.now() + 15*60*1000).toISOString();
   await sb.from('rfid_cards').update({ activation_code: code, activation_code_expires_at: expiresAt }).eq('id', cardId);
-  const { error } = await sendActivationSms(u.phone, code);
+  const { error } = await sendActivationSms(cardId, u.phone);
   if(error){ alert('Failed to send SMS: ' + error.message); return; }
   alert('A new activation code has been sent.');
 }
