@@ -1518,6 +1518,35 @@ function generatePDF(pdfLang) {
     doc.text(label, x0, y + 4); doc.text(`${cs} ${m2(amount)}`, W - M, y + 4, { align:'right' });
     y += 6.2;
   };
+  // Subscription-only quote (nothing to pay once): the quote's bottom line is the subscription itself,
+  // shown for each billing option offered, with VAT. Every other quote keeps the layout below.
+  const subOnly = packActive() && tt.req <= 0;
+  if (subOnly) {
+    const offerS = packOffer(), perMs = L === 'pt' ? '/ mês' : '/ month', perYs = L === 'pt' ? '/ ano' : '/ year';
+    const optsS = [];
+    if (offerS !== 'annual') optsS.push({ amt: packMonthlyC(), per: perMs, name: offerS === 'both' ? P('Option A, monthly billing','Opção A, faturação mensal') : P('Monthly billing','Faturação mensal') });
+    if (offerS !== 'monthly') optsS.push({ amt: packAnnualC(), per: perYs, name: offerS === 'both' ? P('Option B, annual billing','Opção B, faturação anual') : P('Annual billing','Faturação anual') });
+    const blockH = 9 + optsS.length * (vb.on ? 17 : 12) + 12;
+    ensure(blockH + 4);
+    section(P('YOUR SUBSCRIPTION','A SUA ASSINATURA'));
+    optsS.forEach(o => {
+      const v = vatBreakdown(o.amt);
+      doc.setFillColor(240,244,250); doc.rect(M, y, CW, vb.on ? 14 : 10, 'F');
+      doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(...navy);
+      doc.text(o.name, M + 4, y + 6.3);
+      doc.setFontSize(12);
+      doc.text(`${money(v.total)} ${o.per}`, W - M - 4, y + 6.5, { align:'right' });
+      if (vb.on) {
+        doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(...muted);
+        doc.text(`${money(v.sub)} ${P('excl. VAT','sem IVA')} + ${P('VAT','IVA')} ${vatRate()}% ${money(v.vat)}`, W - M - 4, y + 11.2, { align:'right' });
+      }
+      y += (vb.on ? 14 : 10) + 3;
+    });
+    doc.setFont('helvetica','italic'); doc.setFontSize(8); doc.setTextColor(...muted);
+    doc.text(P('Nothing is payable once-off.', 'Nada é pago uma só vez.'), M, y + 2);
+    y += 6;
+    if (!vb.on) { doc.text(P('All prices exclude VAT.', 'Todos os preços não incluem IVA.'), M, y + 2); y += 5; }
+  } else {
   if (vb.on) {
     line2(P('Subtotal (excl. VAT)', 'Subtotal (sem IVA)'), vb.sub, false);
     line2(`${P('VAT','IVA')} ${vatRate()}%`, vb.vat, false);
@@ -1544,6 +1573,7 @@ function generatePDF(pdfLang) {
     doc.setTextColor(...navy);
     rl.forEach((ln, i) => doc.text(ln, M + 4, y + 5 + i * 4.6));
     y += rh + 3;
+  }
   }
   y += 4;
 
