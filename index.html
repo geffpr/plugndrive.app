@@ -1672,48 +1672,102 @@ tr.rowlink:hover td{background:#f0f6fc;}
             <button class="btn btn-primary" id="cc-new-btn" onclick="openCampaignDraft()">+ New campaign</button>
           </div>
           <div style="color:var(--text-muted);font-size:12px;margin:6px 0 12px;max-width:680px;">Campaigns are saved as drafts. Nothing is sent yet: scenarios can only be simulated. Limits, connections and sending come in the next steps.</div>
-          <div id="cc-panel" class="card card-pad" style="display:none;max-width:720px;margin:12px 0;">
-            <div class="form-row"><label>1. Name</label><input type="text" id="cc-name" maxlength="80" placeholder="e.g. Welcome offer"></div>
-            <div class="form-row"><label>Objective (what is this campaign for?)</label><textarea id="cc-objective" maxlength="500" rows="2" style="width:100%;" placeholder="e.g. Bring drivers who are charging into the food court"></textarea></div>
-            <div style="font-weight:600;margin:14px 0 4px;">2. Zone</div>
-            <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">The radius is measured from the starting site or point to the charger, not to the driver. Being near a charger does not prove a visit.</div>
-            <div class="form-row"><label>Starting sites (sites allowed for this sub-account)</label><div id="cc-sites" style="max-height:160px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:8px;"></div></div>
-            <div class="form-row"><label>Radius</label>
-              <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-                <input type="range" id="cc-radius-range" min="0" max="1000" step="1" value="0" style="flex:1;min-width:160px;" oninput="ccRangeInput()" aria-label="Radius slider">
-                <span style="display:flex;gap:6px;align-items:center;"><input type="number" id="cc-radius" min="0.1" max="50" step="0.1" value="1" style="width:90px;" oninput="ccRadiusInput()" aria-label="Radius in km"><span style="font-size:13px;">km</span></span>
-              </div></div>
-            <div id="cc-map" style="height:300px;border:1px solid var(--border);border-radius:10px;margin:0 0 4px;z-index:0;"></div>
-            <div id="cc-map-note" style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">Click a site on the map to use it as a starting site, or click anywhere else to add a point. The circle is the zone: the radius is measured to the charger.</div>
-            <div class="form-row"><label>Extra starting points (optional)</label><div id="cc-points"></div><button class="btn btn-sm" type="button" onclick="ccAddPoint()" style="margin-top:6px;">+ Add a point</button></div>
-            <div class="form-row"><label>Excluded sites (charges there never count)</label><div id="cc-excl" style="max-height:140px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:8px;"></div></div>
-            <div id="cc-preview" style="font-size:12px;color:var(--text-muted);margin:6px 0 10px;"></div>
-            <div style="font-weight:600;margin:14px 0 4px;">3. Period</div>
-            <div style="display:flex;gap:12px;flex-wrap:wrap;">
-              <div class="form-row"><label>Start date</label><input type="date" id="cc-start"></div>
-              <div class="form-row"><label>End date</label><input type="date" id="cc-end"></div>
-            </div>
-            <div style="font-weight:600;margin:14px 0 4px;">4. Scenario</div>
-            <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">Describe when something should happen. Nothing is sent at this stage: you can only simulate. Drivers are never identified.</div>
-            <div id="sc-box">
-              <div class="form-row"><label>When</label><select id="sc-trigger" onchange="scTriggerChange()"></select></div>
-              <div id="sc-thr" class="form-row" style="display:none;"><label>Threshold</label>
-                <div style="display:flex;gap:6px;flex-wrap:wrap;"><select id="sc-metric" onchange="scDirty()"></select><input type="number" id="sc-thr-val" min="0" step="any" style="width:110px;" oninput="scDirty()"></div></div>
-              <div class="form-row"><label>Only if</label>
-                <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px;"><span style="font-size:12px;color:var(--text-muted);">Match</span><select id="sc-match" onchange="scDirty()"><option value="all">all conditions</option><option value="any">at least one condition</option></select></div>
-                <div id="sc-conds"></div>
-                <button class="btn btn-sm" type="button" id="sc-add-cond" onclick="scAddCond()" style="margin-top:4px;">+ Add a condition</button></div>
-              <div class="form-row"><label>Wait before acting</label>
-                <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;"><input type="number" id="sc-delay" min="0" max="1440" step="1" value="0" style="width:90px;" oninput="scDirty()"><span style="font-size:12px;color:var(--text-muted);">minutes, then check the conditions again</span></div></div>
-              <div class="form-row"><label>Then</label><select id="sc-action" onchange="scDirty()"></select></div>
-              <div id="sc-act-extra" style="display:none;">
-                <div class="form-row"><label>Offer name</label><input type="text" id="sc-act-label" maxlength="60" placeholder="e.g. Free coffee" oninput="scDirty()"></div>
-                <div class="form-row"><label>Message</label><textarea id="sc-act-msg" rows="2" maxlength="300" style="width:100%;" placeholder="Short text the driver would see" oninput="scDirty()"></textarea></div>
+          <style>
+            .cc-top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px;}
+            .cc-tabs{display:flex;gap:6px;}
+            .cc-tab{border:1px solid var(--border);background:transparent;border-radius:999px;padding:8px 16px;font:inherit;font-weight:600;cursor:pointer;color:var(--text);}
+            .cc-tab.on{background:var(--navy, #0d1b3d);color:#fff;border-color:var(--navy, #0d1b3d);}
+            .cc-tabn{display:inline-flex;width:20px;height:20px;border-radius:50%;background:rgba(127,127,127,.28);align-items:center;justify-content:center;font-size:12px;margin-right:6px;}
+            .cc-actions{display:flex;gap:8px;}
+            .cc-grid{display:grid;grid-template-columns:minmax(0,520px) minmax(0,1fr);gap:24px;align-items:start;}
+            .cc-col{display:flex;flex-direction:column;min-width:0;}
+            .cc-mapcol{position:sticky;top:12px;min-width:0;}
+            .cc-mapcol #cc-map{height:min(70vh,640px);min-height:360px;}
+            @media (max-width:900px){.cc-grid{grid-template-columns:1fr;gap:0}.cc-col{display:contents}.cc-a{order:1}.cc-mapcol{order:2;position:static}.cc-b{order:3}.cc-mapcol #cc-map{height:300px;min-height:0}}
+            .sc-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px;}
+            .sc-msg{font-size:12px;color:var(--text-muted);}
+            .sc-wrap{display:flex;gap:14px;align-items:stretch;}
+            .sc-canvas{flex:1;min-width:0;height:min(72vh,720px);min-height:420px;overflow:auto;border:1px solid var(--border);border-radius:12px;background-color:var(--surface,#f7f9fb);background-image:radial-gradient(rgba(127,140,160,.35) 1px,transparent 1px);background-size:20px 20px;position:relative;outline:none;}
+            .sc-inner{position:relative;min-width:100%;}
+            .sc-svg{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;overflow:visible;}
+            .sc-svg path.sc-e{fill:none;stroke:#9aa7bd;stroke-width:2.5;pointer-events:stroke;cursor:pointer;}
+            .sc-svg path.sc-e.sel{stroke:#2f95d6;stroke-width:3.5;}
+            .sc-svg path.sc-e.tr{stroke:#1e8e5a;stroke-width:4;}
+            #sc-temp{fill:none;stroke:#2f95d6;stroke-width:2.5;stroke-dasharray:6 4;display:none;}
+            .scn{position:absolute;width:190px;background:var(--card,#fff);border:1px solid var(--border);border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,.14);user-select:none;-webkit-user-select:none;}
+            .scn.sel{outline:3px solid rgba(47,149,214,.55);}
+            .scn.tr{outline:3px solid rgba(30,142,90,.65);}
+            .scn-h{padding:5px 8px;color:#fff;font-weight:700;font-size:13px;text-align:center;border-radius:5px 5px 0 0;cursor:grab;touch-action:none;}
+            .scn-b{padding:8px 8px 24px;font-size:11.5px;min-height:48px;color:var(--text);line-height:1.4;word-break:break-word;}
+            .scn-mut{color:var(--text-muted);}
+            .scn-c{margin-top:6px;font-weight:700;color:#1c6fa8;}
+            .scn-lab{position:absolute;bottom:6px;transform:translateX(-50%);font-size:10px;font-weight:700;color:#fff;border-radius:4px;padding:0 5px;}
+            .scn-lab.y{background:#20c3a0}.scn-lab.n{background:#f26b6b}
+            .scp{position:absolute;width:14px;height:14px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px #8a94a6;touch-action:none;}
+            .scp-in{top:-8px;left:calc(50% - 7px);background:#c3ccdb;}
+            .scp-out{bottom:-8px;cursor:crosshair;}
+            .scn-pill{position:absolute;transform:translate(-50%,-50%);background:var(--card,#fff);border:1px solid var(--border);border-radius:6px;padding:1px 6px;font-size:11px;white-space:nowrap;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.12);color:var(--text);}
+            .scn-pill.sel{border-color:#2f95d6;}
+            .sc-side{width:270px;flex:none;border:1px solid var(--border);border-radius:12px;padding:12px;max-height:min(72vh,720px);overflow:auto;box-sizing:border-box;}
+            .sc-side-h{font-weight:700;margin:2px 0 8px;}
+            .sc-pal{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;}
+            .sc-pb{border:0;border-radius:8px;padding:10px 6px;color:#fff;font:inherit;font-weight:700;font-size:12px;cursor:pointer;}
+            .sc-hint{font-size:12px;color:var(--text-muted);margin:6px 0;}
+            .sc-ins-t{font-weight:700;margin-bottom:6px;}
+            .sc-ins label{display:block;font-size:12px;margin:8px 0 3px;font-weight:600;}
+            .sc-ins select,.sc-ins input,.sc-ins textarea{max-width:100%;box-sizing:border-box;}
+            .sc-row{margin:0 0 10px;padding-bottom:8px;border-bottom:1px dashed var(--border);display:flex;flex-direction:column;gap:5px;}
+            @media (max-width:900px){.sc-wrap{flex-direction:column}.sc-side{width:auto;max-height:none}}
+          </style>
+          <div id="cc-panel" class="card card-pad" style="display:none;max-width:none;margin:12px 0;">
+            <div class="cc-top">
+              <div class="cc-tabs" role="tablist">
+                <button type="button" class="cc-tab on" id="cc-tabbtn-settings" role="tab" onclick="ccTab('settings')"><span class="cc-tabn">1</span>Settings</button>
+                <button type="button" class="cc-tab" id="cc-tabbtn-scenario" role="tab" onclick="ccTab('scenario')"><span class="cc-tabn">2</span>Scenario</button>
               </div>
-              <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 6px;">
+              <div class="cc-actions">
+                <button class="btn btn-primary" id="cc-save" onclick="submitCampaignDraft()">Save draft</button>
+                <button class="btn" onclick="closeCampaignDraft()">Cancel</button>
+              </div>
+            </div>
+            <div id="cc-error" style="color:var(--red, #c0392b);font-size:12px;margin:0 0 8px;"></div>
+            <div id="cc-tab-settings" class="cc-grid">
+              <div class="cc-col">
+                <div class="cc-a">
+                  <div class="form-row"><label>Name</label><input type="text" id="cc-name" maxlength="80" placeholder="e.g. Welcome offer"></div>
+                  <div class="form-row"><label>Objective (what is this campaign for?)</label><textarea id="cc-objective" maxlength="500" rows="2" style="width:100%;" placeholder="e.g. Bring drivers who are charging into the food court"></textarea></div>
+                  <div style="font-weight:600;margin:14px 0 4px;">Zone</div>
+                  <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">The radius is measured from the starting site or point to the charger, not to the driver. Being near a charger does not prove a visit.</div>
+                  <div class="form-row"><label>Starting sites (sites allowed for this sub-account)</label><div id="cc-sites" style="max-height:160px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:8px;"></div></div>
+                  <div class="form-row"><label>Radius</label>
+                    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+                      <input type="range" id="cc-radius-range" min="0" max="1000" step="1" value="0" style="flex:1;min-width:160px;" oninput="ccRangeInput()" aria-label="Radius slider">
+                      <span style="display:flex;gap:6px;align-items:center;"><input type="number" id="cc-radius" min="0.1" max="50" step="0.1" value="1" style="width:90px;" oninput="ccRadiusInput()" aria-label="Radius in km"><span style="font-size:13px;">km</span></span>
+                    </div></div>
+                </div>
+                <div class="cc-b">
+                  <div class="form-row"><label>Extra starting points (optional)</label><div id="cc-points"></div><button class="btn btn-sm" type="button" onclick="ccAddPoint()" style="margin-top:6px;">+ Add a point</button></div>
+                  <div class="form-row"><label>Excluded sites (charges there never count)</label><div id="cc-excl" style="max-height:140px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:8px;"></div></div>
+                  <div id="cc-preview" style="font-size:12px;color:var(--text-muted);margin:6px 0 10px;"></div>
+                  <div style="font-weight:600;margin:14px 0 4px;">Period</div>
+                  <div style="display:flex;gap:12px;flex-wrap:wrap;">
+                    <div class="form-row"><label>Start date</label><input type="date" id="cc-start"></div>
+                    <div class="form-row"><label>End date</label><input type="date" id="cc-end"></div>
+                  </div>
+                  <div style="font-size:12px;color:var(--text-muted);margin:10px 0;">Next: open the Scenario tab to design what happens. Frequency limits, connections and activation come in later steps.</div>
+                </div>
+              </div>
+              <div class="cc-mapcol">
+                <div id="cc-map" style="border:1px solid var(--border);border-radius:10px;margin:0 0 4px;z-index:0;"></div>
+                <div id="cc-map-note" style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">Click a site on the map to use it as a starting site, or click anywhere else to add a point. The circle is the zone: the radius is measured to the charger.</div>
+              </div>
+            </div>
+            <div id="cc-tab-scenario" style="display:none;">
+              <div class="sc-bar">
                 <button class="btn btn-sm" type="button" onclick="scSimulate()">Simulate on history</button>
                 <select id="sc-days" style="width:auto;"><option value="7">last 7 days</option><option value="30" selected>last 30 days</option><option value="90">last 90 days</option><option value="180">last 180 days</option></select>
                 <button class="btn btn-sm" type="button" onclick="scToggleTest()">Test with a fictional charge</button>
+                <span id="sc-msg" class="sc-msg">Nothing is sent: scenarios can only be simulated. Drivers are never identified.</span>
               </div>
               <div id="sc-sim" style="font-size:13px;margin:6px 0;"></div>
               <div id="sc-test" class="card card-pad" style="display:none;margin:6px 0;">
@@ -1722,14 +1776,30 @@ tr.rowlink:hover td{background:#f0f6fc;}
                 <button class="btn btn-sm" type="button" onclick="scRunTest()" style="margin-top:8px;">Run the test</button>
                 <div id="sc-test-out" style="font-size:13px;margin-top:8px;"></div>
               </div>
+              <div class="sc-wrap">
+                <div id="sc-canvas" class="sc-canvas" tabindex="0" aria-label="Scenario canvas">
+                  <div id="sc-inner" class="sc-inner">
+                    <svg id="sc-svg" class="sc-svg"><defs><marker id="sc-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#9aa7bd"></path></marker></defs><g id="sc-edges"></g><path id="sc-temp" d=""></path></svg>
+                    <div id="sc-nodes"></div>
+                    <div id="sc-pills"></div>
+                  </div>
+                </div>
+                <aside class="sc-side">
+                  <div class="sc-side-h">Blocks</div>
+                  <div class="sc-pal">
+                    <button type="button" class="sc-pb" style="background:#f5a54c" onclick="scAddNode('condition')">Condition<br>Yes / No</button>
+                    <button type="button" class="sc-pb" style="background:#5aa6f2" onclick="scAddNode('action','send_offer')">Send an offer</button>
+                    <button type="button" class="sc-pb" style="background:#5aa6f2" onclick="scAddNode('action','reward')">Give a reward</button>
+                    <button type="button" class="sc-pb" style="background:#5aa6f2" onclick="scAddNode('action','notify_system')">Notify your system</button>
+                    <button type="button" class="sc-pb" style="background:#f26b6b" onclick="scAddNode('end')">End</button>
+                  </div>
+                  <div class="sc-side-h">Settings</div>
+                  <div id="sc-insp" class="sc-ins"></div>
+                </aside>
+              </div>
+              <div class="sc-hint">Drag a block by its title to move it. Drag from the dot under a block onto another block to link them (or click the dot, then click the block). Click a block or a link to edit it. Delete removes the selection.</div>
               <div id="sc-error" style="color:var(--red, #c0392b);font-size:12px;margin-top:6px;"></div>
             </div>
-            <div style="font-size:12px;color:var(--text-muted);margin:10px 0;">Coming next: frequency limits, connections to your system and activation.</div>
-            <div style="display:flex;gap:8px;">
-              <button class="btn btn-primary" id="cc-save" onclick="submitCampaignDraft()">Save draft</button>
-              <button class="btn" onclick="closeCampaignDraft()">Cancel</button>
-            </div>
-            <div id="cc-error" style="color:var(--red, #c0392b);font-size:12px;margin-top:8px;"></div>
           </div>
           <div class="card">
             <table>
@@ -7096,7 +7166,7 @@ function renderCampaignDraftsTable(){
 function ccLocName(id){ const l = locations.find(x => x.id === id); return l ? l.name : 'Unknown site'; }
 function ccCheckList(ids, checkedIds, cls){
   const sel = new Set(checkedIds || []);
-  return ids.map(id => `<label style="display:flex;gap:8px;align-items:center;padding:3px 0;font-weight:400;"><input type="checkbox" class="${cls}" value="${bEsc(id)}"${sel.has(id) ? ' checked' : ''} onchange="ccPreview()"> ${bEsc(ccLocName(id))}</label>`).join('');
+  return ids.map(id => `<label style="display:flex;gap:8px;align-items:center;padding:3px 0;font-weight:400;"><input type="checkbox" class="${cls}" value="${bEsc(id)}"${sel.has(id) ? ' checked' : ''} onchange="ccPreview()" style="width:auto;flex:none;margin:0;"> ${bEsc(ccLocName(id))}</label>`).join('');
 }
 function openCampaignDraft(id){
   const sub = csList.find(x => x.id === csEnv); if(!sub) return;
@@ -7121,140 +7191,321 @@ function openCampaignDraft(id){
 }
 function closeCampaignDraft(){ const p = document.getElementById('cc-panel'); if(p) p.style.display = 'none'; ccEditId = null; ccPoints = []; scTouched = false; }
 
-// ---- Scenario designer (step 3): describes, simulates, never sends ----
-let ccOpts = null, scConds = [], scTouched = false, scHadScenario = false, scReady = false;
-function scDirty(){ scTouched = true; }
+// ---- Scenario canvas (step 3): blocks and links. Describes and simulates, never sends ----
+let ccOpts = null, scG = null, scSel = null, scSim = null, scTrace = null, scConn = null, scDrag = null, scTouched = false, scReady = false, scSeq = 1;
+const SC_NW = 190;
+const SC_COL = { start: '#20c3a0', condition: '#f5a54c', action: '#5aa6f2', end: '#f26b6b' };
+const SC_ATITLE = { send_offer: 'Send an offer', reward: 'Give a reward', notify_system: 'Notify your system' };
+function ccTab(t){
+  const s = t === 'settings';
+  document.getElementById('cc-tab-settings').style.display = s ? '' : 'none';
+  document.getElementById('cc-tab-scenario').style.display = s ? 'none' : '';
+  document.getElementById('cc-tabbtn-settings').classList.toggle('on', s);
+  document.getElementById('cc-tabbtn-scenario').classList.toggle('on', !s);
+  if(s) ccPreview(); else scRenderAll();
+}
 function scField(key){ return ccOpts && ccOpts.fields.find(f => f.key === key); }
+function scNode(id){ return scG && scG.nodes.find(n => n.id === id); }
+function scMsg(t){ const m = document.getElementById('sc-msg'); if(m) m.textContent = t || 'Nothing is sent: scenarios can only be simulated. Drivers are never identified.'; }
+// Any change that can alter the result clears the last simulation and test trace.
+function scChanged(){ scTouched = true; scSim = null; scTrace = null; scRenderNodes(); }
+function scDirty(){ scTouched = true; scSim = null; scTrace = null; }
 async function scInit(c){
+  ccTab('settings');
   const err = document.getElementById('sc-error'); err.textContent = '';
-  document.getElementById('sc-sim').innerHTML = '';
-  document.getElementById('sc-test').style.display = 'none';
-  scReady = false; scTouched = false;
+  document.getElementById('sc-sim').innerHTML = ''; document.getElementById('sc-test').style.display = 'none';
+  scReady = false; scTouched = false; scSim = null; scTrace = null; scSel = null; scConn = null; scDrag = null; scG = null;
   if(!ccOpts){
     const { data, error } = await sb.rpc('list_campaign_options');
     if(error || !data || !Array.isArray(data.fields)){ err.textContent = 'The scenario options could not be loaded. Close this panel and try again.'; return; }
     ccOpts = data;
   }
-  const sc = (c && c.scenario) || null;
-  scHadScenario = !!sc;
-  const trig = sc && sc.trigger || {};
-  document.getElementById('sc-trigger').innerHTML = '<option value="">Choose…</option>' + ccOpts.triggers.map(t => `<option value="${bEsc(t.type)}">${bEsc(t.label)}</option>`).join('');
-  document.getElementById('sc-trigger').value = trig.type || '';
-  document.getElementById('sc-metric').innerHTML = ccOpts.metrics.map(m => `<option value="${bEsc(m.key)}">${bEsc(m.label)}</option>`).join('');
-  document.getElementById('sc-metric').value = trig.metric || ccOpts.metrics[0].key;
-  document.getElementById('sc-thr-val').value = trig.value != null ? trig.value : '';
-  const cd = (sc && sc.conditions) || {};
-  document.getElementById('sc-match').value = cd.match === 'any' ? 'any' : 'all';
-  scConds = (cd.items || []).map(i => ({ field: i.field, op: i.op, value: i.value, period_days: i.period_days || '' }));
-  const dl = (sc && sc.delay) || {};
-  document.getElementById('sc-delay').value = dl.minutes != null ? dl.minutes : 0;
-  const act = (sc && sc.action) || {};
-  document.getElementById('sc-action').innerHTML = '<option value="">No action yet</option>' + ccOpts.actions.map(a => `<option value="${bEsc(a.type)}">${bEsc(a.label)}</option>`).join('');
-  document.getElementById('sc-action').value = act.type || '';
-  document.getElementById('sc-act-label').value = act.label || '';
-  document.getElementById('sc-act-msg').value = act.message || '';
-  scReady = true;
-  scTriggerChange(true); scRenderConds(); scActionExtra();
+  const g = c && c.scenario_v2;
+  scG = (g && Array.isArray(g.nodes) && g.nodes.length) ? JSON.parse(JSON.stringify(g)) : { version: 2, nodes: [{ id: 'start', type: 'start', x: 300, y: 30 }], edges: [] };
+  scG.nodes.forEach(n => { if(n.type === 'condition'){ n.conditions = n.conditions || { match: 'all', items: [] }; n.conditions.items = n.conditions.items || []; } });
+  const st = scG.nodes.find(n => n.type === 'start');
+  scSel = st ? { kind: 'node', id: st.id } : null;
+  scSeq = 1; scReady = true; scBind();
 }
-function scTriggerChange(quiet){
-  document.getElementById('sc-thr').style.display = document.getElementById('sc-trigger').value === 'charge_threshold' ? '' : 'none';
-  if(quiet !== true) scDirty();
+function scRenderAll(){
+  if(!scReady){ document.getElementById('sc-insp').innerHTML = '<div class="sc-hint">Loading…</div>'; return; }
+  scRenderNodes(); scInspector();
 }
-function scActionExtra(){
-  const t = document.getElementById('sc-action').value;
-  document.getElementById('sc-act-extra').style.display = (t === 'send_offer' || t === 'reward') ? '' : 'none';
-}
-document.addEventListener('change', e => { if(e.target && e.target.id === 'sc-action') scActionExtra(); });
-function scAddCond(){
-  if(!ccOpts || scConds.length >= 10) return;
-  const f = ccOpts.fields.find(x => x.available);
-  scConds.push({ field: f.key, op: f.operators[0], value: f.type === 'enum' ? f.values[0] : '', period_days: f.needs_period ? 30 : '' });
-  scDirty(); scRenderConds();
-}
-function scRemoveCond(i){ scConds.splice(i, 1); scDirty(); scRenderConds(); }
-function scCondSet(i, k, v){
-  const c = scConds[i]; if(!c) return;
-  if(k === 'field'){
-    const f = scField(v); c.field = v; c.op = f.operators[0]; c.value = f.type === 'enum' ? f.values[0] : ''; c.period_days = f.needs_period ? 30 : '';
-    scDirty(); scRenderConds(); return;
+function scTitle(n){ return n.type === 'start' ? 'Start' : n.type === 'condition' ? 'Condition' : n.type === 'end' ? 'End' : (SC_ATITLE[n.action && n.action.type] || 'Action'); }
+function scSummary(n){
+  if(n.type === 'start'){
+    const t = n.trigger; if(!t || !t.type) return '<span class="scn-mut">Choose when it starts</span>';
+    const tl = (ccOpts.triggers.find(x => x.type === t.type) || {}).label || t.type; let s = bEsc(tl);
+    if(t.type === 'charge_threshold'){ const m = (ccOpts.metrics.find(x => x.key === t.metric) || {}).label || t.metric || ''; s += '<br>' + bEsc(m + ' at least ' + (t.value == null ? '?' : t.value)); }
+    return s;
   }
-  c[k] = v; scDirty();
+  if(n.type === 'condition'){
+    const it = (n.conditions && n.conditions.items) || [];
+    if(!it.length) return '<span class="scn-mut">No condition yet: everything passes</span>';
+    const pre = it.length > 1 ? (n.conditions.match === 'any' ? 'At least one of:' : 'All of:') + '<br>' : '';
+    return pre + it.slice(0, 3).map(i => { const f = scField(i.field) || { label: i.field }; return bEsc(f.label + ' ' + (ccOpts.operators[i.op] || i.op) + ' ' + (i.value == null ? '' : i.value) + (f.unit && f.type === 'number' ? ' ' + f.unit : '') + (i.period_days ? ' / ' + i.period_days + ' d' : '')); }).join('<br>') + (it.length > 3 ? '<br>+' + (it.length - 3) + ' more' : '');
+  }
+  if(n.type === 'action'){
+    const a = n.action || {}; const al = (ccOpts.actions.find(x => x.type === a.type) || {}).label || 'Choose an action';
+    return bEsc(al) + (a.label ? '<br><b>' + bEsc(a.label) + '</b>' : '');
+  }
+  return 'The scenario stops here';
 }
-function scRenderConds(){
-  const box = document.getElementById('sc-conds'); if(!box || !ccOpts) return;
-  const fams = [...new Set(ccOpts.fields.map(f => f.family))];
-  box.innerHTML = scConds.map((c, i) => {
-    const f = scField(c.field) || ccOpts.fields[0];
-    const fieldSel = `<select onchange="scCondSet(${i},'field',this.value)" aria-label="Field">` + fams.map(fam =>
-      `<optgroup label="${bEsc(fam)}">` + ccOpts.fields.filter(x => x.family === fam).map(x =>
-        `<option value="${bEsc(x.key)}"${x.key === c.field ? ' selected' : ''}${x.available ? '' : ' disabled'}>${bEsc(x.label)}${x.available ? '' : ' (later step)'}</option>`).join('') + '</optgroup>').join('') + '</select>';
-    const opSel = `<select onchange="scCondSet(${i},'op',this.value)" aria-label="Operator">` + f.operators.map(o => `<option value="${bEsc(o)}"${o === c.op ? ' selected' : ''}>${bEsc(ccOpts.operators[o] || o)}</option>`).join('') + '</select>';
-    let val;
-    if(f.type === 'enum') val = `<select onchange="scCondSet(${i},'value',this.value)" aria-label="Value">` + f.values.map(v => `<option value="${bEsc(v)}"${v === c.value ? ' selected' : ''}>${bEsc(v)}</option>`).join('') + '</select>';
-    else if(f.type === 'number') val = `<input type="number" step="any" value="${bEsc(String(c.value == null ? '' : c.value))}" oninput="scCondSet(${i},'value',this.value)" style="width:100px;" aria-label="Value">`;
-    else val = `<input type="text" maxlength="40" value="${bEsc(String(c.value == null ? '' : c.value))}" oninput="scCondSet(${i},'value',this.value)" style="width:130px;" aria-label="Value">`;
-    const unit = f.unit && f.type === 'number' ? `<span style="font-size:12px;color:var(--text-muted);">${bEsc(f.unit)}</span>` : '';
-    const per = f.needs_period ? `<span style="font-size:12px;color:var(--text-muted);">over the last</span><input type="number" min="1" max="365" step="1" value="${bEsc(String(c.period_days || ''))}" oninput="scCondSet(${i},'period_days',this.value)" style="width:70px;" aria-label="Period in days"><span style="font-size:12px;color:var(--text-muted);">days</span>` : '';
-    return `<div class="sc-cond" style="margin-bottom:8px;"><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">${fieldSel}${opSel}${val}${unit}${per}<button class="btn btn-sm" type="button" onclick="scRemoveCond(${i})" aria-label="Remove this condition">Remove</button></div><div style="font-size:11px;color:var(--text-muted);margin-top:2px;">${bEsc(f.hint || '')}</div></div>`;
+function scDelayText(m){ m = m || 0; if(m <= 0) return 'right away'; if(m >= 60 && m % 60 === 0) return (m / 60) + ' h'; return m + ' min'; }
+function scRange(x){ if(!x) return '?'; if(x.lt10) return 'fewer than 10'; return x.low + ' to ' + x.high; }
+function scRenderNodes(){
+  const box = document.getElementById('sc-nodes'); if(!box || !scG) return;
+  const tr = new Set((scTrace || []).map(s => s.id));
+  box.innerHTML = scG.nodes.map(n => {
+    const sim = scSim && scSim.nodes && scSim.nodes[n.id];
+    const cnt = sim ? `<div class="scn-c">${bEsc(scRange(sim.events))} charges</div>` : '';
+    const sel = scSel && scSel.kind === 'node' && scSel.id === n.id;
+    const id = bEsc(n.id); let ports = '';
+    if(n.type !== 'start') ports += `<span class="scp scp-in" data-id="${id}"></span>`;
+    if(n.type === 'condition') ports += `<span class="scn-lab y" style="left:25%">Yes</span><span class="scn-lab n" style="left:75%">No</span><span class="scp scp-out" data-id="${id}" data-port="yes" style="left:calc(25% - 7px);background:#20c3a0" title="Yes"></span><span class="scp scp-out" data-id="${id}" data-port="no" style="left:calc(75% - 7px);background:#f26b6b" title="No"></span>`;
+    else if(n.type !== 'end') ports += `<span class="scp scp-out" data-id="${id}" data-port="out" style="left:calc(50% - 7px);background:${SC_COL[n.type]}"></span>`;
+    return `<div class="scn${sel ? ' sel' : ''}${tr.has(n.id) ? ' tr' : ''}" data-id="${id}" data-type="${bEsc(n.type)}" style="left:${n.x}px;top:${n.y}px"><div class="scn-h" style="background:${SC_COL[n.type]}">${bEsc(scTitle(n))}</div><div class="scn-b">${scSummary(n)}${cnt}</div>${ports}</div>`;
   }).join('');
-  document.getElementById('sc-add-cond').style.display = scConds.length >= 10 ? 'none' : '';
+  let w = 0, h = 0; scG.nodes.forEach(n => { w = Math.max(w, n.x + SC_NW + 260); h = Math.max(h, n.y + 240); });
+  const inner = document.getElementById('sc-inner'); inner.style.width = Math.max(w, 900) + 'px'; inner.style.height = Math.max(h, 520) + 'px';
+  scDrawEdges();
 }
-// Builds the scenario from the form. Returns { sc } (sc is null when nothing was chosen) or { err }.
+function scPortPos(id, port){
+  const n = scNode(id); const el = document.querySelector('.scn[data-id="' + id + '"]');
+  const w = el ? el.offsetWidth : SC_NW, h = el ? el.offsetHeight : 90;
+  if(port === 'in') return [n.x + w / 2, n.y];
+  const fx = port === 'yes' ? 0.25 : port === 'no' ? 0.75 : 0.5;
+  return [n.x + w * fx, n.y + h];
+}
+function scDrawEdges(){
+  const g = document.getElementById('sc-edges'), pills = document.getElementById('sc-pills'); if(!g || !scG) return;
+  const trKeys = new Set(); (scTrace || []).forEach(s => { if(s.port) trKeys.add(s.id + ':' + s.port); });
+  let paths = '', pl = '';
+  scG.edges.forEach(e => {
+    if(!scNode(e.from) || !scNode(e.to)) return;
+    const key = e.from + ':' + e.port;
+    const a = scPortPos(e.from, e.port), b = scPortPos(e.to, 'in'); const dy = Math.max(40, Math.abs(b[1] - a[1]) / 2);
+    const sel = scSel && scSel.kind === 'edge' && scSel.key === key;
+    paths += `<path class="sc-e${sel ? ' sel' : ''}${trKeys.has(key) ? ' tr' : ''}" d="M${a[0]},${a[1]} C${a[0]},${a[1] + dy} ${b[0]},${b[1] - dy} ${b[0]},${b[1]}" marker-end="url(#sc-arrow)" data-key="${bEsc(key)}"></path>`;
+    const simc = scSim && scSim.edges && scSim.edges[key];
+    pl += `<div class="scn-pill${sel ? ' sel' : ''}" data-key="${bEsc(key)}" style="left:${(a[0] + b[0]) / 2}px;top:${(a[1] + b[1]) / 2}px">${bEsc(scDelayText(e.delay_minutes))}${simc ? ' · ' + bEsc(scRange(simc)) : ''}</div>`;
+  });
+  g.innerHTML = paths; pills.innerHTML = pl;
+}
+function scPt(e){ const r = document.getElementById('sc-inner').getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
+function scTempHide(){ const t = document.getElementById('sc-temp'); if(t) t.style.display = 'none'; }
+function scSelect(sel){ scSel = sel; scRenderNodes(); scInspector(); }
+function scReach(id){ const seen = new Set([id]), st = [id]; while(st.length){ const c = st.pop(); scG.edges.forEach(e => { if(e.from === c && !seen.has(e.to)){ seen.add(e.to); st.push(e.to); } }); } return seen; }
+function scLink(from, port, to){
+  if(from === to){ scMsg('A block cannot link to itself.'); return; }
+  const t = scNode(to); if(!t || t.type === 'start'){ scMsg('Nothing can lead back to Start.'); return; }
+  if(scReach(to).has(from)){ scMsg('That link would make the scenario loop back on itself.'); return; }
+  const had = scG.edges.some(e => e.from === from && e.port === port);
+  if(!had && scG.edges.length >= 60){ scMsg('A scenario can have up to 60 links.'); return; }
+  scG.edges = scG.edges.filter(e => !(e.from === from && e.port === port));
+  scG.edges.push({ from, to, port, delay_minutes: 0 });
+  scMsg(''); scTouched = true; scSim = null; scTrace = null; scSelect({ kind: 'edge', key: from + ':' + port });
+}
+function scBind(){
+  const cv = document.getElementById('sc-canvas'); if(!cv || cv._b) return; cv._b = true;
+  cv.addEventListener('pointerdown', scDown); cv.addEventListener('pointermove', scMove);
+  cv.addEventListener('pointerup', scUp); cv.addEventListener('pointercancel', scUp);
+  cv.addEventListener('keydown', e => {
+    if(e.key === 'Escape'){ scConn = null; scTempHide(); scMsg(''); }
+    if((e.key === 'Delete' || e.key === 'Backspace') && !/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)){ scDeleteSel(); e.preventDefault(); }
+  });
+}
+function scDown(e){
+  if(!scReady) return;
+  const cv = document.getElementById('sc-canvas');
+  const port = e.target.closest('.scp-out'), pill = e.target.closest('.scn-pill'), path = e.target.closest('path.sc-e'), node = e.target.closest('.scn');
+  if(port){
+    e.preventDefault(); cv.focus({ preventScroll: true });
+    scDrag = { kind: 'link', id: port.dataset.id, port: port.dataset.port, sx: e.clientX, sy: e.clientY, moved: false };
+    scConn = null; try { cv.setPointerCapture(e.pointerId); } catch(x) {} return;
+  }
+  if(pill || path){ scSelect({ kind: 'edge', key: (pill || path).dataset.key }); return; }
+  if(node){
+    if(scConn){ const c = scConn; scConn = null; scTempHide(); scLink(c.id, c.port, node.dataset.id); return; }
+    const n = scNode(node.dataset.id); if(!n) return;
+    if(!(scSel && scSel.kind === 'node' && scSel.id === n.id)) scSelect({ kind: 'node', id: n.id });
+    if(e.target.closest('.scn-h')){
+      e.preventDefault(); const p = scPt(e);
+      scDrag = { kind: 'move', id: n.id, ox: p[0] - n.x, oy: p[1] - n.y, moved: false };
+      try { cv.setPointerCapture(e.pointerId); } catch(x) {}
+    }
+    return;
+  }
+  scConn = null; scTempHide(); scMsg('');
+  if(scSel){ scSel = null; scRenderNodes(); scInspector(); }
+}
+function scMove(e){
+  if(!scDrag) return;
+  if(scDrag.kind === 'move'){
+    const n = scNode(scDrag.id); if(!n) return; const p = scPt(e);
+    const nx = Math.max(0, Math.round(p[0] - scDrag.ox)), ny = Math.max(0, Math.round(p[1] - scDrag.oy));
+    if(nx !== n.x || ny !== n.y){
+      scDrag.moved = true; n.x = nx; n.y = ny;
+      const el = document.querySelector('.scn[data-id="' + n.id + '"]'); if(el){ el.style.left = nx + 'px'; el.style.top = ny + 'px'; }
+      scDrawEdges();
+    }
+  } else if(scDrag.kind === 'link'){
+    if(Math.abs(e.clientX - scDrag.sx) + Math.abs(e.clientY - scDrag.sy) > 5) scDrag.moved = true;
+    if(scDrag.moved){
+      const a = scPortPos(scDrag.id, scDrag.port), p = scPt(e), t = document.getElementById('sc-temp');
+      t.setAttribute('d', `M${a[0]},${a[1]} L${p[0]},${p[1]}`); t.style.display = 'block';
+    }
+  }
+}
+function scUp(e){
+  const d = scDrag; scDrag = null; if(!d) return;
+  const cv = document.getElementById('sc-canvas'); try { cv.releasePointerCapture(e.pointerId); } catch(x) {}
+  if(d.kind === 'move'){ if(d.moved){ scTouched = true; } return; }
+  scTempHide();
+  if(d.moved){
+    // Hit-test the block rectangles: a delay label drawn over a block must not swallow the drop.
+    let tid = null;
+    document.querySelectorAll('#sc-nodes .scn').forEach(el => { const r = el.getBoundingClientRect(); if(e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) tid = el.dataset.id; });
+    if(tid) scLink(d.id, d.port, tid);
+  } else { scConn = { id: d.id, port: d.port }; scMsg('Now click the block to link to. Escape cancels.'); }
+}
+function scNewId(prefix){ let id; do { id = prefix + (scSeq++); } while(scNode(id)); return id; }
+function scAddNode(type, atype){
+  if(!scReady) return;
+  if(scG.nodes.length >= 30){ scMsg('A scenario can have up to 30 blocks.'); return; }
+  const n = { id: scNewId(type === 'action' ? 'a' : type === 'condition' ? 'c' : 'e'), type, x: 300, y: 0 };
+  if(type === 'condition') n.conditions = { match: 'all', items: [] };
+  if(type === 'action') n.action = { type: atype, label: '', message: '' };
+  let maxB = 0; scG.nodes.forEach(m => { const el = document.querySelector('.scn[data-id="' + m.id + '"]'); maxB = Math.max(maxB, m.y + (el ? el.offsetHeight : 100)); });
+  n.y = maxB + 60; scG.nodes.push(n); scMsg('');
+  scTouched = true; scSim = null; scTrace = null; scSelect({ kind: 'node', id: n.id });
+  const cv = document.getElementById('sc-canvas'); cv.scrollTop = Math.max(0, n.y - 80);
+}
+function scDeleteSel(){
+  if(!scReady || !scSel) return;
+  if(scSel.kind === 'node'){
+    const n = scNode(scSel.id); if(!n || n.type === 'start'){ scMsg('The Start block cannot be removed.'); return; }
+    scG.nodes = scG.nodes.filter(x => x.id !== n.id); scG.edges = scG.edges.filter(e => e.from !== n.id && e.to !== n.id);
+  } else { scG.edges = scG.edges.filter(e => (e.from + ':' + e.port) !== scSel.key); }
+  scSel = null; scMsg(''); scChanged(); scInspector();
+}
+// ---- inspector ----
+function scOpt(list, cur, valKey, labKey){ return list.map(x => `<option value="${bEsc(x[valKey])}"${x[valKey] === cur ? ' selected' : ''}>${bEsc(x[labKey])}</option>`).join(''); }
+function scInspector(){
+  const el = document.getElementById('sc-insp'); if(!el) return;
+  if(!scReady || !scG){ el.innerHTML = ''; return; }
+  if(!scSel){ el.innerHTML = '<div class="sc-hint">Click a block or a link to edit it.</div>'; return; }
+  if(scSel.kind === 'edge'){
+    const e = scG.edges.find(x => x.from + ':' + x.port === scSel.key); if(!e){ el.innerHTML = ''; return; }
+    const m = e.delay_minutes || 0, useH = m > 0 && m % 60 === 0, v = useH ? m / 60 : m;
+    el.innerHTML = `<div class="sc-ins-t">Link</div><label for="sc-ed-v">Wait before the next block</label><div style="display:flex;gap:6px;"><input type="number" id="sc-ed-v" min="0" step="1" value="${v}" style="width:90px" oninput="scEdgeDelay()"><select id="sc-ed-u" onchange="scEdgeDelay()"><option value="m"${useH ? '' : ' selected'}>minutes</option><option value="h"${useH ? ' selected' : ''}>hours</option></select></div><div class="sc-hint">Up to 24 hours. The next block is checked after this wait.</div><button class="btn btn-sm btn-danger" type="button" onclick="scDeleteSel()">Remove this link</button>`;
+    return;
+  }
+  const n = scNode(scSel.id); if(!n){ el.innerHTML = ''; return; }
+  const del = n.type === 'start' ? '' : '<div style="margin-top:12px;"><button class="btn btn-sm btn-danger" type="button" onclick="scDeleteSel()">Remove this block</button></div>';
+  if(n.type === 'start'){
+    const t = n.trigger || {};
+    el.innerHTML = `<div class="sc-ins-t">Start</div><label for="sc-i-trig">When</label><select id="sc-i-trig" onchange="scStartType()" style="width:100%"><option value="">Choose…</option>${scOpt(ccOpts.triggers, t.type, 'type', 'label')}</select>
+      <div id="sc-i-thr" style="display:${t.type === 'charge_threshold' ? '' : 'none'}"><label for="sc-i-metric">Threshold</label><div style="display:flex;gap:6px;flex-wrap:wrap;"><select id="sc-i-metric" onchange="scStartSet()">${scOpt(ccOpts.metrics, t.metric || 'kwh', 'key', 'label')}</select><input type="number" id="sc-i-val" min="0" step="any" value="${bEsc(String(t.value == null ? '' : t.value))}" style="width:100px" oninput="scStartSet()" aria-label="Threshold value"></div></div>`;
+  } else if(n.type === 'condition'){
+    const items = n.conditions.items, fams = [...new Set(ccOpts.fields.map(f => f.family))];
+    const rows = items.map((c, i) => {
+      const f = scField(c.field) || ccOpts.fields[0];
+      const fieldSel = `<select onchange="scCondSet(${i},'field',this.value)" aria-label="Field" style="width:100%">` + fams.map(fam => `<optgroup label="${bEsc(fam)}">` + ccOpts.fields.filter(x => x.family === fam).map(x => `<option value="${bEsc(x.key)}"${x.key === c.field ? ' selected' : ''}${x.available ? '' : ' disabled'}>${bEsc(x.label)}${x.available ? '' : ' (later step)'}</option>`).join('') + '</optgroup>').join('') + '</select>';
+      const opSel = `<select onchange="scCondSet(${i},'op',this.value)" aria-label="Operator" style="width:100%">` + f.operators.map(o => `<option value="${bEsc(o)}"${o === c.op ? ' selected' : ''}>${bEsc(ccOpts.operators[o] || o)}</option>`).join('') + '</select>';
+      let val;
+      if(f.type === 'enum') val = `<select onchange="scCondSet(${i},'value',this.value)" aria-label="Value" style="width:100%">` + f.values.map(v => `<option value="${bEsc(v)}"${v === c.value ? ' selected' : ''}>${bEsc(v)}</option>`).join('') + '</select>';
+      else if(f.type === 'number') val = `<span style="display:flex;gap:6px;align-items:center;"><input type="number" step="any" value="${bEsc(String(c.value == null ? '' : c.value))}" oninput="scCondSet(${i},'value',this.value)" style="width:110px" aria-label="Value">${f.unit ? `<span class="sc-hint" style="margin:0">${bEsc(f.unit)}</span>` : ''}</span>`;
+      else val = `<input type="text" maxlength="40" value="${bEsc(String(c.value == null ? '' : c.value))}" oninput="scCondSet(${i},'value',this.value)" style="width:100%" aria-label="Value">`;
+      const per = f.needs_period ? `<span style="display:flex;gap:6px;align-items:center;"><span class="sc-hint" style="margin:0">over the last</span><input type="number" min="1" max="365" step="1" value="${bEsc(String(c.period_days || ''))}" oninput="scCondSet(${i},'period_days',this.value)" style="width:70px" aria-label="Period in days"><span class="sc-hint" style="margin:0">days</span></span>` : '';
+      return `<div class="sc-row">${fieldSel}${opSel}${val}${per}<div class="sc-hint" style="margin:0">${bEsc(f.hint || '')}</div><button class="btn btn-sm" type="button" onclick="scRemoveCond(${i})">Remove this condition</button></div>`;
+    }).join('');
+    el.innerHTML = `<div class="sc-ins-t">Condition</div><div class="sc-hint">Charges that meet the condition leave by Yes, the others by No.</div><label for="sc-i-match">Match</label><select id="sc-i-match" onchange="scCondMatch()" style="width:100%"><option value="all"${n.conditions.match === 'any' ? '' : ' selected'}>all conditions</option><option value="any"${n.conditions.match === 'any' ? ' selected' : ''}>at least one condition</option></select><div style="margin-top:10px;">${rows}</div>${items.length >= 10 ? '' : '<button class="btn btn-sm" type="button" onclick="scAddCond()">+ Add a condition</button>'}`;
+  } else if(n.type === 'action'){
+    const a = n.action || {}, extra = a.type === 'send_offer' || a.type === 'reward';
+    el.innerHTML = `<div class="sc-ins-t">Action</div><label for="sc-i-act">Then</label><select id="sc-i-act" onchange="scActType()" style="width:100%">${scOpt(ccOpts.actions, a.type, 'type', 'label')}</select>
+      ${extra ? `<label for="sc-i-lab">Offer name</label><input type="text" id="sc-i-lab" maxlength="60" value="${bEsc(a.label || '')}" placeholder="e.g. Free coffee" style="width:100%" oninput="scActSet()"><label for="sc-i-msg">Message</label><textarea id="sc-i-msg" rows="3" maxlength="300" style="width:100%" placeholder="Short text the driver would see" oninput="scActSet()">${bEsc(a.message || '')}</textarea>` : ''}
+      <div class="sc-hint">Nothing is sent at this stage.</div>`;
+  } else { el.innerHTML = '<div class="sc-ins-t">End</div><div class="sc-hint">The scenario stops here for this charge.</div>'; }
+  el.innerHTML += del;
+}
+function scSelNode(){ return scSel && scSel.kind === 'node' ? scNode(scSel.id) : null; }
+function scStartType(){ const n = scSelNode(); if(!n) return; const v = document.getElementById('sc-i-trig').value; if(!v) delete n.trigger; else n.trigger = { type: v, metric: v === 'charge_threshold' ? 'kwh' : undefined, value: undefined }; scChanged(); scInspector(); }
+function scStartSet(){ const n = scSelNode(); if(!n || !n.trigger) return; n.trigger.metric = document.getElementById('sc-i-metric').value; n.trigger.value = document.getElementById('sc-i-val').value; scChanged(); }
+function scCondMatch(){ const n = scSelNode(); if(!n) return; n.conditions.match = document.getElementById('sc-i-match').value; scChanged(); }
+function scAddCond(){
+  const n = scSelNode(); if(!n || !ccOpts || n.conditions.items.length >= 10) return;
+  const f = ccOpts.fields.find(x => x.available);
+  n.conditions.items.push({ field: f.key, op: f.operators[0], value: f.type === 'enum' ? f.values[0] : '', period_days: f.needs_period ? 30 : '' });
+  scChanged(); scInspector();
+}
+function scRemoveCond(i){ const n = scSelNode(); if(!n) return; n.conditions.items.splice(i, 1); scChanged(); scInspector(); }
+function scCondSet(i, k, v){
+  const n = scSelNode(); if(!n) return; const c = n.conditions.items[i]; if(!c) return;
+  if(k === 'field'){ const f = scField(v); c.field = v; c.op = f.operators[0]; c.value = f.type === 'enum' ? f.values[0] : ''; c.period_days = f.needs_period ? 30 : ''; scChanged(); scInspector(); return; }
+  c[k] = v; scChanged();
+}
+function scActType(){ const n = scSelNode(); if(!n) return; n.action = n.action || {}; n.action.type = document.getElementById('sc-i-act').value; scChanged(); scInspector(); }
+function scActSet(){ const n = scSelNode(); if(!n) return; n.action = n.action || {}; const l = document.getElementById('sc-i-lab'), m = document.getElementById('sc-i-msg'); if(l) n.action.label = l.value; if(m) n.action.message = m.value; scChanged(); }
+function scEdgeDelay(){
+  const e = scSel && scSel.kind === 'edge' ? scG.edges.find(x => x.from + ':' + x.port === scSel.key) : null; if(!e) return;
+  let v = parseFloat(document.getElementById('sc-ed-v').value); if(!isFinite(v) || v < 0) v = 0;
+  let m = Math.round(v * (document.getElementById('sc-ed-u').value === 'h' ? 60 : 1));
+  if(m > 1440){ m = 1440; scMsg('A wait is limited to 24 hours.'); } else scMsg('');
+  e.delay_minutes = m; scChanged();
+}
+// ---- build, simulate, test ----
+// Returns { sc } (the graph to save) or { err }.
 function scBuild(){
-  const type = document.getElementById('sc-trigger').value;
-  if(!type) return { sc: null };
-  const trigger = { type };
-  if(type === 'charge_threshold'){
-    const v = parseFloat(document.getElementById('sc-thr-val').value);
-    if(!(v > 0)) return { err: 'Enter a threshold greater than zero.' };
-    trigger.metric = document.getElementById('sc-metric').value; trigger.value = v;
-  }
-  const items = [];
-  for(const c of scConds){
-    const f = scField(c.field); if(!f) return { err: 'A condition uses an unknown field.' };
-    let value = c.value;
-    if(f.type === 'number'){ value = parseFloat(value); if(!isFinite(value)) return { err: 'Enter a number for "' + f.label + '".' }; }
-    else { value = String(value == null ? '' : value).trim(); if(!value) return { err: 'Enter a value for "' + f.label + '".' }; }
-    const it = { field: c.field, op: c.op, value };
-    if(f.needs_period){
-      const p = parseInt(c.period_days, 10);
-      if(!(p >= 1 && p <= 365)) return { err: 'The period for "' + f.label + '" must be between 1 and 365 days.' };
-      it.period_days = p;
+  if(!scReady || !scG) return { sc: null };
+  const nodes = [];
+  for(const n of scG.nodes){
+    const o = { id: n.id, type: n.type, x: Math.round(n.x), y: Math.round(n.y) };
+    if(n.type === 'start' && n.trigger && n.trigger.type){
+      o.trigger = { type: n.trigger.type };
+      if(n.trigger.type === 'charge_threshold'){
+        const v = parseFloat(n.trigger.value); if(!(v > 0)) return { err: 'Enter a threshold greater than zero in the Start block.' };
+        o.trigger.metric = n.trigger.metric || 'kwh'; o.trigger.value = v;
+      }
     }
-    items.push(it);
-  }
-  const mins = parseInt(document.getElementById('sc-delay').value, 10);
-  if(!(mins >= 0 && mins <= 1440)) return { err: 'The wait must be between 0 and 1440 minutes.' };
-  const sc = { trigger, conditions: { match: document.getElementById('sc-match').value, items }, delay: { minutes: mins, recheck: true } };
-  const at = document.getElementById('sc-action').value;
-  if(at){
-    sc.action = { type: at };
-    if(at === 'send_offer' || at === 'reward'){
-      sc.action.label = document.getElementById('sc-act-label').value.trim();
-      sc.action.message = document.getElementById('sc-act-msg').value.trim();
+    if(n.type === 'condition'){
+      const items = [];
+      for(const c of n.conditions.items){
+        const f = scField(c.field); if(!f) return { err: 'A condition uses an unknown field.' };
+        let value = c.value;
+        if(f.type === 'number'){ value = parseFloat(value); if(!isFinite(value)) return { err: 'Enter a number for "' + f.label + '".' }; }
+        else { value = String(value == null ? '' : value).trim(); if(!value) return { err: 'Enter a value for "' + f.label + '".' }; }
+        const it = { field: c.field, op: c.op, value };
+        if(f.needs_period){ const p = parseInt(c.period_days, 10); if(!(p >= 1 && p <= 365)) return { err: 'The period for "' + f.label + '" must be between 1 and 365 days.' }; it.period_days = p; }
+        items.push(it);
+      }
+      o.conditions = { match: n.conditions.match === 'any' ? 'any' : 'all', items };
     }
+    if(n.type === 'action' && n.action && n.action.type){
+      o.action = { type: n.action.type };
+      if(n.action.type === 'send_offer' || n.action.type === 'reward'){ o.action.label = (n.action.label || '').trim(); o.action.message = (n.action.message || '').trim(); }
+    }
+    nodes.push(o);
   }
-  return { sc };
+  return { sc: { version: 2, nodes, edges: scG.edges.map(e => ({ from: e.from, to: e.to, port: e.port, delay_minutes: e.delay_minutes || 0 })) } };
 }
-function scRange(x){
-  if(!x) return '?';
-  if(x.lt10) return 'fewer than 10';
-  return x.low + ' to ' + x.high;
-}
+function scStartReady(){ const s = scG && scG.nodes.find(n => n.type === 'start'); return !!(s && s.trigger && s.trigger.type); }
 async function scSimulate(){
   const err = document.getElementById('sc-error'), out = document.getElementById('sc-sim'); err.textContent = ''; out.innerHTML = '';
+  if(!scReady){ err.textContent = 'The scenario is not ready yet.'; return; }
   if(!ccEditId){ err.textContent = 'Save the draft first, then simulate.'; return; }
   const b = scBuild(); if(b.err){ err.textContent = b.err; return; }
-  if(!b.sc){ err.textContent = 'Choose when the scenario starts first.'; return; }
+  if(!scStartReady()){ err.textContent = 'Choose when the scenario starts in the Start block first.'; return; }
   out.textContent = 'Simulating…';
   const days = parseInt(document.getElementById('sc-days').value, 10);
   const { data, error } = await sb.rpc('simulate_campaign', { p_id: ccEditId, p_scenario: b.sc, p_days: days });
   if(error || !data){ out.textContent = ''; err.textContent = csCleanMessage(error && error.message) || 'The simulation failed. Please try again.'; return; }
+  scSim = data.graph ? data : null; scTrace = null; scRenderNodes();
   const per = data.per_week && !data.per_week.lt10 ? `<div>About ${bEsc(scRange(data.per_week))} per week.</div>` : '';
   out.innerHTML = `<div class="card card-pad" style="background:var(--surface, #f7f9fb);"><b>On the last ${bEsc(String(data.days))} days, ${bEsc(String(data.sites))} site${data.sites === 1 ? '' : 's'}</b>
-    <div>Matching charges: <b>${bEsc(scRange(data.events && data.events.matched))}</b> out of ${bEsc(scRange(data.events && data.events.total))}</div>
+    <div>Charges that reach an action: <b>${bEsc(scRange(data.events && data.events.matched))}</b> out of ${bEsc(scRange(data.events && data.events.total))}</div>
     <div>Distinct drivers reached: <b>${bEsc(scRange(data.drivers && data.drivers.matched))}</b> out of ${bEsc(scRange(data.drivers && data.drivers.total))}</div>${per}
-    <div style="font-size:11px;color:var(--text-muted);margin-top:6px;">Simulation only. Figures are rounded ranges (fewer than 10 is not shown precisely). ${data.width === 'narrow' ? 'The result is very narrow: very few drivers would match.' : ''} ${bEsc(data.note || '')}</div></div>`;
+    <div style="font-size:11px;color:var(--text-muted);margin-top:6px;">Simulation only. Figures are rounded ranges (fewer than 10 is not shown precisely). The counts are shown on each block and link. ${data.width === 'narrow' ? 'Very few drivers would be reached. ' : ''}${data.capped ? 'Only the most recent charges were counted. ' : ''}${bEsc(data.note || '')}</div></div>`;
 }
 function scToggleTest(){
   const box = document.getElementById('sc-test');
@@ -7272,31 +7523,32 @@ function scToggleTest(){
 }
 async function scRunTest(){
   const err = document.getElementById('sc-error'), out = document.getElementById('sc-test-out'); err.textContent = ''; out.innerHTML = '';
+  if(!scReady){ err.textContent = 'The scenario is not ready yet.'; return; }
   if(!ccEditId){ err.textContent = 'Save the draft first, then test.'; return; }
   const b = scBuild(); if(b.err){ err.textContent = b.err; return; }
-  if(!b.sc){ err.textContent = 'Choose when the scenario starts first.'; return; }
+  if(!scStartReady()){ err.textContent = 'Choose when the scenario starts in the Start block first.'; return; }
   const ev = {};
   document.querySelectorAll('#sc-test-fields [data-k]').forEach(el => {
     const v = el.value.trim(); if(v === '') return;
-    const f = scField(el.dataset.k);
-    ev[el.dataset.k] = f && f.type === 'number' ? parseFloat(v) : v;
+    const f = scField(el.dataset.k); ev[el.dataset.k] = f && f.type === 'number' ? parseFloat(v) : v;
   });
   const { data, error } = await sb.rpc('simulate_campaign_test', { p_id: ccEditId, p_scenario: b.sc, p_event: ev });
   if(error || !data){ err.textContent = csCleanMessage(error && error.message) || 'The test failed. Please try again.'; return; }
+  scTrace = Array.isArray(data.path) ? data.path : null; scSim = null; scRenderNodes();
   const verdict = {
     would_fire: ['The action would run.', 'var(--green, #1e8e5a)'],
     stopped_trigger: ['Stopped at the start: this charge does not start the scenario.', 'var(--amber, #b8791a)'],
-    stopped_conditions: ['Stopped: the conditions are not met.', 'var(--amber, #b8791a)'],
-    incomplete_no_action: ['The scenario has no action yet, so nothing would happen.', 'var(--amber, #b8791a)']
+    stopped_conditions: ['Stopped: the charge left by a No with nothing after it.', 'var(--amber, #b8791a)'],
+    incomplete_no_action: ['The path reaches no action, so nothing would happen.', 'var(--amber, #b8791a)']
   }[data.outcome] || [String(data.outcome || ''), 'inherit'];
-  const steps = (data.steps || []).map(s => {
-    if(s.step === 'trigger') return `<li>${s.ok ? 'Start: the charge matches.' : 'Start: the charge does not match.'}</li>`;
-    if(s.step === 'conditions') return `<li>Conditions (${s.match === 'any' ? 'at least one' : 'all'}): ${s.ok ? 'met' : 'not met'}<ul>` + (s.items || []).map(i => `<li>${bEsc(i.label || i.field)}: ${i.ok ? 'yes' : 'no'}${i.actual == null ? ' (unknown)' : ' (value ' + bEsc(String(i.actual)) + ')'}</li>`).join('') + '</ul></li>';
-    if(s.step === 'delay') return `<li>Wait: ${bEsc(String(s.minutes))} minute${s.minutes === 1 ? '' : 's'}${s.recheck ? ', then check again' : ''}.</li>`;
-    if(s.step === 'action') return `<li>Action: ${bEsc((s.action && s.action.type) || 'none')}. Not sent, simulation only.</li>`;
-    return '';
+  const label = id => { const n = scNode(id); return n ? scTitle(n) : id; };
+  const steps = (data.path || []).map(s => {
+    if(s.type === 'start') return '<li>Start: the charge matches.</li>';
+    if(s.type === 'condition') return `<li>Condition: ${s.ok ? 'Yes' : 'No'}<ul>` + (s.items || []).map(i => `<li>${bEsc(i.label || i.field)}: ${i.ok ? 'yes' : 'no'}${i.actual == null ? ' (unknown)' : ' (value ' + bEsc(String(i.actual)) + ')'}</li>`).join('') + '</ul></li>' + (s.delay ? `<li>Wait ${bEsc(scDelayText(s.delay))}.</li>` : '');
+    if(s.type === 'action') return `<li>${bEsc(label(s.id))}. Not sent, simulation only.</li>` + (s.delay ? `<li>Wait ${bEsc(scDelayText(s.delay))}.</li>` : '');
+    return '<li>End.</li>';
   }).join('');
-  out.innerHTML = `<div style="font-weight:600;color:${verdict[1]};">${bEsc(verdict[0])}</div><ul style="margin:6px 0 0;padding-left:20px;">${steps}</ul><div style="font-size:11px;color:var(--text-muted);margin-top:4px;">${bEsc(data.note || 'Simulation only: nothing is sent to anyone.')}</div>`;
+  out.innerHTML = `<div style="font-weight:600;color:${verdict[1]};">${bEsc(verdict[0])}</div><ul style="margin:6px 0 0;padding-left:20px;">${steps}</ul><div style="font-size:11px;color:var(--text-muted);margin-top:4px;">The path is highlighted on the canvas. ${bEsc(data.note || 'Simulation only: nothing is sent to anyone.')}</div>`;
 }
 function ccRenderPoints(){
   document.getElementById('cc-points').innerHTML = ccPoints.map((p, i) =>
@@ -7406,14 +7658,14 @@ async function submitCampaignDraft(){
   if(ccBusy) return;
   const errEl = document.getElementById('cc-error'); errEl.textContent = '';
   const name = document.getElementById('cc-name').value.trim();
-  if(!name){ errEl.textContent = 'Give the campaign a name.'; return; }
+  if(!name){ errEl.textContent = 'Give the campaign a name.'; ccTab('settings'); return; }
   const objective = document.getElementById('cc-objective').value.trim();
   const radius = parseFloat(document.getElementById('cc-radius').value);
-  if(!(radius >= 0.1 && radius <= 50)){ errEl.textContent = 'The radius must be between 0.1 and 50 km.'; return; }
+  if(!(radius >= 0.1 && radius <= 50)){ errEl.textContent = 'The radius must be between 0.1 and 50 km.'; ccTab('settings'); return; }
   const pts = [];
   for(const p of ccPoints){
     const lat = parseFloat(p.lat), lng = parseFloat(p.lng);
-    if(!(isFinite(lat) && isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180)){ errEl.textContent = 'Each extra point needs a latitude (-90 to 90) and a longitude (-180 to 180).'; return; }
+    if(!(isFinite(lat) && isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180)){ errEl.textContent = 'Each extra point needs a latitude (-90 to 90) and a longitude (-180 to 180).'; ccTab('settings'); return; }
     pts.push({ label: (p.label || '').trim(), lat, lng });
   }
   const zone = {
@@ -7423,12 +7675,12 @@ async function submitCampaignDraft(){
     excluded_site_ids: [...document.querySelectorAll('#cc-excl .cc-ex:checked')].map(c => c.value)
   };
   const start = document.getElementById('cc-start').value || null, end = document.getElementById('cc-end').value || null;
-  if(start && end && start > end){ errEl.textContent = 'The start date must not be after the end date.'; return; }
+  if(start && end && start > end){ errEl.textContent = 'The start date must not be after the end date.'; ccTab('settings'); return; }
   // The scenario is checked before anything is saved, so a mistake never leaves a half-saved draft.
   let scToSave = null;
   if(scReady && scTouched){
     const b = scBuild();
-    if(b.err){ errEl.textContent = b.err; return; }
+    if(b.err){ errEl.textContent = b.err; ccTab('scenario'); return; }
     scToSave = b.sc;
   }
   ccBusy = true; const btn = document.getElementById('cc-save'); btn.disabled = true;
