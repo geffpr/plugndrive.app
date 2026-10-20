@@ -1055,6 +1055,15 @@ tr.rowlink:hover td{background:#f0f6fc;}
             </select>
           </div>
           <div class="form-row">
+            <label>Opening hours (shown to drivers)</label>
+            <select id="ss-hours-mode" onchange="ssHoursToggle()">
+              <option value="always">Always available (24/7)</option>
+              <option value="set">Set days and hours</option>
+            </select>
+            <div id="ss-hours-grid" style="display:none;margin-top:8px;"></div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">Hours are in the site's timezone. They are shown to drivers as information ("Open now" / "Closed now"); a charge can still be started outside them.</div>
+          </div>
+          <div class="form-row">
             <label>Capacity (kVA)</label>
             <input type="number" id="ss-capacity">
           </div>
@@ -1933,6 +1942,8 @@ tr.rowlink:hover td{background:#f0f6fc;}
               <div class="card card-pad" style="display:flex;flex-direction:column;gap:8px;">
                 <button class="btn btn-block" id="cad-toggle-btn" onclick="toggleCardFromDetail()"></button>
                 <button class="btn btn-block" id="cad-resend-btn" onclick="resendActivationFromDetail()" style="display:none;">New activation code</button>
+                <button class="btn btn-block" id="cad-owner-btn" onclick="toggleOwnerCard()" style="display:none;"></button>
+                <div id="cad-owner-note" style="display:none;font-size:12px;color:var(--text-muted);"></div>
                 <div id="cad-code-box" style="display:none;"></div>
                 <button class="btn btn-primary btn-block" id="cad-credit-btn" onclick="openAdminCredit(currentCardUid)" style="display:none;">Credit card</button>
               </div>
@@ -3270,7 +3281,7 @@ let users = [];
 let tariffs = [];
 let clients = [];
 
-function mapLocation(l){ return {id:l.id, name:l.name, type:l.type, parentId:l.parent_id, city:l.city, address:l.address, capacityKVA:l.capacity_kva, currency:l.currency, clientId:l.client_id, timezone:l.timezone, contactName:l.contact_name, contactPhone:l.contact_phone, contactEmail:l.contact_email, status:l.status, loadManagementEnabled:l.load_management_enabled, latitude:l.latitude, longitude:l.longitude, siteDescription:l.site_description, accessMode:l.access_mode, hostPhone:l.host_phone}; }
+function mapLocation(l){ return {id:l.id, name:l.name, type:l.type, parentId:l.parent_id, city:l.city, address:l.address, capacityKVA:l.capacity_kva, currency:l.currency, clientId:l.client_id, timezone:l.timezone, contactName:l.contact_name, contactPhone:l.contact_phone, contactEmail:l.contact_email, status:l.status, loadManagementEnabled:l.load_management_enabled, latitude:l.latitude, longitude:l.longitude, siteDescription:l.site_description, accessMode:l.access_mode, hostPhone:l.host_phone, openingHours:l.opening_hours||null}; }
 function mapCharger(c){ return {id:c.id, locationId:c.location_id, name:c.name, ocppId:c.ocpp_id, vendor:c.vendor, connector:c.connector, powerKW:c.power_kw, ocpp:c.ocpp_version, status:c.status, currentKW:c.current_kw, ocppPassword:c.ocpp_password, lastSeenAt:c.last_seen_at, ocppStatus:c.ocpp_status, listedPublicly:c.listed_publicly}; }
 function mapSession(s){ return {id:s.id, chargerId:s.charger_id, userId:s.user_id, rfidCardId:s.rfid_card_id, kwh:s.kwh, cost:s.cost, currency:s.currency, startedAt:s.started_at, endedAt:s.ended_at, paymentStatus:s.payment_status, payment:s.payment_method, groupId:s.access_group_id, groupMode:s.group_pricing_mode, groupPercent:s.group_discount_percent, offered:s.offered_value}; }
 function mapRfid(r){ return {id:r.id, uid:r.uid, userId:r.user_id, complexId:r.location_id, status:r.status, number:r.card_number||null, ownerClientId:r.owner_client_id||null}; }
@@ -4479,6 +4490,65 @@ function siteHasFinancialData(id){
   const hasSession = sessions.some(s=>chargerIds.includes(s.chargerId));
   return hasTariff || hasSession;
 }
+// ---- Opening hours editor (site settings) ----
+const SS_DAYS = [['mon','Monday'],['tue','Tuesday'],['wed','Wednesday'],['thu','Thursday'],['fri','Friday'],['sat','Saturday'],['sun','Sunday']];
+function ssHoursBuild(){
+  const g = document.getElementById('ss-hours-grid');
+  if(g.dataset.built) return;
+  g.dataset.built = '1';
+  g.innerHTML = SS_DAYS.map(([k,label]) =>
+    `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;">
+      <label style="width:110px;display:flex;align-items:center;gap:6px;margin:0;"><input type="checkbox" id="ss-h-${k}-on"> ${label}</label>
+      <input type="time" id="ss-h-${k}-from" value="08:00" style="width:110px;"> <span>to</span>
+      <input type="time" id="ss-h-${k}-to" value="18:00" style="width:110px;">
+    </div>`).join('') +
+    `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">
+      <button type="button" class="btn" onclick="ssHoursCopy('weekdays')">Copy Monday to weekdays</button>
+      <button type="button" class="btn" onclick="ssHoursCopy('all')">Copy Monday to all days</button>
+    </div>`;
+}
+function ssHoursToggle(){
+  ssHoursBuild();
+  document.getElementById('ss-hours-grid').style.display = document.getElementById('ss-hours-mode').value === 'set' ? 'block' : 'none';
+}
+function ssHoursCopy(which){
+  const from = document.getElementById('ss-h-mon-from').value, to = document.getElementById('ss-h-mon-to').value;
+  SS_DAYS.forEach(([k]) => {
+    if(k === 'mon') return;
+    if(which === 'weekdays' && (k === 'sat' || k === 'sun')) return;
+    document.getElementById(`ss-h-${k}-on`).checked = true;
+    document.getElementById(`ss-h-${k}-from`).value = from;
+    document.getElementById(`ss-h-${k}-to`).value = to;
+  });
+  document.getElementById('ss-h-mon-on').checked = true;
+}
+function ssHoursFill(hours){
+  ssHoursBuild();
+  SS_DAYS.forEach(([k]) => {
+    const r = hours && Array.isArray(hours[k]) && hours[k][0] ? hours[k][0] : null;
+    document.getElementById(`ss-h-${k}-on`).checked = !!r;
+    document.getElementById(`ss-h-${k}-from`).value = r ? r[0] : '08:00';
+    document.getElementById(`ss-h-${k}-to`).value = r ? (r[1] === '24:00' ? '23:59' : r[1]) : '18:00';
+  });
+  document.getElementById('ss-hours-mode').value = hours ? 'set' : 'always';
+  ssHoursToggle();
+}
+// Returns { hours } (null = always available) or { error }
+function ssHoursRead(){
+  if(document.getElementById('ss-hours-mode').value !== 'set') return { hours: null };
+  const hours = {};
+  for(const [k,label] of SS_DAYS){
+    if(!document.getElementById(`ss-h-${k}-on`).checked) continue;
+    const from = document.getElementById(`ss-h-${k}-from`).value, to = document.getElementById(`ss-h-${k}-to`).value;
+    if(!from || !to) return { error: `Set the opening and closing time for ${label}.` };
+    const end = to === '23:59' ? '24:00' : to;
+    if(from >= end) return { error: `Closing time must be after opening time (${label}).` };
+    hours[k] = [[from, end]];
+  }
+  if(!Object.keys(hours).length) return { error: 'Tick at least one open day, or choose "Always available (24/7)".' };
+  return { hours };
+}
+
 function openSiteSettings(id){
   siteSettingsTargetId = id;
   const loc = locations.find(l=>l.id===id);
@@ -4505,6 +4575,7 @@ function openSiteSettings(id){
   document.getElementById('ss-desc').value = loc.siteDescription || '';
   document.getElementById('ss-access').value = loc.accessMode || '';
   document.getElementById('ss-hostphone').value = loc.hostPhone || '';
+  ssHoursFill(loc.openingHours);
   document.getElementById('site-settings-error').textContent = '';
 
   const currencySel = document.getElementById('ss-currency');
@@ -4544,6 +4615,8 @@ async function saveSiteSettings(){
     const dup = locations.some(l => l.id !== siteSettingsTargetId && (l.clientId||null) === newClientId && (l.name||'').trim().toLowerCase() === newName.toLowerCase());
     if(dup){ errEl.textContent = 'Another site of this client already uses this name.'; return; }
   }
+  const hrs = ssHoursRead();
+  if(hrs.error){ errEl.textContent = hrs.error; return; }
   const payload = {
     name: newName,
     client_id: document.getElementById('ss-client').value || null,
@@ -4564,6 +4637,11 @@ async function saveSiteSettings(){
   };
   const { error } = await sb.from('locations').update(payload).eq('id', siteSettingsTargetId);
   if(error){ errEl.textContent = error.message; return; }
+  // Opening hours go through their own function (it also covers accounts that cannot edit the site row directly).
+  if(JSON.stringify(hrs.hours || null) !== JSON.stringify((curLoc && curLoc.openingHours) || null)){
+    const { error: hErr } = await sb.rpc('set_site_opening_hours', { p_location: siteSettingsTargetId, p_hours: hrs.hours });
+    if(hErr){ await loadAll(); errEl.textContent = 'Site saved, but the opening hours could not be saved: ' + hErr.message; return; }
+  }
   await loadAll();
   cancelSiteSettings();
 }
@@ -6761,7 +6839,42 @@ function openCardDetail(uid){
   // their own separate "credit a cardholder" screen, tied to their site).
   document.getElementById('cad-credit-btn').style.display = (currentStaff && currentStaff.role === 'plugndrive_admin') ? '' : 'none';
 
+  updateOwnerCardButton();
+  refreshOwnerCardIds().then(updateOwnerCardButton);
   loadCardHistory(card.userId);
+}
+// "My vehicle": the owner's own card. Its charges are free, recorded as "Owner", and carry no platform fee.
+let ownerCardIds = new Set();
+async function refreshOwnerCardIds(){
+  try{
+    const { data, error } = await sb.rpc('owner_card_ids');
+    if(!error && Array.isArray(data)) ownerCardIds = new Set(data);
+  }catch(e){ /* the button simply keeps its last state */ }
+}
+function updateOwnerCardButton(){
+  const btn = document.getElementById('cad-owner-btn'), note = document.getElementById('cad-owner-note');
+  if(!btn || !note) return;
+  const card = rfidCards.find(r=>r.uid===currentCardUid);
+  const canUse = currentStaff && (currentStaff.role === 'plugndrive_admin' || currentStaff.role === 'client_admin');
+  if(!card || !canUse || !(card.status === 'active' || card.status === 'pending')){ btn.style.display = 'none'; note.style.display = 'none'; return; }
+  const on = ownerCardIds.has(card.id);
+  btn.style.display = ''; btn.disabled = false;
+  btn.textContent = on ? 'Remove from my vehicles' : 'Mark as my vehicle';
+  note.style.display = 'block';
+  note.textContent = on
+    ? 'This card is one of your own vehicles: its charges are free and recorded as "Owner".'
+    : 'Use this for your own car: its charges will be free and recorded as "Owner".';
+}
+async function toggleOwnerCard(){
+  const card = rfidCards.find(r=>r.uid===currentCardUid);
+  if(!card) return;
+  const btn = document.getElementById('cad-owner-btn');
+  const on = ownerCardIds.has(card.id);
+  btn.disabled = true;
+  const { error } = await sb.rpc('set_owner_card', { p_card: card.id, p_on: !on });
+  if(error){ alert('Could not change this card: ' + error.message); btn.disabled = false; return; }
+  await refreshOwnerCardIds();
+  updateOwnerCardButton();
 }
 function backToRfid(){
   currentCardUid = null;
