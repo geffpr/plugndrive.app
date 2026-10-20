@@ -3487,7 +3487,7 @@ function renderChargeReqs(){
   if(!chargeReqCanSee() || !chargeReqs.length){ if(box.dataset.h){ box.innerHTML = ''; box.dataset.h = ''; } box.style.display = 'none'; return; }
   const hm = ts => new Date(ts).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
   let h = pend.map(r => {
-    const mins = chargeReqMin[r.id] || 120, busy = !!chargeReqBusy[r.id];
+    const mins = chargeReqMin[r.id] || 60, busy = !!chargeReqBusy[r.id];
     return `<div class="reqb-card"><div class="reqb-title">${escHtml(r.driver_name)} would like to charge at ${escHtml(r.site_name)}</div>
       <div class="reqb-sub">${escHtml(r.charger_name)} · arriving ${escHtml(fmtReqEta(r.eta_minutes))}${r.note ? '<br>Message: ' + escHtml(r.note) : ''}</div>
       <div class="reqb-act"><span class="reqb-sub">Green light for</span>
@@ -3506,7 +3506,7 @@ async function answerChargeReq(id, accept){
   chargeReqBusy[id] = true; renderChargeReqs();
   let err = null;
   try{
-    const r = await sb.rpc('respond_charge_request', {p_id:id, p_accept:accept, p_minutes:chargeReqMin[id] || 120});
+    const r = await sb.rpc('respond_charge_request', {p_id:id, p_accept:accept, p_minutes:chargeReqMin[id] || 60});
     if(r && r.error) err = r.error.message;
   }catch(e){ err = 'network'; }
   delete chargeReqBusy[id];
