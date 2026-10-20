@@ -498,6 +498,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
     <img id="logo-activate" alt="Plug n Drive" style="height:56px;width:auto;margin-bottom:8px;">
     <div style="color:var(--text-muted);font-size:13px;margin-bottom:16px;">Activate your RFID card</div>
     <div class="form-row"><label>Activation code</label><input type="text" id="activate-code" inputmode="numeric" placeholder="e.g. 482913"></div>
+    <label style="display:flex;gap:8px;align-items:flex-start;font-size:12px;color:var(--text-muted);line-height:1.45;margin:2px 0 12px;cursor:pointer;font-weight:400;"><input type="checkbox" id="activate-mkt" style="width:auto;margin-top:2px;flex-shrink:0;"><span>I agree to receive offers and news from the charging network I use and from Plug n Drive. Optional. I can unsubscribe at any time.</span></label>
     <button class="btn btn-primary btn-block" onclick="submitActivation()">Activate card</button>
     <div id="activate-message" style="font-size:13px;margin-top:10px;"></div>
   </div>
@@ -8817,7 +8818,7 @@ async function submitActivation(){
     const resp = await fetch(`${SUPABASE_URL}/functions/v1/activate-card`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code }),
+      body: JSON.stringify({ code, marketing: !!(document.getElementById('activate-mkt') || {}).checked }),
     });
     const data = await resp.json();
     if(!resp.ok){
