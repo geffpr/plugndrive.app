@@ -4943,7 +4943,7 @@ async function importClientCards(){
   document.getElementById('cl-cards-count').textContent = `${n} in stock, ${mine.length - n} assigned.`;
 }
 // ---------- Features panel (Plug n Drive admin, on the client page) ----------
-const FT_BOOLS = [['reporting','Reporting'],['load_management','Load management'],['tariff_advanced','Day and night tariffs, idle fee'],['sms_activation','Automatic SMS activation'],['resident_billing','Resident billing (coming soon)'],['white_label','White label (coming soon)']];
+const FT_BOOLS = [['reporting','Reporting'],['load_management','Load management'],['tariff_advanced','Day and night tariffs, idle fee'],['sms_activation','Automatic SMS activation'],['resident_billing','Resident billing (coming soon)'],['white_label','White label (coming soon)'],['campaigns','Campaigns (needs API keys)']];
 const FT_LIMITS = [['max_chargers','Chargers'],['api_keys','API keys'],['access_groups','Access groups'],['operator_accounts','Operator accounts']];
 const FT_PRESETS = {
   starter:    { reporting:true, load_management:false, tariff_advanced:false, sms_activation:false, resident_billing:false, white_label:false, max_chargers:1,    api_keys:1,    access_groups:0,    operator_accounts:0 },
@@ -4970,11 +4970,14 @@ async function renderFeaturesPanel(cl){
 function ftSrcLabel(k){
   if(ftDirty.has(k)) return ['Changed', true];
   const s = ftData.source && ftData.source[k];
+  if(k === 'campaigns' && s === 'override' && ftData.overrides && ftData.overrides.campaigns === true && ftData.features.campaigns !== true) return ['On, waiting for API keys', true];
   if(s === 'override') return ['Manual', true];
   return [s === 'plan' ? 'Plan' : 'Default', false];
 }
 function drawFeatureRows(values){
-  const vals = values || ftData.features;
+  const vals = Object.assign({}, values || ftData.features);
+  // Campaigns shows the manual switch itself, so saving other settings never turns it off by accident while the API keys are off.
+  if(!values && ftData.overrides && typeof ftData.overrides.campaigns === 'boolean') vals.campaigns = ftData.overrides.campaigns;
   const planTxt = ftData.mode === 'plan' ? `Self-serve: features follow the ${PLAN_NAME[ftData.plan] || ftData.plan || 'current'} plan unless set manually below.` : 'Contract account: features are set manually here.';
   document.getElementById('ft-mode').textContent = planTxt;
   let h = '';
@@ -5004,7 +5007,9 @@ function applyFeaturePreset(){
   const p = FT_PRESETS[document.getElementById('ft-preset').value];
   if(!p || !ftData) return;
   ftDirty = new Set(Object.keys(p));
-  drawFeatureRows(p);
+  const cur = Object.assign({}, ftData.features);   // keep switches a template does not cover (Campaigns)
+  if(ftData.overrides && typeof ftData.overrides.campaigns === 'boolean') cur.campaigns = ftData.overrides.campaigns;
+  drawFeatureRows(Object.assign(cur, p));
   document.getElementById('ft-msg').textContent = 'Template applied. Press Save to keep it.';
 }
 function ftCollect(){
@@ -5027,7 +5032,7 @@ async function ftPush(overrides, okText){
   btn.disabled = true; msg.textContent = 'Saving…';
   const { data, error } = await sb.rpc('admin_set_client_features', { p_client: currentClientId, p_overrides: overrides });
   btn.disabled = false;
-  if(error){ msg.textContent = error.message; return; }
+  if(error){ msg.textContent = String(error.message || '').replace(/^campaigns_requires_api:\s*/, 'Campaigns needs the API: '); return; }
   ftData = data; ftDirty = new Set();
   drawFeatureRows();
   msg.textContent = okText;
