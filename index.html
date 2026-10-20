@@ -1553,6 +1553,31 @@ tr.rowlink:hover td{background:#f0f6fc;}
             <tbody id="cs-body"></tbody>
           </table>
         </div>
+        <div id="cs-keys" class="card card-pad" style="display:none;max-width:760px;margin-top:14px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+            <div style="font-weight:600;">API keys for <span id="cs-keys-name"></span></div>
+            <button class="btn btn-sm" onclick="closeCampaignKeys()">Close</button>
+          </div>
+          <div style="font-size:12px;color:var(--text-muted);margin:6px 0 10px;">A key lets this brand's own tools read only the sites you allowed for it (sites and chargers). It never gives access to drivers or sessions. Up to 5 active keys.</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+            <input type="text" id="cs-key-name" maxlength="60" placeholder="Key name, e.g. Loyalty system" style="flex:1;min-width:200px;">
+            <button class="btn btn-primary" id="cs-key-submit" onclick="submitCampaignKey()">Create key</button>
+          </div>
+          <div id="cs-key-error" style="color:var(--red, #c0392b);font-size:12px;margin-bottom:8px;"></div>
+          <div id="cs-key-reveal" style="display:none;margin-bottom:12px;padding:10px;border:1px solid var(--amber, #b8791a);border-radius:8px;">
+            <div style="font-weight:600;margin-bottom:4px;">Copy your key now</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">For security, this key is shown only once. If you lose it, revoke it and create a new one.</div>
+            <div id="cs-key-value" class="pay-ref" style="padding:10px;background:var(--surface, #f7f9fb);border:1px solid var(--border);border-radius:8px;"></div>
+            <div style="display:flex;gap:8px;margin-top:10px;">
+              <button class="btn btn-primary" id="cs-key-copy" onclick="copyCampaignKey()">Copy</button>
+              <button class="btn" onclick="hideCampaignKeyReveal()">I have copied it</button>
+            </div>
+          </div>
+          <table>
+            <thead><tr><th>Name</th><th>Key</th><th>Created</th><th>Last used</th><th>Status</th><th></th></tr></thead>
+            <tbody id="cs-keys-body"></tbody>
+          </table>
+        </div>
       </div>
 
       <div class="page" id="page-myoperators">
@@ -6662,7 +6687,69 @@ function csCleanMessage(msg){
   if(/invalid_site/i.test(m)) return 'One of the selected sites is not part of your account.';
   if(/archived/i.test(m)) return 'This sub-account is archived and can no longer be changed.';
   if(/campaigns_unavailable|not permitted/i.test(m)) return 'Campaigns is not available on your account.';
+  if(/limit of 5/i.test(m)) return 'This sub-account already has 5 active keys. Revoke one to create another.';
+  if(/not_active/i.test(m)) return 'The sub-account must be active to create a key.';
+  if(/key not found/i.test(m)) return 'This key was not found or is already revoked.';
   return 'Could not complete this action. Please try again.';
+}
+// ---- keys of one sub-account ----
+let csKeysSub = null, csKeysList = [], csKeyBusy = false;
+async function openCampaignKeys(id){
+  const s = csList.find(x => x.id === id); if(!s) return;
+  csKeysSub = s.id;
+  document.getElementById('cs-keys-name').textContent = s.name;
+  document.getElementById('cs-key-name').value = '';
+  document.getElementById('cs-key-error').textContent = '';
+  hideCampaignKeyReveal();
+  document.getElementById('cs-keys').style.display = 'block';
+  await loadCampaignKeys();
+}
+function closeCampaignKeys(){ hideCampaignKeyReveal(); const p = document.getElementById('cs-keys'); if(p) p.style.display = 'none'; csKeysSub = null; }
+async function loadCampaignKeys(){
+  const body = document.getElementById('cs-keys-body');
+  body.innerHTML = '<tr><td colspan="6" class="empty">Loading…</td></tr>';
+  const { data, error } = await sb.rpc('list_campaign_subaccount_keys', { p_sub: csKeysSub });
+  if(error || !Array.isArray(data)){ body.innerHTML = '<tr><td colspan="6" class="empty">Could not load the keys. Please try again.</td></tr>'; return; }
+  csKeysList = data;
+  const sub = csList.find(x => x.id === csKeysSub);
+  body.innerHTML = data.map(k => {
+    const revoked = !!k.revoked_at;
+    return `<tr${revoked ? ' style="opacity:.55;"' : ''}><td>${bEsc(k.name)}</td><td><span class="pay-ref">${bEsc(k.prefix)}…</span></td><td>${bEsc(akDate(k.created_at))}</td><td>${bEsc(akRelative(k.last_used_at))}</td><td>${revoked ? 'Revoked ' + bEsc(akDate(k.revoked_at)) : (sub && sub.status !== 'active' ? 'Paused (sub-account ' + bEsc(sub.status) + ')' : 'Active')}</td>` +
+      `<td>${revoked ? '' : `<button class="btn btn-sm btn-danger" data-kid="${bEsc(k.id)}" onclick="revokeCampaignKey(this)">Revoke</button>`}</td></tr>`;
+  }).join('') || '<tr><td colspan="6" class="empty">No keys yet for this sub-account.</td></tr>';
+}
+async function submitCampaignKey(){
+  if(csKeyBusy || !csKeysSub) return;
+  const errEl = document.getElementById('cs-key-error'); errEl.textContent = '';
+  const name = document.getElementById('cs-key-name').value.trim();
+  if(!name){ errEl.textContent = 'Give the key a name, for example the tool that will use it.'; return; }
+  csKeyBusy = true; const btn = document.getElementById('cs-key-submit'); btn.disabled = true;
+  const { data, error } = await sb.rpc('create_campaign_subaccount_key', { p_sub: csKeysSub, p_name: name });
+  csKeyBusy = false; btn.disabled = false;
+  if(error || !data || !data.key){ errEl.textContent = csCleanMessage(error && error.message); return; }
+  document.getElementById('cs-key-name').value = '';
+  document.getElementById('cs-key-value').textContent = data.key;
+  document.getElementById('cs-key-copy').textContent = 'Copy';
+  document.getElementById('cs-key-reveal').style.display = 'block';
+  await loadCampaignKeys();
+}
+async function copyCampaignKey(){
+  const el = document.getElementById('cs-key-value'); const btn = document.getElementById('cs-key-copy');
+  try { await navigator.clipboard.writeText(el.textContent); btn.textContent = 'Copied'; return; } catch(e) { /* fall back to manual selection */ }
+  try { const r = document.createRange(); r.selectNodeContents(el); const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r); btn.textContent = 'Selected: press Ctrl+C'; } catch(e) { /* nothing more to do */ }
+}
+function hideCampaignKeyReveal(){
+  const box = document.getElementById('cs-key-reveal'); if(!box) return;
+  document.getElementById('cs-key-value').textContent = '';   // the key leaves the page for good
+  box.style.display = 'none';
+}
+async function revokeCampaignKey(btn){
+  const k = csKeysList.find(x => x.id === btn.dataset.kid); if(!k) return;
+  if(!confirm(`Revoke the key "${k.name}"? Any tool using it will stop working immediately. This cannot be undone.`)) return;
+  btn.disabled = true;
+  const { error } = await sb.rpc('revoke_campaign_subaccount_key', { p_id: k.id });
+  if(error){ btn.disabled = false; alert(csCleanMessage(error.message)); return; }
+  await loadCampaignKeys();
 }
 async function renderCampaigns(){
   if(!(currentStaff && currentStaff.role === 'client_admin' && featOn('campaigns'))){ showPage('dashboard'); return; }
@@ -6691,6 +6778,7 @@ function renderCampaignsTable(){
     let actions = '';
     if(!arch){
       actions = `<button class="btn btn-sm" data-sid="${bEsc(s.id)}" onclick="openCampaignSub(this.dataset.sid)">Edit</button> ` +
+        `<button class="btn btn-sm" data-sid="${bEsc(s.id)}" onclick="openCampaignKeys(this.dataset.sid)">Keys</button> ` +
         (s.status === 'active'
           ? `<button class="btn btn-sm" data-sid="${bEsc(s.id)}" data-st="suspended" onclick="setCampaignSubStatus(this)">Suspend</button> `
           : `<button class="btn btn-sm" data-sid="${bEsc(s.id)}" data-st="active" onclick="setCampaignSubStatus(this)">Reactivate</button> `) +
