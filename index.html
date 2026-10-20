@@ -1829,6 +1829,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
               <tbody id="cc-body"></tbody>
             </table>
           </div>
+          <div id="cc-run" class="card card-pad" style="display:none;margin-top:12px;"></div>
         </div>
       </div>
 
@@ -6974,6 +6975,7 @@ function csCleanMessage(msg){
   if(/limit of 5/i.test(m)) return 'This sub-account already has 5 active keys. Revoke one to create another.';
   if(/not_active/i.test(m)) return 'The sub-account must be active to create a key.';
   if(/key not found/i.test(m)) return 'This key was not found or is already revoked.';
+  if(/invalid_status[:\s]+(.+)/i.test(m)){ const t = /invalid_status[:\s]+(.+)/i.exec(m)[1].replace(/\.$/, '').split('\n')[0]; return t.charAt(0).toUpperCase() + t.slice(1) + '.'; }
   if(/invalid_channel[:\s]+(.+)/i.test(m)) return 'Channels: ' + /invalid_channel[:\s]+(.+)/i.exec(m)[1].replace(/\.$/, '').split('\n')[0] + '.';
   if(/limit of 10 test/i.test(m)) return 'You can keep up to 10 test addresses.';
   if(/unknown_subaccount/i.test(m)) return 'This sub-account was not found.';
@@ -7282,9 +7284,13 @@ function renderCampaignDraftsTable(){
     if(c.status === 'draft') actions += `<button class="btn btn-sm" data-cid="${id}" onclick="openCampaignDraft(this.dataset.cid)">Edit</button> `;
     actions += `<button class="btn btn-sm" data-cid="${id}" onclick="duplicateCampaignDraft(this)">Duplicate</button>`;
     if(c.status === 'draft') actions += ` <button class="btn btn-sm btn-danger" data-cid="${id}" onclick="archiveCampaignDraft(this)">Archive</button>`;
+    if(c.status === 'draft' && c.scenario_complete) actions += ` <button class="btn btn-sm btn-primary" data-cid="${id}" data-act="activate" onclick="csRunAction(this)">Activate (test mode)</button>`;
+    if(c.status === 'active') actions += ` <button class="btn btn-sm" data-cid="${id}" data-act="pause" onclick="csRunAction(this)">Pause</button>`;
+    if(c.status === 'paused') actions += ` <button class="btn btn-sm" data-cid="${id}" data-act="resume" onclick="csRunAction(this)">Resume</button>`;
+    if(c.status === 'active' || c.status === 'paused') actions += ` <button class="btn btn-sm" data-cid="${id}" data-act="stop" onclick="csRunAction(this)">Stop</button> <button class="btn btn-sm" data-cid="${id}" onclick="csRunSummary(this.dataset.cid)">Results</button>`;
     const scTxt = c.scenario ? (c.scenario_complete ? 'Scenario ready (simulation only)' : 'Scenario incomplete') : '';
     const obj = (c.objective ? `<div style="font-size:12px;color:var(--text-muted);">${bEsc(c.objective)}</div>` : '') + (scTxt ? `<div style="font-size:12px;color:var(--text-muted);">${scTxt}</div>` : '');
-    return `<tr${arch ? ' style="opacity:.55;"' : ''}><td>${bEsc(c.name)}${obj}</td><td>${ccZoneLabel(c.zone)}</td><td>${period}</td><td>${bEsc(labels[c.status] || c.status)}</td><td style="white-space:nowrap;">${actions}</td></tr>`;
+    return `<tr${arch ? ' style="opacity:.55;"' : ''}><td>${bEsc(c.name)}${obj}</td><td>${ccZoneLabel(c.zone)}</td><td>${period}</td><td>${bEsc(labels[c.status] || c.status)}${c.status === 'active' || c.status === 'paused' ? '<div style="font-size:11px;color:var(--text-muted);">Test mode: nothing is sent</div>' : ''}</td><td style="white-space:nowrap;">${actions}</td></tr>`;
   }).join('') || '<tr><td colspan="5" class="empty">No campaigns yet. Create the first draft for this sub-account.</td></tr>';
 }
 function ccLocName(id){ const l = locations.find(x => x.id === id); return l ? l.name : 'Unknown site'; }
@@ -7631,7 +7637,7 @@ async function scSimulate(){
     <div>Distinct drivers reached: <b>${bEsc(scRange(data.drivers && data.drivers.matched))}</b> out of ${bEsc(scRange(data.drivers && data.drivers.total))}</div>${per}
     <div style="font-size:11px;color:var(--text-muted);margin-top:6px;">Simulation only. Figures are rounded ranges (fewer than 10 is not shown precisely). The counts are shown on each block and link. ${data.width === 'narrow' ? 'Very few drivers would be reached. ' : ''}${data.capped ? 'Only the most recent charges were counted. ' : ''}${bEsc(data.note || '')}</div></div>`;
 }
-const MK_REASON = { cap_7d: 'Weekly limit reached', cap_30d: 'Monthly limit reached', one_per_session: 'Another message already sent for this charge', refused: 'Driver said no to offers', refused_platform: 'Driver said no to offers', unsubscribed: 'Driver unsubscribed', channel_unavailable: 'No usable contact (email or phone)', review: 'To review (conflicting consent)', still_delayed: 'Still waiting after 5 retries', invalid_channel: 'Channel not allowed', no_driver: 'Driver unknown', unknown_driver: 'Driver unknown' };
+const MK_REASON = { cap_7d: 'Weekly limit reached', cap_30d: 'Monthly limit reached', one_per_session: 'Another message already sent for this charge', refused: 'Driver said no to offers', refused_platform: 'Driver said no to offers', unsubscribed: 'Driver unsubscribed', channel_unavailable: 'No usable contact (email or phone)', review: 'To review (conflicting consent)', still_delayed: 'Still waiting after 5 retries', invalid_channel: 'Channel not allowed', no_driver: 'Driver unknown', unknown_driver: 'Driver unknown', min_gap: 'Too soon after the previous message', offer_pause: 'Calm period after a previous offer', quiet_hours: 'Quiet hours', no_channel: 'No sending channel set up for this brand', platform_daily_limit: 'Daily e-mail limit of the platform', conflicting_consent: 'Conflicting consent, to review' };
 async function scSimulateVolume(){
   const err = document.getElementById('sc-error'), out = document.getElementById('sc-sim'); err.textContent = ''; out.innerHTML = '';
   if(!scReady){ err.textContent = 'The scenario is not ready yet.'; return; }
@@ -7888,6 +7894,36 @@ async function duplicateCampaignDraft(btn){
   const { error } = await sb.rpc('duplicate_campaign', { p_id: btn.dataset.cid });
   if(error){ btn.disabled = false; alert(csCleanMessage(error.message)); return; }
   await loadCampaignDrafts();
+}
+async function csRunAction(btn){
+  const c = ccList.find(x => x.id === btn.dataset.cid); if(!c) return;
+  const act = btn.dataset.act;
+  const ask = {
+    activate: `Activate "${c.name}" in test mode?\n\nThe campaign will follow new charges on its sites and record every decision, but nothing is sent to anyone.`,
+    stop: `Stop "${c.name}"? Waiting steps are cancelled and the campaign goes back to draft so you can edit it.`
+  }[act];
+  if(ask && !confirm(ask)) return;
+  btn.disabled = true;
+  const { error } = await sb.rpc('set_campaign_status', { p_id: c.id, p_action: act });
+  if(error){ btn.disabled = false; alert(/not_active/i.test(error.message || '') ? 'The sub-account must be active.' : csCleanMessage(error.message)); return; }
+  document.getElementById('cc-run').style.display = 'none';
+  await loadCampaignDrafts();
+}
+async function csRunSummary(id){
+  const c = ccList.find(x => x.id === id), box = document.getElementById('cc-run'); if(!c || !box) return;
+  box.style.display = 'block'; box.innerHTML = '<div style="color:var(--text-muted);font-size:13px;">Loading…</div>';
+  const { data, error } = await sb.rpc('campaign_run_summary', { p_id: id });
+  if(error || !data){ box.innerHTML = `<div style="color:var(--red, #c0392b);font-size:12px;">${bEsc(csCleanMessage(error && error.message))}</div>`; return; }
+  const line = (label, obj, key) => `${bEsc(label)}: <b>${obj && obj[key] ? bEsc(scRange(obj[key])) : 'none'}</b>`;
+  const rs = data.reasons || {}, rk = Object.keys(rs);
+  box.innerHTML = `<div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;"><div style="font-weight:600;">Results for ${bEsc(c.name)}</div><button class="btn btn-sm" onclick="document.getElementById('cc-run').style.display='none'">Close</button></div>
+    <div style="font-size:12px;color:var(--text-muted);margin:4px 0 8px;">${data.mode === 'live' ? 'Live mode.' : 'Test mode: decisions are recorded and messages are held, nothing is sent to anyone.'} Figures are rounded ranges.</div>
+    <div style="font-size:13px;line-height:1.7;">
+      <div>${line('Waiting', data.steps, 'waiting')} &nbsp; ${line('Handled', data.steps, 'done')} &nbsp; ${line('Dropped', data.steps, 'dropped')}</div>
+      <div>${line('Messages held', data.messages, 'held')} &nbsp; ${line('Messages queued', data.messages, 'queued')} &nbsp; ${line('Messages sent', data.messages, 'sent')}</div>
+      <div>Decisions in 30 days: ${line('allowed', data.decisions, 'allowed')} &nbsp; ${line('delayed', data.decisions, 'delayed')} &nbsp; ${line('blocked', data.decisions, 'blocked')} &nbsp; ${line('to review', data.decisions, 'review')}</div>
+      ${rk.length ? '<div style="margin-top:4px;">Why some were not allowed:</div><ul style="margin:2px 0 0;padding-left:20px;">' + rk.map(k => `<li>${bEsc(MK_REASON[k] || k)}: <b>${bEsc(scRange(rs[k]))}</b></li>`).join('') + '</ul>' : ''}
+    </div>`;
 }
 async function archiveCampaignDraft(btn){
   const c = ccList.find(x => x.id === btn.dataset.cid); if(!c) return;
