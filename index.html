@@ -740,6 +740,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
     <div class="nav-section-label" id="nav-lbl-account" style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:rgba(255,255,255,.45);padding:14px 10px 4px;">Account</div>
     <a class="navitem" data-page="myoperators" id="myoperators-nav" onclick="showPage('myoperators')" style="display:none;"><span class="ic">◉</span>My operators</a>
     <a class="navitem" data-page="apikeys" id="apikeys-nav" onclick="showPage('apikeys')" style="display:none;"><span class="ic">&lt;/&gt;</span>API &amp; Keys</a>
+    <a class="navitem" data-page="campaigns" id="campaigns-nav" onclick="showPage('campaigns')" style="display:none;"><span class="ic">✉</span>Campaigns</a>
     <a class="navitem" data-page="settings" id="settings-nav" onclick="showPage('settings')" style="display:none;"><span class="ic">⚙</span>Settings</a>
     <a class="navitem" data-page="billing" id="billing-nav" onclick="showPage('billing')" style="display:none;"><span class="ic">◈</span>Billing</a>
     <a class="navitem" data-page="proshop" id="proshop-nav" onclick="showPage('proshop')" style="display:none;"><span class="ic">▣</span>Shop</a>
@@ -1527,6 +1528,30 @@ tr.rowlink:hover td{background:#f0f6fc;}
           <div style="font-weight:600;margin-bottom:6px;">Example</div>
           <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">Replace YOUR_API_KEY with one of your keys. Endpoints: /v1/sites, /v1/chargers, /v1/sessions, /v1/drivers.</div>
           <div class="pay-ref" id="apikey-example" style="padding:10px;background:var(--surface, #f7f9fb);border:1px solid var(--border);border-radius:8px;"></div>
+        </div>
+      </div>
+
+      <!-- CAMPAIGNS (client_admin, only when the Campaigns switch is effectively on): sub-accounts -->
+      <div class="page" id="page-campaigns">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+          <div class="section-title" style="margin:0;">Campaigns</div>
+          <button class="btn btn-primary" id="cs-new-btn" onclick="openCampaignSub()">+ New sub-account</button>
+        </div>
+        <div style="color:var(--text-muted);font-size:12px;margin:6px 0 12px;max-width:680px;">A sub-account is a separate space for one brand or tenant. It only sees the sites you allow, and it never receives driver names, e-mails or phone numbers. Campaigns, API keys and reporting for each sub-account come next.</div>
+        <div id="cs-panel" class="card card-pad" style="display:none;max-width:520px;margin:12px 0;">
+          <div class="form-row"><label>Sub-account name</label><input type="text" id="cs-name" maxlength="80" placeholder="e.g. Woolworths, Food court"></div>
+          <div class="form-row"><label>Sites this sub-account can use</label><div id="cs-sites" style="max-height:220px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:8px;"></div></div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-primary" id="cs-submit" onclick="submitCampaignSub()">Save</button>
+            <button class="btn" onclick="closeCampaignSub()">Cancel</button>
+          </div>
+          <div id="cs-error" style="color:var(--red, #c0392b);font-size:12px;margin-top:8px;"></div>
+        </div>
+        <div class="card">
+          <table>
+            <thead><tr><th>Name</th><th>Sites</th><th>Created</th><th>Status</th><th></th></tr></thead>
+            <tbody id="cs-body"></tbody>
+          </table>
         </div>
       </div>
 
@@ -3257,6 +3282,8 @@ function applyFeatureNav(){
     if(st === 'premium'){ if(!b){ b = document.createElement('span'); b.className = 'prem-badge'; b.textContent = 'Premium'; el.appendChild(b); } }
     else if(b) b.remove();
   });
+  const cn = document.getElementById('campaigns-nav');
+  if(cn) cn.style.display = (isCA && featOn('campaigns')) ? '' : 'none';
   refreshQuotaButtons();
 }
 function quotaCount(key){
@@ -3883,6 +3910,7 @@ const ROUTES = {
   addclient: () => '/addclient',
   myoperators: () => '/myoperators',
   apikeys: () => '/apikeys',
+  campaigns: () => '/campaigns',
   settings: () => '/settings',
   shop: () => '/shop',
   proshop: () => '/proshop',
@@ -3917,7 +3945,7 @@ function showPage(id, opts){
   const parentNav = { addsite:'sites', addcharger:'chargers', addclient:'clients' };
   const navEl = document.querySelector(`.navitem[data-page="${parentNav[id] || id}"]`);
   if(navEl) navEl.classList.add('active');
-  const titles={billing:'Billing',dashboard:'Dashboard',sites:'Sites',addsite:'Add site',chargers:'Chargers',addcharger:'Add charger',sessions:'Sessions',rfid:'RFID cards',load:'Load management',tariffs:'Tariffs',clients:'Clients',addclient:'Add client',myoperators:'My operators',apikeys:'API & Keys',walletactivity:'Wallet activity',payments:'Payments',shop:'Shop',proshop:'Shop',photos:'Site photos',settings:'Settings',exchangerates:'Exchange rates',reporting:'Reporting',access:'Access'};
+  const titles={billing:'Billing',dashboard:'Dashboard',sites:'Sites',addsite:'Add site',chargers:'Chargers',addcharger:'Add charger',sessions:'Sessions',rfid:'RFID cards',load:'Load management',tariffs:'Tariffs',clients:'Clients',addclient:'Add client',myoperators:'My operators',apikeys:'API & Keys',campaigns:'Campaigns',walletactivity:'Wallet activity',payments:'Payments',shop:'Shop',proshop:'Shop',photos:'Site photos',settings:'Settings',exchangerates:'Exchange rates',reporting:'Reporting',access:'Access'};
   document.getElementById('topbar-title').textContent = titles[id];
   if(!opts.skipNav) navigate(ROUTES[id] ? ROUTES[id]() : '/'+id);
   if(id==='sites') renderSites();
@@ -3934,6 +3962,7 @@ function showPage(id, opts){
   if(id==='addclient') renderAddClient();
   if(id==='myoperators') renderMyOperators();
   if(id==='apikeys') renderApiKeys();
+  if(id==='campaigns') renderCampaigns();
   if(id==='walletactivity') renderWalletActivity();
   if(id==='payments') renderPayments();
   if(id==='shop') renderShop();
@@ -3950,7 +3979,7 @@ function showPage(id, opts){
 function routeFromLocation(){
   const parts = location.pathname.split('/').filter(Boolean); // e.g. ['sites','<id>']
   const page = parts[0] || 'dashboard';
-  const knownPages = ['dashboard','sites','addsite','chargers','addcharger','sessions','rfid','load','tariffs','clients','addclient','myoperators','apikeys','walletactivity','payments','shop','proshop','photos','settings','exchangerates','reporting','access','billing'];
+  const knownPages = ['dashboard','sites','addsite','chargers','addcharger','sessions','rfid','load','tariffs','clients','addclient','myoperators','apikeys','campaigns','walletactivity','payments','shop','proshop','photos','settings','exchangerates','reporting','access','billing'];
   if(!knownPages.includes(page)){ showPage('dashboard'); return; }
 
   showPage(page, {skipNav:true});
@@ -6619,6 +6648,104 @@ async function revokeApiKey(btn){
   if(error){ btn.disabled = false; alert(akCleanMessage(error.message)); return; }
   const list = await sb.rpc('list_api_keys');
   if(!list.error && Array.isArray(list.data)){ apiKeysList = list.data; renderApiKeysTable(); refreshQuotaButtons(); }
+}
+
+// ---------------- CAMPAIGNS: sub-accounts (client_admin, Campaigns switch on) ----------------
+let csList = [];
+let csEditId = null;
+let csBusy = false;
+function csCleanMessage(msg){
+  const m = String(msg || '');
+  if(/name_taken/i.test(m)) return 'A sub-account with this name already exists.';
+  if(/limit of 50/i.test(m)) return 'You already have 50 active sub-accounts. Archive one to create another.';
+  if(/name must be/i.test(m)) return 'Give the sub-account a name of 1 to 80 characters.';
+  if(/invalid_site/i.test(m)) return 'One of the selected sites is not part of your account.';
+  if(/archived/i.test(m)) return 'This sub-account is archived and can no longer be changed.';
+  if(/campaigns_unavailable|not permitted/i.test(m)) return 'Campaigns is not available on your account.';
+  return 'Could not complete this action. Please try again.';
+}
+async function renderCampaigns(){
+  if(!(currentStaff && currentStaff.role === 'client_admin' && featOn('campaigns'))){ showPage('dashboard'); return; }
+  closeCampaignSub();
+  const body = document.getElementById('cs-body');
+  body.innerHTML = '<tr><td colspan="5" class="empty">Loading…</td></tr>';
+  const { data, error } = await sb.rpc('list_campaign_subaccounts');
+  if(error || !Array.isArray(data)){
+    body.innerHTML = '<tr><td colspan="5" class="empty">Could not load your sub-accounts. Please try again.</td></tr>';
+    return;
+  }
+  csList = data;
+  renderCampaignsTable();
+}
+function csSiteNames(ids){
+  const names = (ids || []).map(id => { const l = locations.find(x => x.id === id); return l ? l.name : null; }).filter(Boolean);
+  if(!names.length) return '<span style="color:var(--text-muted);">None</span>';
+  const shown = names.slice(0, 3).map(bEsc).join(', ');
+  return shown + (names.length > 3 ? ` +${names.length - 3}` : '');
+}
+function renderCampaignsTable(){
+  const body = document.getElementById('cs-body'); if(!body) return;
+  body.innerHTML = csList.map(s => {
+    const arch = s.status === 'archived';
+    const label = { active:'Active', suspended:'Suspended', archived:'Archived' }[s.status] || s.status;
+    let actions = '';
+    if(!arch){
+      actions = `<button class="btn btn-sm" data-sid="${bEsc(s.id)}" onclick="openCampaignSub(this.dataset.sid)">Edit</button> ` +
+        (s.status === 'active'
+          ? `<button class="btn btn-sm" data-sid="${bEsc(s.id)}" data-st="suspended" onclick="setCampaignSubStatus(this)">Suspend</button> `
+          : `<button class="btn btn-sm" data-sid="${bEsc(s.id)}" data-st="active" onclick="setCampaignSubStatus(this)">Reactivate</button> `) +
+        `<button class="btn btn-sm btn-danger" data-sid="${bEsc(s.id)}" data-st="archived" onclick="setCampaignSubStatus(this)">Archive</button>`;
+    }
+    return `<tr${arch ? ' style="opacity:.55;"' : ''}><td>${bEsc(s.name)}</td><td>${csSiteNames(s.site_ids)}</td><td>${bEsc(akDate(s.created_at))}</td><td>${label}</td><td style="white-space:nowrap;">${actions}</td></tr>`;
+  }).join('') || '<tr><td colspan="5" class="empty">No sub-accounts yet. Create one for each brand or tenant you run campaigns for.</td></tr>';
+}
+function openCampaignSub(id){
+  const s = id ? csList.find(x => x.id === id) : null;
+  csEditId = s ? s.id : null;
+  document.getElementById('cs-name').value = s ? s.name : '';
+  document.getElementById('cs-error').textContent = '';
+  const sel = new Set(s ? s.site_ids : []);
+  document.getElementById('cs-sites').innerHTML = locations.map(l =>
+    `<label style="display:flex;gap:8px;align-items:center;padding:3px 0;font-weight:400;"><input type="checkbox" class="cs-site" value="${bEsc(l.id)}"${sel.has(l.id) ? ' checked' : ''}> ${bEsc(l.name)}${l.city ? ' <span style="color:var(--text-muted);font-size:12px;">' + bEsc(l.city) + '</span>' : ''}</label>`
+  ).join('') || '<div style="color:var(--text-muted);font-size:12px;">You have no sites yet.</div>';
+  document.getElementById('cs-panel').style.display = 'block';
+  document.getElementById('cs-name').focus();
+}
+function closeCampaignSub(){ const p = document.getElementById('cs-panel'); if(p) p.style.display = 'none'; csEditId = null; }
+async function submitCampaignSub(){
+  if(csBusy) return;
+  const errEl = document.getElementById('cs-error'); errEl.textContent = '';
+  const name = document.getElementById('cs-name').value.trim();
+  if(!name){ errEl.textContent = 'Give the sub-account a name.'; return; }
+  const ids = [...document.querySelectorAll('#cs-sites .cs-site:checked')].map(c => c.value);
+  csBusy = true; const btn = document.getElementById('cs-submit'); btn.disabled = true;
+  let err = null;
+  if(!csEditId){
+    const r = await sb.rpc('create_campaign_subaccount', { p_name: name, p_site_ids: ids });
+    err = r.error;
+  } else {
+    const cur = csList.find(x => x.id === csEditId);
+    if(cur && cur.name !== name){
+      const r = await sb.rpc('update_campaign_subaccount', { p_id: csEditId, p_name: name });
+      err = r.error;
+    }
+    if(!err){
+      const r2 = await sb.rpc('set_campaign_subaccount_sites', { p_id: csEditId, p_site_ids: ids });
+      err = r2.error;
+    }
+  }
+  csBusy = false; btn.disabled = false;
+  if(err){ errEl.textContent = csCleanMessage(err.message); return; }
+  await renderCampaigns();
+}
+async function setCampaignSubStatus(btn){
+  const id = btn.dataset.sid, st = btn.dataset.st;
+  const s = csList.find(x => x.id === id); if(!s) return;
+  if(st === 'archived' && !confirm(`Archive "${s.name}"? It will stop working and can no longer be changed. This cannot be undone.`)) return;
+  btn.disabled = true;
+  const { error } = await sb.rpc('update_campaign_subaccount', { p_id: id, p_status: st });
+  if(error){ btn.disabled = false; alert(csCleanMessage(error.message)); return; }
+  await renderCampaigns();
 }
 
 async function renderMyOperators(){
