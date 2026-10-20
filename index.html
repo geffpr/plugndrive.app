@@ -1671,7 +1671,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
             <div style="font-weight:600;">Campaigns</div>
             <button class="btn btn-primary" id="cc-new-btn" onclick="openCampaignDraft()">+ New campaign</button>
           </div>
-          <div style="color:var(--text-muted);font-size:12px;margin:6px 0 12px;max-width:680px;">Campaigns are saved as drafts. Nothing is sent yet: targeting, scenarios and sending come in the next steps.</div>
+          <div style="color:var(--text-muted);font-size:12px;margin:6px 0 12px;max-width:680px;">Campaigns are saved as drafts. Nothing is sent yet: scenarios can only be simulated. Limits, connections and sending come in the next steps.</div>
           <div id="cc-panel" class="card card-pad" style="display:none;max-width:720px;margin:12px 0;">
             <div class="form-row"><label>1. Name</label><input type="text" id="cc-name" maxlength="80" placeholder="e.g. Welcome offer"></div>
             <div class="form-row"><label>Objective (what is this campaign for?)</label><textarea id="cc-objective" maxlength="500" rows="2" style="width:100%;" placeholder="e.g. Bring drivers who are charging into the food court"></textarea></div>
@@ -1687,7 +1687,38 @@ tr.rowlink:hover td{background:#f0f6fc;}
               <div class="form-row"><label>Start date</label><input type="date" id="cc-start"></div>
               <div class="form-row"><label>End date</label><input type="date" id="cc-end"></div>
             </div>
-            <div style="font-size:12px;color:var(--text-muted);margin:10px 0;">Coming next: target audience, scenario, limits and activation.</div>
+            <div style="font-weight:600;margin:14px 0 4px;">4. Scenario</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">Describe when something should happen. Nothing is sent at this stage: you can only simulate. Drivers are never identified.</div>
+            <div id="sc-box">
+              <div class="form-row"><label>When</label><select id="sc-trigger" onchange="scTriggerChange()"></select></div>
+              <div id="sc-thr" class="form-row" style="display:none;"><label>Threshold</label>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;"><select id="sc-metric" onchange="scDirty()"></select><input type="number" id="sc-thr-val" min="0" step="any" style="width:110px;" oninput="scDirty()"></div></div>
+              <div class="form-row"><label>Only if</label>
+                <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px;"><span style="font-size:12px;color:var(--text-muted);">Match</span><select id="sc-match" onchange="scDirty()"><option value="all">all conditions</option><option value="any">at least one condition</option></select></div>
+                <div id="sc-conds"></div>
+                <button class="btn btn-sm" type="button" id="sc-add-cond" onclick="scAddCond()" style="margin-top:4px;">+ Add a condition</button></div>
+              <div class="form-row"><label>Wait before acting</label>
+                <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;"><input type="number" id="sc-delay" min="0" max="1440" step="1" value="0" style="width:90px;" oninput="scDirty()"><span style="font-size:12px;color:var(--text-muted);">minutes, then check the conditions again</span></div></div>
+              <div class="form-row"><label>Then</label><select id="sc-action" onchange="scDirty()"></select></div>
+              <div id="sc-act-extra" style="display:none;">
+                <div class="form-row"><label>Offer name</label><input type="text" id="sc-act-label" maxlength="60" placeholder="e.g. Free coffee" oninput="scDirty()"></div>
+                <div class="form-row"><label>Message</label><textarea id="sc-act-msg" rows="2" maxlength="300" style="width:100%;" placeholder="Short text the driver would see" oninput="scDirty()"></textarea></div>
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 6px;">
+                <button class="btn btn-sm" type="button" onclick="scSimulate()">Simulate on history</button>
+                <select id="sc-days" style="width:auto;"><option value="7">last 7 days</option><option value="30" selected>last 30 days</option><option value="90">last 90 days</option><option value="180">last 180 days</option></select>
+                <button class="btn btn-sm" type="button" onclick="scToggleTest()">Test with a fictional charge</button>
+              </div>
+              <div id="sc-sim" style="font-size:13px;margin:6px 0;"></div>
+              <div id="sc-test" class="card card-pad" style="display:none;margin:6px 0;">
+                <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">Invent a charge. Leave a field empty to say it is unknown.</div>
+                <div id="sc-test-fields" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
+                <button class="btn btn-sm" type="button" onclick="scRunTest()" style="margin-top:8px;">Run the test</button>
+                <div id="sc-test-out" style="font-size:13px;margin-top:8px;"></div>
+              </div>
+              <div id="sc-error" style="color:var(--red, #c0392b);font-size:12px;margin-top:6px;"></div>
+            </div>
+            <div style="font-size:12px;color:var(--text-muted);margin:10px 0;">Coming next: frequency limits, connections to your system and activation.</div>
             <div style="display:flex;gap:8px;">
               <button class="btn btn-primary" id="cc-save" onclick="submitCampaignDraft()">Save draft</button>
               <button class="btn" onclick="closeCampaignDraft()">Cancel</button>
@@ -6834,6 +6865,7 @@ function csCleanMessage(msg){
   if(/not_draft/i.test(m)) return 'Only a draft can be changed for now.';
   if(/limit of 200/i.test(m)) return 'This sub-account already has 200 campaigns. Archive some to create more.';
   if(/unknown_campaign/i.test(m)) return 'This campaign was not found.';
+  if(/(?:invalid_scenario|field_unavailable)[:\s]+(.+)/i.test(m)) return 'Scenario: ' + /(?:invalid_scenario|field_unavailable)[:\s]+(.+)/i.exec(m)[1].replace(/\.$/, '').split('\n')[0] + '.';
   if(/objective must be/i.test(m)) return 'The objective must be 500 characters or fewer.';
   if(/name_taken/i.test(m)) return 'A sub-account with this name already exists.';
   if(/limit of 50/i.test(m)) return 'You already have 50 active sub-accounts. Archive one to create another.';
@@ -7050,7 +7082,8 @@ function renderCampaignDraftsTable(){
     if(c.status === 'draft') actions += `<button class="btn btn-sm" data-cid="${id}" onclick="openCampaignDraft(this.dataset.cid)">Edit</button> `;
     actions += `<button class="btn btn-sm" data-cid="${id}" onclick="duplicateCampaignDraft(this)">Duplicate</button>`;
     if(c.status === 'draft') actions += ` <button class="btn btn-sm btn-danger" data-cid="${id}" onclick="archiveCampaignDraft(this)">Archive</button>`;
-    const obj = c.objective ? `<div style="font-size:12px;color:var(--text-muted);">${bEsc(c.objective)}</div>` : '';
+    const scTxt = c.scenario ? (c.scenario_complete ? 'Scenario ready (simulation only)' : 'Scenario incomplete') : '';
+    const obj = (c.objective ? `<div style="font-size:12px;color:var(--text-muted);">${bEsc(c.objective)}</div>` : '') + (scTxt ? `<div style="font-size:12px;color:var(--text-muted);">${scTxt}</div>` : '');
     return `<tr${arch ? ' style="opacity:.55;"' : ''}><td>${bEsc(c.name)}${obj}</td><td>${ccZoneLabel(c.zone)}</td><td>${period}</td><td>${bEsc(labels[c.status] || c.status)}</td><td style="white-space:nowrap;">${actions}</td></tr>`;
   }).join('') || '<tr><td colspan="5" class="empty">No campaigns yet. Create the first draft for this sub-account.</td></tr>';
 }
@@ -7076,9 +7109,188 @@ function openCampaignDraft(id){
   ccRenderPoints();
   document.getElementById('cc-panel').style.display = 'block';
   ccPreview();
+  scInit(c);
   document.getElementById('cc-name').focus();
 }
-function closeCampaignDraft(){ const p = document.getElementById('cc-panel'); if(p) p.style.display = 'none'; ccEditId = null; ccPoints = []; }
+function closeCampaignDraft(){ const p = document.getElementById('cc-panel'); if(p) p.style.display = 'none'; ccEditId = null; ccPoints = []; scTouched = false; }
+
+// ---- Scenario designer (step 3): describes, simulates, never sends ----
+let ccOpts = null, scConds = [], scTouched = false, scHadScenario = false, scReady = false;
+function scDirty(){ scTouched = true; }
+function scField(key){ return ccOpts && ccOpts.fields.find(f => f.key === key); }
+async function scInit(c){
+  const err = document.getElementById('sc-error'); err.textContent = '';
+  document.getElementById('sc-sim').innerHTML = '';
+  document.getElementById('sc-test').style.display = 'none';
+  scReady = false; scTouched = false;
+  if(!ccOpts){
+    const { data, error } = await sb.rpc('list_campaign_options');
+    if(error || !data || !Array.isArray(data.fields)){ err.textContent = 'The scenario options could not be loaded. Close this panel and try again.'; return; }
+    ccOpts = data;
+  }
+  const sc = (c && c.scenario) || null;
+  scHadScenario = !!sc;
+  const trig = sc && sc.trigger || {};
+  document.getElementById('sc-trigger').innerHTML = '<option value="">Choose…</option>' + ccOpts.triggers.map(t => `<option value="${bEsc(t.type)}">${bEsc(t.label)}</option>`).join('');
+  document.getElementById('sc-trigger').value = trig.type || '';
+  document.getElementById('sc-metric').innerHTML = ccOpts.metrics.map(m => `<option value="${bEsc(m.key)}">${bEsc(m.label)}</option>`).join('');
+  document.getElementById('sc-metric').value = trig.metric || ccOpts.metrics[0].key;
+  document.getElementById('sc-thr-val').value = trig.value != null ? trig.value : '';
+  const cd = (sc && sc.conditions) || {};
+  document.getElementById('sc-match').value = cd.match === 'any' ? 'any' : 'all';
+  scConds = (cd.items || []).map(i => ({ field: i.field, op: i.op, value: i.value, period_days: i.period_days || '' }));
+  const dl = (sc && sc.delay) || {};
+  document.getElementById('sc-delay').value = dl.minutes != null ? dl.minutes : 0;
+  const act = (sc && sc.action) || {};
+  document.getElementById('sc-action').innerHTML = '<option value="">No action yet</option>' + ccOpts.actions.map(a => `<option value="${bEsc(a.type)}">${bEsc(a.label)}</option>`).join('');
+  document.getElementById('sc-action').value = act.type || '';
+  document.getElementById('sc-act-label').value = act.label || '';
+  document.getElementById('sc-act-msg').value = act.message || '';
+  scReady = true;
+  scTriggerChange(true); scRenderConds(); scActionExtra();
+}
+function scTriggerChange(quiet){
+  document.getElementById('sc-thr').style.display = document.getElementById('sc-trigger').value === 'charge_threshold' ? '' : 'none';
+  if(quiet !== true) scDirty();
+}
+function scActionExtra(){
+  const t = document.getElementById('sc-action').value;
+  document.getElementById('sc-act-extra').style.display = (t === 'send_offer' || t === 'reward') ? '' : 'none';
+}
+document.addEventListener('change', e => { if(e.target && e.target.id === 'sc-action') scActionExtra(); });
+function scAddCond(){
+  if(!ccOpts || scConds.length >= 10) return;
+  const f = ccOpts.fields.find(x => x.available);
+  scConds.push({ field: f.key, op: f.operators[0], value: f.type === 'enum' ? f.values[0] : '', period_days: f.needs_period ? 30 : '' });
+  scDirty(); scRenderConds();
+}
+function scRemoveCond(i){ scConds.splice(i, 1); scDirty(); scRenderConds(); }
+function scCondSet(i, k, v){
+  const c = scConds[i]; if(!c) return;
+  if(k === 'field'){
+    const f = scField(v); c.field = v; c.op = f.operators[0]; c.value = f.type === 'enum' ? f.values[0] : ''; c.period_days = f.needs_period ? 30 : '';
+    scDirty(); scRenderConds(); return;
+  }
+  c[k] = v; scDirty();
+}
+function scRenderConds(){
+  const box = document.getElementById('sc-conds'); if(!box || !ccOpts) return;
+  const fams = [...new Set(ccOpts.fields.map(f => f.family))];
+  box.innerHTML = scConds.map((c, i) => {
+    const f = scField(c.field) || ccOpts.fields[0];
+    const fieldSel = `<select onchange="scCondSet(${i},'field',this.value)" aria-label="Field">` + fams.map(fam =>
+      `<optgroup label="${bEsc(fam)}">` + ccOpts.fields.filter(x => x.family === fam).map(x =>
+        `<option value="${bEsc(x.key)}"${x.key === c.field ? ' selected' : ''}${x.available ? '' : ' disabled'}>${bEsc(x.label)}${x.available ? '' : ' (later step)'}</option>`).join('') + '</optgroup>').join('') + '</select>';
+    const opSel = `<select onchange="scCondSet(${i},'op',this.value)" aria-label="Operator">` + f.operators.map(o => `<option value="${bEsc(o)}"${o === c.op ? ' selected' : ''}>${bEsc(ccOpts.operators[o] || o)}</option>`).join('') + '</select>';
+    let val;
+    if(f.type === 'enum') val = `<select onchange="scCondSet(${i},'value',this.value)" aria-label="Value">` + f.values.map(v => `<option value="${bEsc(v)}"${v === c.value ? ' selected' : ''}>${bEsc(v)}</option>`).join('') + '</select>';
+    else if(f.type === 'number') val = `<input type="number" step="any" value="${bEsc(String(c.value == null ? '' : c.value))}" oninput="scCondSet(${i},'value',this.value)" style="width:100px;" aria-label="Value">`;
+    else val = `<input type="text" maxlength="40" value="${bEsc(String(c.value == null ? '' : c.value))}" oninput="scCondSet(${i},'value',this.value)" style="width:130px;" aria-label="Value">`;
+    const unit = f.unit && f.type === 'number' ? `<span style="font-size:12px;color:var(--text-muted);">${bEsc(f.unit)}</span>` : '';
+    const per = f.needs_period ? `<span style="font-size:12px;color:var(--text-muted);">over the last</span><input type="number" min="1" max="365" step="1" value="${bEsc(String(c.period_days || ''))}" oninput="scCondSet(${i},'period_days',this.value)" style="width:70px;" aria-label="Period in days"><span style="font-size:12px;color:var(--text-muted);">days</span>` : '';
+    return `<div class="sc-cond" style="margin-bottom:8px;"><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">${fieldSel}${opSel}${val}${unit}${per}<button class="btn btn-sm" type="button" onclick="scRemoveCond(${i})" aria-label="Remove this condition">Remove</button></div><div style="font-size:11px;color:var(--text-muted);margin-top:2px;">${bEsc(f.hint || '')}</div></div>`;
+  }).join('');
+  document.getElementById('sc-add-cond').style.display = scConds.length >= 10 ? 'none' : '';
+}
+// Builds the scenario from the form. Returns { sc } (sc is null when nothing was chosen) or { err }.
+function scBuild(){
+  const type = document.getElementById('sc-trigger').value;
+  if(!type) return { sc: null };
+  const trigger = { type };
+  if(type === 'charge_threshold'){
+    const v = parseFloat(document.getElementById('sc-thr-val').value);
+    if(!(v > 0)) return { err: 'Enter a threshold greater than zero.' };
+    trigger.metric = document.getElementById('sc-metric').value; trigger.value = v;
+  }
+  const items = [];
+  for(const c of scConds){
+    const f = scField(c.field); if(!f) return { err: 'A condition uses an unknown field.' };
+    let value = c.value;
+    if(f.type === 'number'){ value = parseFloat(value); if(!isFinite(value)) return { err: 'Enter a number for "' + f.label + '".' }; }
+    else { value = String(value == null ? '' : value).trim(); if(!value) return { err: 'Enter a value for "' + f.label + '".' }; }
+    const it = { field: c.field, op: c.op, value };
+    if(f.needs_period){
+      const p = parseInt(c.period_days, 10);
+      if(!(p >= 1 && p <= 365)) return { err: 'The period for "' + f.label + '" must be between 1 and 365 days.' };
+      it.period_days = p;
+    }
+    items.push(it);
+  }
+  const mins = parseInt(document.getElementById('sc-delay').value, 10);
+  if(!(mins >= 0 && mins <= 1440)) return { err: 'The wait must be between 0 and 1440 minutes.' };
+  const sc = { trigger, conditions: { match: document.getElementById('sc-match').value, items }, delay: { minutes: mins, recheck: true } };
+  const at = document.getElementById('sc-action').value;
+  if(at){
+    sc.action = { type: at };
+    if(at === 'send_offer' || at === 'reward'){
+      sc.action.label = document.getElementById('sc-act-label').value.trim();
+      sc.action.message = document.getElementById('sc-act-msg').value.trim();
+    }
+  }
+  return { sc };
+}
+function scRange(x){
+  if(!x) return '?';
+  if(x.lt10) return 'fewer than 10';
+  return x.low + ' to ' + x.high;
+}
+async function scSimulate(){
+  const err = document.getElementById('sc-error'), out = document.getElementById('sc-sim'); err.textContent = ''; out.innerHTML = '';
+  if(!ccEditId){ err.textContent = 'Save the draft first, then simulate.'; return; }
+  const b = scBuild(); if(b.err){ err.textContent = b.err; return; }
+  if(!b.sc){ err.textContent = 'Choose when the scenario starts first.'; return; }
+  out.textContent = 'Simulating…';
+  const days = parseInt(document.getElementById('sc-days').value, 10);
+  const { data, error } = await sb.rpc('simulate_campaign', { p_id: ccEditId, p_scenario: b.sc, p_days: days });
+  if(error || !data){ out.textContent = ''; err.textContent = csCleanMessage(error && error.message) || 'The simulation failed. Please try again.'; return; }
+  const per = data.per_week && !data.per_week.lt10 ? `<div>About ${bEsc(scRange(data.per_week))} per week.</div>` : '';
+  out.innerHTML = `<div class="card card-pad" style="background:var(--surface, #f7f9fb);"><b>On the last ${bEsc(String(data.days))} days, ${bEsc(String(data.sites))} site${data.sites === 1 ? '' : 's'}</b>
+    <div>Matching charges: <b>${bEsc(scRange(data.events && data.events.matched))}</b> out of ${bEsc(scRange(data.events && data.events.total))}</div>
+    <div>Distinct drivers reached: <b>${bEsc(scRange(data.drivers && data.drivers.matched))}</b> out of ${bEsc(scRange(data.drivers && data.drivers.total))}</div>${per}
+    <div style="font-size:11px;color:var(--text-muted);margin-top:6px;">Simulation only. Figures are rounded ranges (fewer than 10 is not shown precisely). ${data.width === 'narrow' ? 'The result is very narrow: very few drivers would match.' : ''} ${bEsc(data.note || '')}</div></div>`;
+}
+function scToggleTest(){
+  const box = document.getElementById('sc-test');
+  if(box.style.display !== 'none'){ box.style.display = 'none'; return; }
+  const fields = ccOpts ? ccOpts.fields.filter(f => f.available) : [];
+  document.getElementById('sc-test-fields').innerHTML = fields.map(f => {
+    let inp;
+    if(f.type === 'enum') inp = `<select data-k="${bEsc(f.key)}"><option value="">unknown</option>` + f.values.map(v => `<option value="${bEsc(v)}">${bEsc(v)}</option>`).join('') + '</select>';
+    else if(f.type === 'number') inp = `<input type="number" step="any" data-k="${bEsc(f.key)}" style="width:110px;">`;
+    else inp = `<input type="text" maxlength="40" data-k="${bEsc(f.key)}" style="width:130px;">`;
+    return `<label style="font-weight:400;font-size:12px;display:flex;flex-direction:column;gap:2px;">${bEsc(f.label)}${f.unit && f.type === 'number' ? ' (' + bEsc(f.unit) + ')' : ''}${inp}</label>`;
+  }).join('');
+  document.getElementById('sc-test-out').innerHTML = '';
+  box.style.display = 'block';
+}
+async function scRunTest(){
+  const err = document.getElementById('sc-error'), out = document.getElementById('sc-test-out'); err.textContent = ''; out.innerHTML = '';
+  if(!ccEditId){ err.textContent = 'Save the draft first, then test.'; return; }
+  const b = scBuild(); if(b.err){ err.textContent = b.err; return; }
+  if(!b.sc){ err.textContent = 'Choose when the scenario starts first.'; return; }
+  const ev = {};
+  document.querySelectorAll('#sc-test-fields [data-k]').forEach(el => {
+    const v = el.value.trim(); if(v === '') return;
+    const f = scField(el.dataset.k);
+    ev[el.dataset.k] = f && f.type === 'number' ? parseFloat(v) : v;
+  });
+  const { data, error } = await sb.rpc('simulate_campaign_test', { p_id: ccEditId, p_scenario: b.sc, p_event: ev });
+  if(error || !data){ err.textContent = csCleanMessage(error && error.message) || 'The test failed. Please try again.'; return; }
+  const verdict = {
+    would_fire: ['The action would run.', 'var(--green, #1e8e5a)'],
+    stopped_trigger: ['Stopped at the start: this charge does not start the scenario.', 'var(--amber, #b8791a)'],
+    stopped_conditions: ['Stopped: the conditions are not met.', 'var(--amber, #b8791a)'],
+    incomplete_no_action: ['The scenario has no action yet, so nothing would happen.', 'var(--amber, #b8791a)']
+  }[data.outcome] || [String(data.outcome || ''), 'inherit'];
+  const steps = (data.steps || []).map(s => {
+    if(s.step === 'trigger') return `<li>${s.ok ? 'Start: the charge matches.' : 'Start: the charge does not match.'}</li>`;
+    if(s.step === 'conditions') return `<li>Conditions (${s.match === 'any' ? 'at least one' : 'all'}): ${s.ok ? 'met' : 'not met'}<ul>` + (s.items || []).map(i => `<li>${bEsc(i.label || i.field)}: ${i.ok ? 'yes' : 'no'}${i.actual == null ? ' (unknown)' : ' (value ' + bEsc(String(i.actual)) + ')'}</li>`).join('') + '</ul></li>';
+    if(s.step === 'delay') return `<li>Wait: ${bEsc(String(s.minutes))} minute${s.minutes === 1 ? '' : 's'}${s.recheck ? ', then check again' : ''}.</li>`;
+    if(s.step === 'action') return `<li>Action: ${bEsc((s.action && s.action.type) || 'none')}. Not sent, simulation only.</li>`;
+    return '';
+  }).join('');
+  out.innerHTML = `<div style="font-weight:600;color:${verdict[1]};">${bEsc(verdict[0])}</div><ul style="margin:6px 0 0;padding-left:20px;">${steps}</ul><div style="font-size:11px;color:var(--text-muted);margin-top:4px;">${bEsc(data.note || 'Simulation only: nothing is sent to anyone.')}</div>`;
+}
 function ccRenderPoints(){
   document.getElementById('cc-points').innerHTML = ccPoints.map((p, i) =>
     `<div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap;"><input type="text" placeholder="Label" maxlength="60" value="${bEsc(p.label)}" oninput="ccPointSet(${i},'label',this.value)" style="width:150px;"><input type="number" step="any" placeholder="Latitude" value="${bEsc(p.lat)}" oninput="ccPointSet(${i},'lat',this.value)" style="width:120px;"><input type="number" step="any" placeholder="Longitude" value="${bEsc(p.lng)}" oninput="ccPointSet(${i},'lng',this.value)" style="width:120px;"><button class="btn btn-sm" type="button" onclick="ccRemovePoint(${i})">Remove</button></div>`
@@ -7136,6 +7348,13 @@ async function submitCampaignDraft(){
   };
   const start = document.getElementById('cc-start').value || null, end = document.getElementById('cc-end').value || null;
   if(start && end && start > end){ errEl.textContent = 'The start date must not be after the end date.'; return; }
+  // The scenario is checked before anything is saved, so a mistake never leaves a half-saved draft.
+  let scToSave = null;
+  if(scReady && scTouched){
+    const b = scBuild();
+    if(b.err){ errEl.textContent = b.err; return; }
+    scToSave = b.sc;
+  }
   ccBusy = true; const btn = document.getElementById('cc-save'); btn.disabled = true;
   let err = null, created = false;
   if(!ccEditId){
@@ -7146,6 +7365,10 @@ async function submitCampaignDraft(){
   if(!err && ccEditId){
     const r2 = await sb.rpc('update_campaign', { p_id: ccEditId, p_name: name, p_objective: objective, p_zone: zone, p_start: start, p_end: end });
     err = r2.error;
+  }
+  if(!err && ccEditId && scToSave){
+    const r3 = await sb.rpc('set_campaign_scenario', { p_id: ccEditId, p_scenario: scToSave });
+    err = r3.error;
   }
   ccBusy = false; btn.disabled = false;
   if(err){
