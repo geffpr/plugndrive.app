@@ -1647,6 +1647,15 @@ tr.rowlink:hover td{background:#f0f6fc;}
             <tbody id="cs-body"></tbody>
           </table>
         </div>
+        <div id="cs-channels" class="card card-pad" style="display:none;max-width:760px;margin-top:14px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+            <div style="font-weight:600;">Sending channels for <span id="cs-ch-name"></span></div>
+            <button class="btn btn-sm" onclick="closeCampaignChannels()">Close</button>
+          </div>
+          <div style="font-size:12px;color:var(--text-muted);margin:6px 0 12px;">Nothing is sent yet: this page only prepares how this brand will reach drivers. Consent, unsubscribes and frequency limits are always checked by Plug n Drive first, whichever channel you choose.</div>
+          <div id="cs-ch-error" style="color:var(--red, #c0392b);font-size:12px;margin-bottom:8px;"></div>
+          <div id="cs-ch-body"></div>
+        </div>
         <div id="cs-keys" class="card card-pad" style="display:none;max-width:760px;margin-top:14px;">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
             <div style="font-weight:600;">API keys for <span id="cs-keys-name"></span></div>
@@ -6965,11 +6974,110 @@ function csCleanMessage(msg){
   if(/limit of 5/i.test(m)) return 'This sub-account already has 5 active keys. Revoke one to create another.';
   if(/not_active/i.test(m)) return 'The sub-account must be active to create a key.';
   if(/key not found/i.test(m)) return 'This key was not found or is already revoked.';
+  if(/invalid_channel[:\s]+(.+)/i.test(m)) return 'Channels: ' + /invalid_channel[:\s]+(.+)/i.exec(m)[1].replace(/\.$/, '').split('\n')[0] + '.';
+  if(/limit of 10 test/i.test(m)) return 'You can keep up to 10 test addresses.';
+  if(/unknown_subaccount/i.test(m)) return 'This sub-account was not found.';
   if(/cap_too_loose:\s*(\w+)/i.test(m)) return 'You can only be stricter than Plug n Drive limits (' + /cap_too_loose:\s*(\w+)/i.exec(m)[1].replace(/_/g, ' ') + ').';
   if(/invalid_quiet_hours/i.test(m)) return 'Fill both the start and the end of the quiet hours, or leave both empty.';
   return 'Could not complete this action. Please try again.';
 }
 // ---- keys of one sub-account ----
+// ---- sending channels of one sub-account (preparation only, nothing is sent) ----
+let csChSub = null, csChData = null, csChBusy = false;
+function csChMsg(e){ const m = String(e && e.message || ''); return /not_active/i.test(m) ? 'The sub-account must be active to change its channels.' : csCleanMessage(m); }
+async function openCampaignChannels(id){
+  const s = csList.find(x => x.id === id); if(!s) return;
+  csChSub = s.id; csChData = null;
+  closeCampaignKeys();
+  document.getElementById('cs-ch-name').textContent = s.name;
+  document.getElementById('cs-ch-error').textContent = '';
+  document.getElementById('cs-ch-body').innerHTML = '<div style="color:var(--text-muted);font-size:13px;">Loading…</div>';
+  document.getElementById('cs-channels').style.display = 'block';
+  const { data, error } = await sb.rpc('list_campaign_channels', { p_sub: id });
+  if(csChSub !== id) return;
+  if(error || !data){ document.getElementById('cs-ch-body').innerHTML = ''; document.getElementById('cs-ch-error').textContent = csChMsg(error); return; }
+  csChData = data; csChRender();
+}
+function closeCampaignChannels(){ csChHideSecret(); const p = document.getElementById('cs-channels'); if(p) p.style.display = 'none'; csChSub = null; csChData = null; }
+function csChRender(){
+  const d = csChData; if(!d) return;
+  const e = d.email || {}, w = d.webhook || {}, box = 'border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px;';
+  const tests = (d.test_recipients || []).map(t => `<div style="display:flex;gap:8px;align-items:center;padding:2px 0;"><span style="flex:1;word-break:break-all;">${bEsc(t.email)}</span><button class="btn btn-sm" data-rid="${bEsc(t.id)}" onclick="csChRemoveTest(this.dataset.rid)">Remove</button></div>`).join('') || '<div style="color:var(--text-muted);font-size:12px;">No test address yet.</div>';
+  document.getElementById('cs-ch-body').innerHTML =
+    `<div style="${box}"><div style="font-weight:600;">E-mail sent by Plug n Drive</div>
+      <div style="font-size:12px;color:var(--text-muted);margin:4px 0 8px;">Messages leave from our server, on behalf of this brand. We handle delivery and unsubscribes. The sender address is fixed: <b>${bEsc(d.sender_address)}</b>.</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;">
+        <label style="font-weight:400;font-size:12px;display:flex;flex-direction:column;gap:2px;">Sender name shown to drivers<input type="text" id="cs-ch-fn" maxlength="60" value="${bEsc(e.from_name)}"></label>
+        <label style="font-weight:400;font-size:12px;display:flex;flex-direction:column;gap:2px;">Replies go to (optional)<input type="text" id="cs-ch-rt" maxlength="120" value="${bEsc(e.reply_to)}" placeholder="hello@yourbrand.co.za"></label>
+      </div>
+      <label style="display:flex;gap:8px;align-items:center;font-weight:400;font-size:13px;margin-top:10px;"><input type="checkbox" id="cs-ch-e-on" style="width:auto;"${e.enabled ? ' checked' : ''}> Use e-mail for this brand</label>
+      <div style="margin-top:8px;"><button class="btn btn-primary btn-sm" onclick="csChSaveEmail()">Save e-mail settings</button></div></div>
+    <div style="${box}"><div style="font-weight:600;">Events sent to your own system (webhook)</div>
+      <div style="font-size:12px;color:var(--text-muted);margin:4px 0 8px;">Your system receives each event with a signature, and sends the message itself. Plug n Drive never shares driver names, e-mails or phone numbers this way.</div>
+      <label style="font-weight:400;font-size:12px;display:flex;flex-direction:column;gap:2px;">Address that receives the events (https)<input type="text" id="cs-ch-url" maxlength="300" value="${bEsc(w.url)}" placeholder="https://hooks.yourbrand.co.za/plugndrive"></label>
+      <div style="font-size:12px;margin-top:8px;">Signing secret: ${w.has_secret ? 'ends with <b>' + bEsc(w.secret_hint) + '</b>' : '<span style="color:var(--text-muted);">none yet</span>'}
+        <button class="btn btn-sm" style="margin-left:8px;" onclick="csChRotate()">${w.has_secret ? 'Renew secret' : 'Create secret'}</button></div>
+      <div id="cs-ch-reveal" style="display:none;margin-top:10px;padding:10px;border:1px solid var(--amber, #b8791a);border-radius:8px;">
+        <div style="font-weight:600;margin-bottom:4px;">Copy your secret now</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">It is shown only once. Renewing it makes the old one stop working.</div>
+        <div id="cs-ch-secret" class="pay-ref" style="padding:10px;background:var(--surface, #f7f9fb);border:1px solid var(--border);border-radius:8px;word-break:break-all;"></div>
+        <div style="display:flex;gap:8px;margin-top:10px;"><button class="btn btn-primary btn-sm" id="cs-ch-copy" onclick="csChCopySecret()">Copy</button><button class="btn btn-sm" onclick="csChHideSecret()">I have copied it</button></div></div>
+      <label style="display:flex;gap:8px;align-items:center;font-weight:400;font-size:13px;margin-top:10px;"><input type="checkbox" id="cs-ch-w-on" style="width:auto;"${w.enabled ? ' checked' : ''}> Use the webhook for this brand</label>
+      <div style="margin-top:8px;"><button class="btn btn-primary btn-sm" onclick="csChSaveWebhook()">Save webhook settings</button></div></div>
+    <div style="${box}margin-bottom:0;"><div style="font-weight:600;">Test addresses</div>
+      <div style="font-size:12px;color:var(--text-muted);margin:4px 0 8px;">While a campaign is in test mode, e-mails can only go to these addresses (up to 10), never to drivers.</div>
+      <div id="cs-ch-tests" style="font-size:13px;margin-bottom:8px;">${tests}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;"><input type="text" id="cs-ch-test-in" maxlength="120" placeholder="you@yourbrand.co.za" style="flex:1;min-width:200px;"><button class="btn btn-sm" onclick="csChAddTest()">Add</button></div></div>`;
+}
+async function csChCall(fn, args, okMsg){
+  if(csChBusy) return null; csChBusy = true;
+  const err = document.getElementById('cs-ch-error'); err.style.color = 'var(--red, #c0392b)'; err.textContent = '';
+  const sub = csChSub;
+  const { data, error } = await sb.rpc(fn, args);
+  csChBusy = false;
+  if(csChSub !== sub) return null;
+  if(error || !data){ err.textContent = csChMsg(error); return null; }
+  if(okMsg){ err.style.color = 'var(--green, #1a7f37)'; err.textContent = okMsg; }
+  return data;
+}
+async function csChSaveEmail(){
+  const d = await csChCall('set_campaign_channel', { p_sub: csChSub, p_channel: 'email', p_config: { from_name: document.getElementById('cs-ch-fn').value.trim(), reply_to: document.getElementById('cs-ch-rt').value.trim() }, p_enabled: document.getElementById('cs-ch-e-on').checked }, 'E-mail settings saved.');
+  if(d){ csChData = d; csChRender(); }
+}
+async function csChSaveWebhook(){
+  const d = await csChCall('set_campaign_channel', { p_sub: csChSub, p_channel: 'webhook', p_config: { url: document.getElementById('cs-ch-url').value.trim() }, p_enabled: document.getElementById('cs-ch-w-on').checked }, 'Webhook settings saved.');
+  if(d){ csChData = d; csChRender(); }
+}
+async function csChRotate(){
+  const had = csChData && csChData.webhook && csChData.webhook.has_secret;
+  if(had && !window.confirm('Renew the secret? The current one will stop working at once.')) return;
+  const d = await csChCall('rotate_webhook_secret', { p_sub: csChSub }, null);
+  if(!d || !d.secret) return;
+  const l = await csChCall('list_campaign_channels', { p_sub: csChSub }, null);
+  if(l){ csChData = l; csChRender(); }
+  document.getElementById('cs-ch-secret').textContent = d.secret;
+  document.getElementById('cs-ch-copy').textContent = 'Copy';
+  document.getElementById('cs-ch-reveal').style.display = 'block';
+}
+async function csChCopySecret(){
+  const el = document.getElementById('cs-ch-secret'), btn = document.getElementById('cs-ch-copy');
+  try { await navigator.clipboard.writeText(el.textContent); btn.textContent = 'Copied'; return; } catch(e) { /* manual selection below */ }
+  try { const r = document.createRange(); r.selectNodeContents(el); const s = window.getSelection(); s.removeAllRanges(); s.addRange(r); btn.textContent = 'Selected: press Ctrl+C'; } catch(e) { /* nothing more to do */ }
+}
+function csChHideSecret(){
+  const v = document.getElementById('cs-ch-secret'), box = document.getElementById('cs-ch-reveal');
+  if(v) v.textContent = '';   // the secret leaves the page for good
+  if(box) box.style.display = 'none';
+}
+async function csChAddTest(){
+  const inp = document.getElementById('cs-ch-test-in'); const em = inp.value.trim(); if(!em) return;
+  const d = await csChCall('add_test_recipient', { p_sub: csChSub, p_email: em }, null);
+  if(d){ csChData = d; csChRender(); }
+}
+async function csChRemoveTest(id){
+  const d = await csChCall('remove_test_recipient', { p_sub: csChSub, p_id: id }, null);
+  if(d){ csChData = d; csChRender(); }
+}
 let csKeysSub = null, csKeysList = [], csKeyBusy = false;
 async function openCampaignKeys(id){
   const s = csList.find(x => x.id === id); if(!s) return;
@@ -7059,6 +7167,7 @@ function renderCampaignsTable(){
       actions = `<button class="btn btn-sm" data-sid="${bEsc(s.id)}" onclick="selectCampaignEnv(this.dataset.sid)">Campaigns</button> ` +
         `<button class="btn btn-sm" data-sid="${bEsc(s.id)}" onclick="openCampaignSub(this.dataset.sid)">Edit</button> ` +
         `<button class="btn btn-sm" data-sid="${bEsc(s.id)}" onclick="openCampaignKeys(this.dataset.sid)">Keys</button> ` +
+        `<button class="btn btn-sm" data-sid="${bEsc(s.id)}" onclick="openCampaignChannels(this.dataset.sid)">Channels</button> ` +
         (s.status === 'active'
           ? `<button class="btn btn-sm" data-sid="${bEsc(s.id)}" data-st="suspended" onclick="setCampaignSubStatus(this)">Suspend</button> `
           : `<button class="btn btn-sm" data-sid="${bEsc(s.id)}" data-st="active" onclick="setCampaignSubStatus(this)">Reactivate</button> `) +
