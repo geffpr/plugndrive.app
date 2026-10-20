@@ -5,6 +5,7 @@
   ],
   "rewrites": [
     { "source": "/quote", "destination": "/quote.html" },
+    { "source": "/faq", "destination": "/faq.html" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

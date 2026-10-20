@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Getting started guide | Plug n Drive</title>
+<meta name="description" content="How to connect a charger, get paid and put your sites and chargers online with Plug n Drive.">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<style>
+:root{--navy:#0d1b3d;--blue:#2f95d6;--blue-dark:#1c6fa8;--blue-light:#eaf5fc;--blue-mid:#bfe0f5;--bg:#f5f8fc;--text:#1f2a44;--muted:#5d6b88;--border:#dde5f0;--card:#fff;--code:#eef2f8;}
+@media (prefers-color-scheme:dark){:root{--navy:#e8eefc;--blue:#5aaee8;--blue-dark:#8cc6f0;--blue-light:#16253f;--blue-mid:#27415f;--bg:#0b1324;--text:#dbe4f5;--muted:#9aa9c6;--border:#24324d;--card:#111c33;--code:#1a2742;}}
+*{box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.55;-webkit-font-smoothing:antialiased;}
+header{background:var(--card);border-bottom:1px solid var(--border);}
+.wrap{max-width:760px;margin:0 auto;padding:0 16px;}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 0;}
+.top a.back{color:var(--blue-dark);font-weight:600;text-decoration:none;font-size:.9rem;}
+.top .brand{font-weight:800;color:var(--navy);letter-spacing:-.01em;}
+h1{margin:28px 0 6px;font-size:1.7rem;color:var(--navy);line-height:1.2;}
+.lead{margin:0 0 20px;color:var(--muted);}
+.jump{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 26px;}
+.jump a{padding:8px 14px;border-radius:999px;background:var(--blue-light);color:var(--blue-dark);font-weight:700;font-size:.85rem;text-decoration:none;border:1px solid var(--blue-mid);}
+h2{margin:34px 0 12px;font-size:1.2rem;color:var(--navy);scroll-margin-top:12px;}
+details{background:var(--card);border:1px solid var(--border);border-radius:12px;margin:0 0 10px;}
+summary{cursor:pointer;list-style:none;padding:14px 16px;font-weight:700;color:var(--navy);display:flex;align-items:center;justify-content:space-between;gap:12px;}
+summary::-webkit-details-marker{display:none;}
+summary::after{content:"+";font-size:1.3rem;line-height:1;color:var(--blue-dark);flex:none;}
+details[open] summary::after{content:"\2212";}
+summary:focus-visible,.jump a:focus-visible,a:focus-visible{outline:3px solid var(--blue-mid);outline-offset:2px;}
+.ans{padding:0 16px 16px;}
+.ans p{margin:0 0 10px;}
+.ans ol,.ans ul{margin:0 0 10px;padding-left:22px;}
+.ans li{margin:0 0 6px;}
+code{background:var(--code);border-radius:6px;padding:2px 6px;font-size:.88em;word-break:break-all;}
+.note{background:var(--blue-light);border:1px solid var(--blue-mid);border-radius:10px;padding:10px 12px;font-size:.92rem;margin:10px 0 0;}
+.help{margin:34px 0 48px;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;}
+.help h2{margin:0 0 6px;}
+.help a{color:var(--blue-dark);font-weight:700;}
+</style>
+</head>
+<body>
+<header><div class="wrap top"><span class="brand">Plug n Drive</span><a class="back" href="/">&larr; Back to the console</a></div></header>
+<main class="wrap">
+<h1>Getting started guide</h1>
+<p class="lead">Three things to set up: your sites and chargers, the connection between each charger and our system, and the bank account that receives your money.</p>
+<nav class="jump" aria-label="Sections">
+  <a href="#online">Sites and chargers</a>
+  <a href="#connect">Connect a charger</a>
+  <a href="#paid">Get paid</a>
+</nav>
+
+<h2 id="online">Put your sites and chargers online</h2>
+<details>
+<summary>How do I add a site?</summary>
+<div class="ans">
+<ol>
+<li>Open <b>Sites</b> and click <b>+ Add site</b>.</li>
+<li>Enter the site name, choose the type (complex, building, parking, parking spot or standalone site) and fill in the address and city. Start typing the address and pick a suggestion: the map position is filled in for you.</li>
+<li>Save. The site now appears in your list and you can add chargers to it.</li>
+</ol>
+<p>The map position is what shows your site on the customer map, so it is worth getting right.</p>
+</div>
+</details>
+<details>
+<summary>How do I add a charger?</summary>
+<div class="ans">
+<ol>
+<li>Open <b>Chargers</b> and click <b>+ Add charger</b>.</li>
+<li>Choose the site, give the charger a name (for example <i>Charger C1</i>), choose the connector type and enter its maximum power in kW (for example 7.4).</li>
+<li>Choose the OCPP version of your charger (<b>1.6J</b> for most chargers).</li>
+<li>Click <b>Generate connection details</b>, then follow the next section to enter them in your charger.</li>
+</ol>
+</div>
+</details>
+<details>
+<summary>When do drivers see my charger on the public map?</summary>
+<div class="ans">
+<p>Only when <b>Show on the public site (charge.plugndrive.co.za)</b> is ticked for that charger. It is off by default, so you can test everything first.</p>
+<p>A hidden charger still works through its own QR code or link, which is handy for demos and for private use.</p>
+<div class="note">Tick the box once the charger is connected and answering, and you are ready to receive drivers.</div>
+</div>
+</details>
+
+<h2 id="connect">Connect a charger</h2>
+<details>
+<summary>What do I need to enter in my charger?</summary>
+<div class="ans">
+<p>After you click <b>Generate connection details</b> in the console, you get two things:</p>
+<ul>
+<li><b>WebSocket URL</b>, which looks like <code>wss://ocpp.plugndrive.co.za/your-charger-123</code>. The last part is your charger's identifier.</li>
+<li><b>Auth password</b>, a short code made for this charger only.</li>
+</ul>
+<p>Enter them in the settings of your charger (its app, web page or installer menu). The names differ from one brand to another:</p>
+<ul>
+<li><b>Server address</b> (also called CSMS URL, central system URL or backend URL): the WebSocket URL.</li>
+<li><b>Charge point ID</b> (or charger ID, station ID): the last part of the URL, for example <code>your-charger-123</code>.</li>
+<li><b>Password</b> (or authorization key, Basic Auth password): the Auth password.</li>
+<li><b>Username</b>, if asked: use the charge point ID.</li>
+<li><b>Protocol</b>: OCPP 1.6J over WebSocket.</li>
+</ul>
+<div class="note">Some chargers want the full URL in one field. Others want the address without the identifier in one field and the identifier in another. If your charger has a separate ID field, give it the base address <code>wss://ocpp.plugndrive.co.za</code> and the identifier on its own.</div>
+</div>
+</details>
+<details>
+<summary>How do I know it works?</summary>
+<div class="ans">
+<ol>
+<li>After entering the details in your charger, restart it so that it connects.</li>
+<li>In the console, click <b>Save and test connection</b>. It saves the charger, waits for it to connect, then checks that it answers a live request.</li>
+<li>When you see <i>The charger is online and answering</i>, you are done. The charger appears on the Dashboard with its live status.</li>
+</ol>
+</div>
+</details>
+<details>
+<summary>The test says the charger has not connected yet</summary>
+<div class="ans">
+<p>The charger is saved as <b>Offline</b> and switches to <b>Available</b> by itself as soon as it connects, so nothing is lost. Check these points, then test again:</p>
+<ul>
+<li>The URL is typed exactly as shown, starting with <code>wss://</code>, with no extra space at the end.</li>
+<li>The password is the one shown for this charger. If you generated the details more than once, use the latest ones.</li>
+<li>The charger is set to <b>OCPP 1.6J</b> and has been restarted after the change.</li>
+<li>The charger has internet access (Wi-Fi, network cable or SIM card with data).</li>
+<li>The date and time of the charger are correct (some chargers refuse secure connections when their clock is wrong).</li>
+</ul>
+<p>Still stuck? Use the Help button and tell us the charger name and brand.</p>
+</div>
+</details>
+<details>
+<summary>My charger goes Offline from time to time</summary>
+<div class="ans">
+<p>A charger shows Offline when it loses its internet connection, and it comes back by itself once the connection returns. A charge that was running keeps going and is settled normally when the charger reconnects.</p>
+<p>If it happens often, check the signal at the charger (Wi-Fi strength or SIM coverage) and make sure only one device uses the same charger identifier.</p>
+</div>
+</details>
+
+<h2 id="paid">Get paid</h2>
+<details>
+<summary>How do I connect my bank account?</summary>
+<div class="ans">
+<ol>
+<li>Open <b>Settings</b> and go to <b>Payouts (Paystack)</b>.</li>
+<li>Enter your business name, choose your bank and enter your account number.</li>
+<li>Click <b>Connect</b>.</li>
+</ol>
+<p>Once it is connected, the page shows the account name and the last four digits of the account number. Your payouts are sent to this account whenever Plug n Drive pays out your revenue.</p>
+<div class="note">Settings is available to the account administrator of the company. If you do not see it, ask your administrator or contact us.</div>
+</div>
+</details>
+<details>
+<summary>How do I change my bank account?</summary>
+<div class="ans">
+<p>In <b>Settings</b>, under <b>Payouts (Paystack)</b>, click <b>Change bank details</b>, fill in the new details and click <b>Connect</b>.</p>
+</div>
+</details>
+<details>
+<summary>The connection is refused</summary>
+<div class="ans">
+<p>Check that the account number has no spaces or dashes, that you chose the right bank, and that the account is in the same name as the business. If the message stays, send it to us with the Help button and we will look at it.</p>
+</div>
+</details>
+<details>
+<summary>Where can I see what I earned?</summary>
+<div class="ans">
+<p>Your sessions and the amounts they brought in are listed in the console, and the balance and payments are shown in <b>Settings</b> under <b>Balance &amp; payments</b>. For anything about the timing of a payout, use the Help button.</p>
+</div>
+</details>
+
+<section class="help" aria-labelledby="stuck">
+<h2 id="stuck">Still need help?</h2>
+<p>Use the <b>?</b> button in the console to write to us or open WhatsApp. You can also e-mail <a href="mailto:support@plugndrive.co.za?cc=hello@plugndrive.co.za">support@plugndrive.co.za</a>. Tell us the charger name and what you see on the screen.</p>
+</section>
+</main>
+</body>
+</html>
