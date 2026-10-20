@@ -1690,7 +1690,10 @@ tr.rowlink:hover td{background:#f0f6fc;}
           </div>
           <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
             <div style="font-weight:600;">Campaigns</div>
-            <button class="btn btn-primary" id="cc-new-btn" onclick="openCampaignDraft()">+ New campaign</button>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="btn" id="ct-open-btn" onclick="openCampaignTemplates()">E-mail templates</button>
+              <button class="btn btn-primary" id="cc-new-btn" onclick="openCampaignDraft()">+ New campaign</button>
+            </div>
           </div>
           <div style="color:var(--text-muted);font-size:12px;margin:6px 0 12px;max-width:680px;">Campaigns are saved as drafts. Nothing is sent yet: scenarios can only be simulated. Limits, connections and sending come in the next steps.</div>
           <style>
@@ -1830,6 +1833,39 @@ tr.rowlink:hover td{background:#f0f6fc;}
             </table>
           </div>
           <div id="cc-run" class="card card-pad" style="display:none;margin-top:12px;"></div>
+          <div id="ct-panel" class="card card-pad" style="display:none;margin-top:12px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+              <div style="font-weight:600;">E-mail templates for <span id="ct-sub-name"></span></div>
+              <div style="display:flex;gap:8px;"><button class="btn btn-primary btn-sm" onclick="ctEdit('')">+ New template</button><button class="btn btn-sm" onclick="closeCampaignTemplates()">Close</button></div>
+            </div>
+            <div style="font-size:12px;color:var(--text-muted);margin:6px 0 10px;max-width:760px;">Build your e-mail in the tool you already use, paste its HTML here and save it as a template. Nothing is sent from this page. Write {{first_name}}, {{site}}, {{brand}}, {{offer_name}}, {{offer_code}} or {{unsubscribe_url}} where you want them filled in. Scripts, forms and unsafe links are refused.</div>
+            <div id="ct-error" style="color:var(--red, #c0392b);font-size:12px;margin-bottom:8px;"></div>
+            <label style="display:flex;gap:8px;align-items:center;font-weight:400;font-size:12px;margin-bottom:8px;"><input type="checkbox" id="ct-arch" style="width:auto;" onchange="ctToggleArch()"> Show archived templates</label>
+            <div id="ct-list" class="card" style="overflow:auto;"></div>
+            <div id="ct-editor" style="display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--border);">
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;">
+                <label style="font-weight:400;font-size:12px;display:flex;flex-direction:column;gap:2px;">Template name<input type="text" id="ct-name" maxlength="80" placeholder="e.g. Thanks after a charge"></label>
+                <label style="font-weight:400;font-size:12px;display:flex;flex-direction:column;gap:2px;">Subject<input type="text" id="ct-subject" maxlength="150" placeholder="e.g. Thanks {{first_name}}, here is a treat" oninput="ctSoon()"></label>
+              </div>
+              <label style="font-weight:400;font-size:12px;display:flex;flex-direction:column;gap:2px;margin-top:10px;">HTML of the e-mail<textarea id="ct-html" rows="14" spellcheck="false" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;width:100%;" oninput="ctSoon()"></textarea></label>
+              <label style="font-weight:400;font-size:12px;display:flex;flex-direction:column;gap:2px;margin-top:10px;">Plain-text version (optional)<textarea id="ct-text" rows="4" style="width:100%;" placeholder="Shown by e-mail apps that do not display HTML. Left empty, one is generated."></textarea></label>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center;">
+                <button class="btn btn-primary btn-sm" id="ct-save" onclick="ctSave()">Save template</button>
+                <button class="btn btn-sm" onclick="ctCheck()">Check</button>
+                <button class="btn btn-sm" onclick="ctEdit(null)">Cancel</button>
+                <span id="ct-ver-wrap" style="display:none;margin-left:auto;font-size:12px;">Versions <select id="ct-ver" style="width:auto;"></select> <button class="btn btn-sm" onclick="ctRestore()">Restore this version</button></span>
+              </div>
+              <div id="ct-check-out" style="font-size:12px;margin-top:10px;"></div>
+              <div style="display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap;">
+                <div style="font-weight:600;">Preview</div>
+                <button class="btn btn-sm" id="ct-dev-d" onclick="ctDevice('d')">Computer</button>
+                <button class="btn btn-sm" id="ct-dev-m" onclick="ctDevice('m')">Phone</button>
+                <span style="font-size:11px;color:var(--text-muted);">Sample values are used for the variables.</span>
+              </div>
+              <div id="ct-subj-prev" style="font-size:13px;margin:6px 0;"></div>
+              <iframe id="ct-frame" sandbox="" title="E-mail preview" style="display:block;width:100%;height:440px;border:1px solid var(--border);border-radius:8px;background:#fff;"></iframe>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -6958,6 +6994,13 @@ let csEditId = null;
 let csBusy = false;
 function csCleanMessage(msg){
   const m = String(msg || '');
+  if(/invalid_template[:\s]+(.+)/i.test(m)) return /invalid_template[:\s]+([\s\S]+)/i.exec(m)[1].trim();
+  if(/template_in_use[:\s]+used by (\d+)/i.test(m)){ const n = /template_in_use[:\s]+used by (\d+)/i.exec(m)[1]; return 'This template is used by ' + n + ' campaign' + (n === '1' ? '' : 's') + '. Remove it from their scenarios first.'; }
+  if(/archived_template/i.test(m)) return 'This template is archived. Restore it before editing it.';
+  if(/unknown_template/i.test(m)) return 'This template was not found.';
+  if(/version_unavailable/i.test(m)) return 'This version is no longer stored.';
+  if(/limit: up to 30 templates/i.test(m)) return 'You can keep up to 30 templates. Archive some to create more.';
+  if(/duplicate_name/i.test(m)) return 'A template with this name already exists.';
   if(/name_taken: a campaign/i.test(m)) return 'A campaign with this name already exists in this sub-account.';
   if(/invalid_zone:\s*(.+)/i.test(m)) return 'Zone: ' + /invalid_zone:\s*(.+)/i.exec(m)[1].replace(/\.$/, '') + '.';
   if(/invalid_dates/i.test(m)) return 'The start date must not be after the end date.';
@@ -7239,7 +7282,7 @@ function fillCampaignEnv(){
 }
 function selectCampaignEnv(id){
   csEnv = id || '';
-  closeCampaignDraft(); closeCampaignKeys(); closeCampaignSub();
+  closeCampaignDraft(); closeCampaignKeys(); closeCampaignSub(); closeCampaignTemplates();
   const sel = document.getElementById('cs-env'); if(sel) sel.value = csEnv;
   applyCampaignView();
 }
@@ -7320,6 +7363,143 @@ function openCampaignDraft(id){
   document.getElementById('cc-name').focus();
 }
 function closeCampaignDraft(){ const p = document.getElementById('cc-panel'); if(p) p.style.display = 'none'; ccEditId = null; ccPoints = []; scTouched = false; }
+
+// ---- E-mail templates of one sub-account (step 5c-1). Nothing is sent from here ----
+let ctSub = null, ctList = [], ctEditing = null, ctBusy = false, ctTimer = null, ctDev = 'd';
+let csTplCache = { sub: null, list: [], loading: null };
+const CT_STARTER = '<!DOCTYPE html>\n<html>\n<body style="margin:0;padding:0;background:#f4f4f4;">\n  <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:24px 12px;">\n    <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:8px;">\n      <tr><td style="padding:24px;font-family:Arial,sans-serif;font-size:16px;color:#222222;">\n        <p>Hi {{first_name}},</p>\n        <p>Thanks for charging at {{site}}. Here is a little something from {{brand}}: <b>{{offer_name}}</b>.</p>\n        <p style="text-align:center;"><a href="https://example.com" style="background:#0a7d5a;color:#ffffff;padding:12px 20px;border-radius:6px;text-decoration:none;display:inline-block;">Claim your offer</a></p>\n        <p style="font-size:12px;color:#777777;"><a href="{{unsubscribe_url}}">Unsubscribe</a></p>\n      </td></tr>\n    </table>\n  </td></tr></table>\n</body>\n</html>';
+function ctVals(){ const s = csList.find(x => x.id === ctSub) || {}; return { first_name: 'Alex', site: 'Your site', brand: s.name || 'Your brand', offer_name: 'Free coffee', offer_code: 'THANKS10', unsubscribe_url: '#' }; }
+function ctFill(str, esc){ const v = ctVals(); return String(str || '').replace(/\{\{\s*([a-z_]+)\s*\}\}/g, (m, k) => Object.prototype.hasOwnProperty.call(v, k) ? (esc ? bEsc(v[k]) : v[k]) : m); }
+async function openCampaignTemplates(){
+  const s = csList.find(x => x.id === csEnv); if(!s) return;
+  ctSub = s.id; ctEditing = null;
+  document.getElementById('ct-sub-name').textContent = s.name;
+  document.getElementById('ct-error').textContent = '';
+  document.getElementById('ct-editor').style.display = 'none';
+  document.getElementById('ct-panel').style.display = 'block';
+  await ctLoad();
+}
+function closeCampaignTemplates(){ clearTimeout(ctTimer); const p = document.getElementById('ct-panel'); if(p) p.style.display = 'none'; ctSub = null; ctEditing = null; }
+function ctToggleArch(){ ctLoad(); }
+async function ctLoad(){
+  const sub = ctSub, box = document.getElementById('ct-list'); if(!sub) return;
+  const arch = document.getElementById('ct-arch').checked;
+  box.innerHTML = '<div style="padding:12px;color:var(--text-muted);font-size:13px;">Loading…</div>';
+  const { data, error } = await sb.rpc('list_campaign_templates', { p_sub: sub, p_include_archived: arch });
+  if(ctSub !== sub) return;
+  if(error || !Array.isArray(data)){ box.innerHTML = ''; document.getElementById('ct-error').textContent = csCleanMessage(error && error.message); return; }
+  ctList = data; csTplCache = { sub, list: data.filter(t => !t.archived), loading: null };
+  ctRender();
+}
+function ctRender(){
+  const box = document.getElementById('ct-list');
+  const rows = ctList.map(t => {
+    const id = bEsc(t.id);
+    const act = t.archived
+      ? `<button class="btn btn-sm" data-tid="${id}" data-arch="0" onclick="ctArchive(this)">Restore</button>`
+      : `<button class="btn btn-sm" data-tid="${id}" onclick="ctEdit(this.dataset.tid)">Edit</button> <button class="btn btn-sm btn-danger" data-tid="${id}" data-arch="1" onclick="ctArchive(this)">Archive</button>`;
+    return `<tr${t.archived ? ' style="opacity:.55;"' : ''}><td>${bEsc(t.name)}${t.archived ? ' <span style="font-size:11px;color:var(--text-muted);">(archived)</span>' : ''}</td><td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${bEsc(t.subject)}</td><td>v${bEsc(String(t.version))}</td><td>${t.used_by ? bEsc(String(t.used_by)) + ' campaign' + (t.used_by === 1 ? '' : 's') : '<span style="color:var(--text-muted);">Not used</span>'}</td><td style="white-space:nowrap;">${act}</td></tr>`;
+  }).join('');
+  box.innerHTML = `<table><thead><tr><th>Name</th><th>Subject</th><th>Version</th><th>Used by</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="5" class="empty">No template yet. Create one with + New template.</td></tr>'}</tbody></table>`;
+}
+async function ctEdit(id){
+  const ed = document.getElementById('ct-editor'), err = document.getElementById('ct-error'); err.textContent = '';
+  document.getElementById('ct-check-out').innerHTML = '';
+  if(id === null){ ctEditing = null; ed.style.display = 'none'; return; }
+  if(!id){
+    ctEditing = { id: null, version: 0 };
+    document.getElementById('ct-name').value = ''; document.getElementById('ct-subject').value = '';
+    document.getElementById('ct-html').value = CT_STARTER; document.getElementById('ct-text').value = '';
+    document.getElementById('ct-ver-wrap').style.display = 'none';
+    ed.style.display = 'block'; ctPreview(); document.getElementById('ct-name').focus(); return;
+  }
+  const sub = ctSub;
+  const { data, error } = await sb.rpc('get_campaign_template', { p_id: id });
+  if(ctSub !== sub) return;
+  if(error || !data || !data.template){ err.textContent = csCleanMessage(error && error.message); return; }
+  const t = data.template;
+  ctEditing = { id: t.id, version: t.version };
+  document.getElementById('ct-name').value = t.name; document.getElementById('ct-subject').value = t.subject;
+  document.getElementById('ct-html').value = t.html; document.getElementById('ct-text').value = t.text || '';
+  ed.style.display = 'block'; ctRenderCheck(data.check); ctPreview(); ctVersions();
+}
+async function ctVersions(){
+  const wrap = document.getElementById('ct-ver-wrap'), sel = document.getElementById('ct-ver');
+  if(!ctEditing || !ctEditing.id){ wrap.style.display = 'none'; return; }
+  const tid = ctEditing.id;
+  const { data } = await sb.rpc('list_campaign_template_versions', { p_id: tid });
+  if(!ctEditing || ctEditing.id !== tid || !Array.isArray(data)) return;
+  sel.innerHTML = data.filter(v => v.restorable && v.version !== ctEditing.version).map(v => `<option value="${bEsc(String(v.version))}">v${bEsc(String(v.version))}, ${bEsc(akDate(v.saved_at))}</option>`).join('');
+  wrap.style.display = sel.options.length ? '' : 'none';
+}
+function ctRenderCheck(r){
+  const out = document.getElementById('ct-check-out'); if(!r){ out.innerHTML = ''; return; }
+  const li = (arr, col) => (arr || []).map(x => `<div style="color:${col};">${bEsc(x)}</div>`).join('');
+  let h = li(r.errors, 'var(--red, #c0392b)') + li(r.warnings, 'var(--amber, #b8791a)');
+  if(r.ok && !(r.warnings || []).length) h += '<div style="color:var(--green, #1a7f37);">No problem found.</div>';
+  h += `<div style="color:var(--text-muted);margin-top:4px;">${bEsc(String(Math.max(1, Math.round((r.size || 0) / 1024))))} KB, ${bEsc(String(r.links || 0))} link${r.links === 1 ? '' : 's'}</div>`;
+  out.innerHTML = h;
+}
+async function ctCheck(){
+  const { data, error } = await sb.rpc('check_campaign_template', { p_subject: document.getElementById('ct-subject').value, p_html: document.getElementById('ct-html').value, p_text: document.getElementById('ct-text').value });
+  if(error || !data){ document.getElementById('ct-check-out').innerHTML = `<div style="color:var(--red, #c0392b);">${bEsc(csCleanMessage(error && error.message))}</div>`; return null; }
+  ctRenderCheck(data); return data;
+}
+function ctSoon(){ clearTimeout(ctTimer); ctTimer = setTimeout(ctPreview, 400); }
+function ctDevice(d){ ctDev = d; ctPreview(); }
+function ctPreview(){
+  const f = document.getElementById('ct-frame'); if(!f) return;
+  const html = document.getElementById('ct-html').value;
+  f.style.width = ctDev === 'm' ? '375px' : '100%';
+  const footer = /\{\{\s*unsubscribe_url\s*\}\}/.test(html) ? '' : '<div style="font:12px Arial,sans-serif;color:#777;padding:14px;text-align:center;border-top:1px solid #ddd;margin-top:16px;">Added automatically: you receive this e-mail because you charged at ' + bEsc(ctVals().site) + '. <a href="#">Unsubscribe</a></div>';
+  f.srcdoc = '<base target="_blank">' + ctFill(html, true) + footer;
+  document.getElementById('ct-subj-prev').innerHTML = 'Subject: <b>' + bEsc(ctFill(document.getElementById('ct-subject').value, false)) + '</b>';
+}
+async function ctSave(){
+  if(ctBusy || !ctEditing) return;
+  const err = document.getElementById('ct-error'); err.style.color = 'var(--red, #c0392b)'; err.textContent = '';
+  if(!document.getElementById('ct-name').value.trim()){ err.textContent = 'Give the template a name.'; return; }
+  const btn = document.getElementById('ct-save'); ctBusy = true; btn.disabled = true;
+  const { data, error } = await sb.rpc('save_campaign_template', { p_sub: ctSub, p_id: ctEditing.id, p_name: document.getElementById('ct-name').value, p_subject: document.getElementById('ct-subject').value, p_html: document.getElementById('ct-html').value, p_text: document.getElementById('ct-text').value });
+  ctBusy = false; btn.disabled = false;
+  if(error || !data || !data.template){ err.textContent = csCleanMessage(error && error.message); return; }
+  ctEditing = { id: data.template.id, version: data.template.version };
+  ctRenderCheck(data.check);
+  err.style.color = 'var(--green, #1a7f37)'; err.textContent = 'Saved (version ' + data.template.version + ').';
+  ctVersions(); ctLoad();
+}
+async function ctArchive(btn){
+  const id = btn.dataset.tid, arch = btn.dataset.arch === '1', err = document.getElementById('ct-error'); err.style.color = 'var(--red, #c0392b)'; err.textContent = '';
+  if(arch && !confirm('Archive this template? It will no longer be selectable in scenarios.')) return;
+  btn.disabled = true;
+  const { error } = await sb.rpc('archive_campaign_template', { p_id: id, p_archive: arch });
+  if(error){ btn.disabled = false; err.textContent = csCleanMessage(error.message); return; }
+  if(ctEditing && ctEditing.id === id){ ctEditing = null; document.getElementById('ct-editor').style.display = 'none'; }
+  ctLoad();
+}
+async function ctRestore(){
+  if(!ctEditing || !ctEditing.id) return;
+  const v = parseInt(document.getElementById('ct-ver').value, 10); if(!v) return;
+  if(!confirm('Restore version ' + v + '? It is saved as a new version; nothing is lost.')) return;
+  const err = document.getElementById('ct-error'); err.style.color = 'var(--red, #c0392b)'; err.textContent = '';
+  const { data, error } = await sb.rpc('restore_campaign_template', { p_id: ctEditing.id, p_version: v });
+  if(error || !data || !data.template){ err.textContent = csCleanMessage(error && error.message); return; }
+  await ctEdit(data.template.id); ctLoad();
+  err.style.color = 'var(--green, #1a7f37)'; err.textContent = 'Version ' + v + ' restored as version ' + data.template.version + '.';
+}
+async function csTplEnsure(){
+  const sub = csEnv; if(!sub || csTplCache.loading === sub) return;
+  csTplCache.loading = sub;
+  const { data } = await sb.rpc('list_campaign_templates', { p_sub: sub });
+  if(csTplCache.loading === sub) csTplCache.loading = null;
+  if(Array.isArray(data)){ csTplCache = { sub, list: data, loading: null }; if(csEnv === sub){ const n = scSelNode(); if(n && n.type === 'action') scInspector(); } }
+}
+function scTplField(a){
+  const c = csTplCache, ready = c.sub === csEnv;
+  if(!ready) csTplEnsure();
+  const list = ready ? c.list : [], cur = a.template_id || '', known = !ready || !cur || list.some(t => t.id === cur);
+  return `<label for="sc-i-tpl">E-mail template (optional)</label><select id="sc-i-tpl" onchange="scActSet()" style="width:100%"><option value="">None: simple text from the offer name and message</option>${list.map(t => `<option value="${bEsc(t.id)}"${t.id === cur ? ' selected' : ''}>${bEsc(t.name)}</option>`).join('')}${known ? '' : `<option value="${bEsc(cur)}" selected>Template not available</option>`}${!ready && cur ? `<option value="${bEsc(cur)}" selected>Loading…</option>` : ''}</select><div class="sc-hint">Create templates with the "E-mail templates" button above the campaigns list.</div>`;
+}
 
 // ---- Scenario canvas (step 3): blocks and links. Describes and simulates, never sends ----
 let ccOpts = null, scG = null, scSel = null, scSim = null, scTrace = null, scConn = null, scDrag = null, scTouched = false, scReady = false, scSeq = 1;
@@ -7554,7 +7734,7 @@ function scInspector(){
   } else if(n.type === 'action'){
     const a = n.action || {}, extra = a.type === 'send_offer' || a.type === 'reward';
     el.innerHTML = `<div class="sc-ins-t">Action</div><label for="sc-i-act">Then</label><select id="sc-i-act" onchange="scActType()" style="width:100%">${scOpt(ccOpts.actions, a.type, 'type', 'label')}</select>
-      ${extra ? `<label for="sc-i-lab">Offer name</label><input type="text" id="sc-i-lab" maxlength="60" value="${bEsc(a.label || '')}" placeholder="e.g. Free coffee" style="width:100%" oninput="scActSet()"><label for="sc-i-msg">Message</label><textarea id="sc-i-msg" rows="3" maxlength="300" style="width:100%" placeholder="Short text the driver would see" oninput="scActSet()">${bEsc(a.message || '')}</textarea>` : ''}
+      ${extra ? `<label for="sc-i-lab">Offer name</label><input type="text" id="sc-i-lab" maxlength="60" value="${bEsc(a.label || '')}" placeholder="e.g. Free coffee" style="width:100%" oninput="scActSet()"><label for="sc-i-msg">Message</label><textarea id="sc-i-msg" rows="3" maxlength="300" style="width:100%" placeholder="Short text the driver would see" oninput="scActSet()">${bEsc(a.message || '')}</textarea>${a.type === 'send_offer' ? scTplField(a) : ''}` : ''}
       <div class="sc-hint">Nothing is sent at this stage.</div>`;
   } else { el.innerHTML = '<div class="sc-ins-t">End</div><div class="sc-hint">The scenario stops here for this charge.</div>'; }
   el.innerHTML += del;
@@ -7576,7 +7756,7 @@ function scCondSet(i, k, v){
   c[k] = v; scChanged();
 }
 function scActType(){ const n = scSelNode(); if(!n) return; n.action = n.action || {}; n.action.type = document.getElementById('sc-i-act').value; scChanged(); scInspector(); }
-function scActSet(){ const n = scSelNode(); if(!n) return; n.action = n.action || {}; const l = document.getElementById('sc-i-lab'), m = document.getElementById('sc-i-msg'); if(l) n.action.label = l.value; if(m) n.action.message = m.value; scChanged(); }
+function scActSet(){ const n = scSelNode(); if(!n) return; n.action = n.action || {}; const l = document.getElementById('sc-i-lab'), m = document.getElementById('sc-i-msg'); if(l) n.action.label = l.value; if(m) n.action.message = m.value; const t = document.getElementById('sc-i-tpl'); if(t) n.action.template_id = t.value; scChanged(); }
 function scEdgeDelay(){
   const e = scSel && scSel.kind === 'edge' ? scG.edges.find(x => x.from + ':' + x.port === scSel.key) : null; if(!e) return;
   let v = parseFloat(document.getElementById('sc-ed-v').value); if(!isFinite(v) || v < 0) v = 0;
@@ -7614,6 +7794,7 @@ function scBuild(){
     if(n.type === 'action' && n.action && n.action.type){
       o.action = { type: n.action.type };
       if(n.action.type === 'send_offer' || n.action.type === 'reward'){ o.action.label = (n.action.label || '').trim(); o.action.message = (n.action.message || '').trim(); }
+      if(n.action.type === 'send_offer' && n.action.template_id) o.action.template_id = n.action.template_id;
     }
     nodes.push(o);
   }
