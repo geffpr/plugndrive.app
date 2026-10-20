@@ -43,6 +43,45 @@ input,select{font-family:'Inter',sans-serif;font-size:13px;}
 #app-loading .al-bar::after{content:'';position:absolute;top:0;bottom:0;left:0;width:40%;background:#2f80c8;border-radius:2px;animation:alslide 1.1s ease-in-out infinite;}
 @keyframes alslide{0%{transform:translateX(-100%)}100%{transform:translateX(250%)}}
 @media (prefers-reduced-motion:reduce){#app-loading .al-bar::after{animation:none;width:100%;opacity:.45}}
+/* Help button: write to support or open WhatsApp (see the script at the end of the page) */
+#sup-root{position:fixed;right:18px;bottom:18px;z-index:45;display:flex;flex-direction:column;align-items:flex-end;gap:10px;pointer-events:none;font-family:'Inter',sans-serif;}
+#sup-root>*{pointer-events:auto;}
+#sup-fab{display:flex;align-items:center;gap:8px;height:46px;padding:0 18px 0 14px;border:none;border-radius:23px;background:var(--navy);color:#fff;font-size:14px;font-weight:700;box-shadow:0 8px 22px rgba(13,27,61,.28);}
+#sup-fab:hover{background:#16295a;}
+#sup-fab:focus-visible,.sup-opt:focus-visible,.sup-send:focus-visible,.sup-x:focus-visible,.sup-back:focus-visible{outline:3px solid var(--blue-mid);outline-offset:2px;}
+#sup-fab svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none;}
+#sup-panel{width:min(360px,calc(100vw - 24px));max-height:calc(100vh - 110px);overflow:auto;background:#fff;border:1px solid var(--border);border-radius:16px;box-shadow:0 18px 50px -12px rgba(13,27,61,.35);}
+#sup-panel[hidden],#sup-panel [hidden]{display:none !important;}
+.sup-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:16px 16px 12px;background:var(--navy);color:#fff;border-radius:16px 16px 0 0;}
+.sup-title{font-family:'Poppins',sans-serif;font-weight:600;font-size:16px;}
+.sup-sub{font-size:12px;color:#cfe0f5;margin-top:3px;line-height:1.4;}
+.sup-x{border:none;background:none;color:#fff;font-size:24px;line-height:1;padding:0 4px;opacity:.85;}
+.sup-body{padding:14px 16px 16px;display:flex;flex-direction:column;gap:10px;}
+.sup-opt{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:#fff;color:var(--text);text-decoration:none;font-family:inherit;}
+.sup-opt:hover{border-color:var(--blue);background:var(--blue-light);}
+.sup-opt svg{width:24px;height:24px;fill:none;stroke:var(--blue-dark);stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none;}
+.sup-opt b{display:block;font-size:14px;}
+.sup-opt small{display:block;font-size:12px;color:var(--text-secondary);margin-top:2px;}
+.sup-back{align-self:flex-start;border:none;background:none;color:var(--blue-dark);font-size:13px;font-weight:600;padding:0;}
+#sup-form label{font-size:12px;font-weight:700;color:var(--text-secondary);margin-bottom:-4px;}
+#sup-topic,#sup-msg{width:100%;border:1px solid var(--border);border-radius:10px;padding:9px 10px;font-size:14px;font-family:inherit;color:var(--text);background:#fff;}
+#sup-msg{resize:vertical;min-height:96px;}
+#sup-topic:focus,#sup-msg:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-light);}
+.sup-note{font-size:12px;color:var(--text-muted);line-height:1.4;}
+.sup-err{font-size:13px;color:var(--red);background:var(--red-light);border-radius:8px;padding:8px 10px;line-height:1.4;}
+.sup-send{border:none;border-radius:10px;background:var(--blue);color:#fff;font-size:14px;font-weight:700;padding:11px 14px;font-family:inherit;}
+.sup-send:hover{background:var(--blue-dark);}
+.sup-send:disabled{opacity:.6;cursor:default;}
+.sup-ok{width:44px;height:44px;border-radius:50%;background:#e6f6ee;color:#168a57;font-size:24px;display:flex;align-items:center;justify-content:center;align-self:center;}
+.sup-done-t{text-align:center;font-weight:700;font-size:16px;color:var(--navy);}
+.sup-done-s{text-align:center;font-size:13px;color:var(--text-secondary);line-height:1.5;}
+@media(max-width:900px){
+  #sup-root{right:12px;bottom:calc(72px + env(safe-area-inset-bottom,0px));}
+  #sup-fab{width:48px;height:48px;padding:0;justify-content:center;border-radius:50%;}
+  #sup-fab span{display:none;}
+  #sup-panel{max-height:calc(100vh - 170px);}
+}
+@media print{#sup-root{display:none !important;}}
 .brand-text{line-height:1.2;}
 .brand-sub{font-size:10px;color:#8fa3c9;letter-spacing:.02em;}
 #mobile-menu-toggle{display:none;position:fixed;top:14px;left:14px;z-index:60;width:38px;height:38px;border-radius:8px;border:none;background:var(--navy);color:#fff;font-size:18px;align-items:center;justify-content:center;}
@@ -716,6 +755,35 @@ tr.rowlink:hover td{background:#f0f6fc;}
 </div>
 
 <div class="app" id="app-root" style="display:none;">
+  <div id="sup-root">
+    <div id="sup-panel" role="dialog" aria-modal="false" aria-labelledby="sup-title" hidden>
+      <div class="sup-head">
+        <div><div class="sup-title" id="sup-title">How can we help?</div><div class="sup-sub">We reply by e-mail, usually within one business day.</div></div>
+        <button type="button" class="sup-x" id="sup-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="sup-body" id="sup-choose">
+        <button type="button" class="sup-opt" id="sup-opt-mail"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg><span><b>Write to support</b><small>Send us a message and we answer by e-mail</small></span></button>
+        <a class="sup-opt" id="sup-opt-wa" href="#" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5a8 8 0 0 1-11.9 7L4 20l1.5-4A8 8 0 1 1 20 11.5z"/><path d="M9 9.2c.3 2.6 2.4 4.6 5 5l1.2-1.2-1.7-1-.8.7a3.6 3.6 0 0 1-1.8-1.8l.7-.8-1-1.7z"/></svg><span><b>WhatsApp</b><small>+27 61 153 1743</small></span></a>
+      </div>
+      <form class="sup-body" id="sup-form" hidden novalidate>
+        <button type="button" class="sup-back" id="sup-back">&larr; Back</button>
+        <label for="sup-topic">Topic</label>
+        <select id="sup-topic"><option value="charger">A charger or a charge</option><option value="billing">Billing or payments</option><option value="account">My account</option><option value="other">Something else</option></select>
+        <label for="sup-msg">Your message</label>
+        <textarea id="sup-msg" rows="5" maxlength="4000" placeholder="Tell us what happened. If it is about a charger, tell us which one."></textarea>
+        <div class="sup-note" id="sup-ctx"></div>
+        <div class="sup-err" id="sup-err" role="alert" hidden></div>
+        <button type="submit" class="sup-send" id="sup-send">Send message</button>
+      </form>
+      <div class="sup-body" id="sup-done" hidden aria-live="polite">
+        <div class="sup-ok" aria-hidden="true">&#10003;</div>
+        <div class="sup-done-t">Message sent</div>
+        <div class="sup-done-s" id="sup-done-s"></div>
+        <button type="button" class="sup-send" id="sup-done-btn">Close</button>
+      </div>
+    </div>
+    <button type="button" id="sup-fab" aria-expanded="false" aria-controls="sup-panel" aria-label="Help"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.5-4.6A8 8 0 1 1 21 12z"/><path d="M9.5 10h5M9.5 13.5h3"/></svg><span>Help</span></button>
+  </div>
   <nav class="bottom-nav" id="bottom-nav" aria-label="Main navigation">
     <button type="button" class="bn-item active" data-page="dashboard" onclick="showPage('dashboard')"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>Dashboard</button>
     <button type="button" class="bn-item" data-page="sites" onclick="showPage('sites')"><svg viewBox="0 0 24 24"><path d="M3 21V8l7-4 7 4v13"/><path d="M17 21V11l4 2v8"/><path d="M8 21v-5h4v5"/></svg>Sites</button>
@@ -2774,6 +2842,7 @@ let currentStaff = null;
 function resetAppData(){
   locations = []; chargers = []; sessions = []; rfidCards = []; users = []; tariffs = []; clients = [];
   myFeat = null;   // the previous account's plan and options
+  if(typeof supReset === 'function') supReset();   // a half-written support message must not follow into the next account
 }
 // Full-screen loading view (Plug n Drive logo) held until the account's data and options are ready.
 // A 30 s safety timer always lifts it, so a slow network can never leave the screen covered.
@@ -8169,6 +8238,75 @@ async function submitActivation(){
   var sb=document.getElementById('sidebar');
   if(sb && window.MutationObserver){ new MutationObserver(sync).observe(sb,{subtree:true,attributes:true,attributeFilter:['class']}); }
   sync();
+})();
+</script>
+<script>
+/* Help button: write to support (stored and e-mailed by the support-request function) or open WhatsApp. */
+(function(){
+  var WA = '27611531743', MAIL = 'support@plugndrive.co.za';
+  var $ = function(id){ return document.getElementById(id); };
+  var busy = false;
+  function email(){ try { return (currentStaff && currentStaff.email) || ''; } catch(e){ return ''; } }
+  function ctx(){
+    var page = location.pathname || '/', charger = '', client = '';
+    try {
+      if(typeof rtChargerDetailOpen === 'function' && rtChargerDetailOpen() && currentChargerId){
+        var c = chargers.find(function(x){ return x.id === currentChargerId; });
+        if(c) charger = (c.name || '') + (c.ocppId ? ' (' + c.ocppId + ')' : '');
+      }
+    } catch(e){}
+    try { if(currentStaff && currentStaff.role !== 'plugndrive_admin' && clients && clients[0]) client = clients[0].name || ''; } catch(e){}
+    return { page: page, charger: charger, client: client };
+  }
+  function waLink(){
+    var c = ctx(), em = email();
+    var text = 'Hello Plug n Drive, I need help.' + (c.client ? '\nClient: ' + c.client : '') + (em ? '\nAccount: ' + em : '') + '\nPage: ' + c.page + (c.charger ? '\nCharger: ' + c.charger : '');
+    return 'https://wa.me/' + WA + '?text=' + encodeURIComponent(text);
+  }
+  function view(name){ ['choose','form','done'].forEach(function(v){ $('sup-' + v).hidden = (v !== name); }); }
+  function showErr(m){ var e = $('sup-err'); e.textContent = m; e.hidden = false; }
+  function hideErr(){ var e = $('sup-err'); e.textContent = ''; e.hidden = true; }
+  function open(){
+    $('sup-panel').hidden = false; $('sup-fab').setAttribute('aria-expanded', 'true');
+    $('sup-opt-wa').href = waLink();
+    if($('sup-done').hidden === false) return;
+    view($('sup-msg').value.trim() ? 'form' : 'choose');
+    var first = $('sup-form').hidden ? $('sup-opt-mail') : $('sup-msg'); if(first) first.focus();
+  }
+  function close(){ $('sup-panel').hidden = true; $('sup-fab').setAttribute('aria-expanded', 'false'); if($('sup-done').hidden === false){ view('choose'); } }
+  function reset(){ $('sup-msg').value = ''; $('sup-topic').selectedIndex = 0; hideErr(); view('choose'); $('sup-panel').hidden = true; $('sup-fab').setAttribute('aria-expanded', 'false'); busy = false; $('sup-send').disabled = false; $('sup-send').textContent = 'Send message'; }
+  window.supReset = reset;
+  function toForm(){ var c = ctx(); $('sup-ctx').textContent = 'We include your account and the page you are on' + (c.charger ? ' (' + c.charger + ')' : '') + ' so we can help you faster.'; hideErr(); view('form'); $('sup-msg').focus(); }
+  function send(ev){
+    ev.preventDefault(); if(busy) return;
+    var msg = $('sup-msg').value.trim();
+    if(msg.length < 5){ showErr('Please write a few words about what you need.'); return; }
+    busy = true; hideErr(); $('sup-send').disabled = true; $('sup-send').textContent = 'Sending...';
+    var c = ctx();
+    var done = function(){ busy = false; $('sup-send').disabled = false; $('sup-send').textContent = 'Send message'; };
+    var call;
+    try { call = sb.functions.invoke('support-request', { body: { topic: $('sup-topic').value, message: msg, app: 'console', lang: 'en', page: c.page, charger: c.charger } }); }
+    catch(e){ call = Promise.reject(e); }
+    call.then(function(res){
+      var d = res && res.data;
+      if(d && d.ok){
+        $('sup-msg').value = '';
+        $('sup-done-s').textContent = 'Reference ' + d.ref + '. We will reply to ' + (email() || 'your e-mail address') + '.';
+        view('done'); $('sup-done-btn').focus();
+      } else if(d && d.error === 'rate_limited'){ showErr('You have sent several messages recently. Please wait a little, or reach us on WhatsApp.'); }
+      else if(d && d.error === 'send_failed'){ showErr('We saved your message but could not e-mail it. Please write to ' + MAIL + ' or use WhatsApp, and quote ' + (d.ref || 'this message') + '.'); }
+      else if(d && d.error === 'message_too_short'){ showErr('Please write a few words about what you need.'); }
+      else { showErr('Something went wrong. Please try again, or use WhatsApp.'); }
+    }).catch(function(){ showErr('Something went wrong. Please try again, or use WhatsApp.'); }).then(done, done);
+  }
+  $('sup-fab').addEventListener('click', function(){ if($('sup-panel').hidden) open(); else close(); });
+  $('sup-close').addEventListener('click', function(){ close(); $('sup-fab').focus(); });
+  $('sup-done-btn').addEventListener('click', function(){ close(); $('sup-fab').focus(); });
+  $('sup-opt-mail').addEventListener('click', toForm);
+  $('sup-back').addEventListener('click', function(){ hideErr(); view('choose'); $('sup-opt-mail').focus(); });
+  $('sup-form').addEventListener('submit', send);
+  $('sup-msg').addEventListener('input', hideErr);
+  document.addEventListener('keydown', function(e){ if(e.key === 'Escape' && !$('sup-panel').hidden){ close(); $('sup-fab').focus(); } });
 })();
 </script>
 </body>
