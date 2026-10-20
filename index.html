@@ -109,6 +109,7 @@ tr.rowlink:hover td{background:var(--blue-light);}
 .filters{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center;}
 .filters select, .filters input[type=text]{border:1px solid var(--border);border-radius:8px;padding:7px 10px;background:#fff;color:var(--text);}
 .filters .search{min-width:200px;}
+.filters input[type=date]{border:1px solid var(--border);border-radius:8px;padding:6px 10px;background:#fff;color:var(--text);}
 
 .trial-bar{display:none;align-items:center;gap:12px;flex-wrap:wrap;background:var(--blue-light);border:1px solid var(--blue-mid);color:var(--navy);border-radius:10px;padding:10px 14px;margin-bottom:16px;font-size:13px;}
 .trial-bar.locked{background:#fdecec;border-color:var(--red);color:var(--red);}
@@ -1663,16 +1664,24 @@ tr.rowlink:hover td{background:#f0f6fc;}
       <div class="page" id="page-chargers">
         <div id="chargers-list-view">
           <div class="filters" style="justify-content:space-between;">
-            <div style="display:flex;gap:8px;">
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
               <select id="chg-complex-filter" onchange="renderChargers()"></select>
+              <select id="chg-client-filter" onchange="renderChargers()" style="display:none;"></select>
               <select id="chg-status-filter" onchange="renderChargers()">
                 <option value="all">All statuses</option>
+                <option value="attention">Needs attention</option>
                 <option value="Available">Available</option>
                 <option value="Charging">Charging</option>
                 <option value="Faulted">Faulted</option>
                 <option value="Offline">Offline</option>
               </select>
+              <select id="chg-vis-filter" onchange="renderChargers()">
+                <option value="all">Listed and hidden</option>
+                <option value="listed">Listed on the public site</option>
+                <option value="hidden">Hidden</option>
+              </select>
               <input class="search" type="text" id="chg-search" placeholder="Search chargers..." oninput="renderChargers()">
+              <button class="btn" type="button" onclick="resetFilters('chargers')">Reset filters</button>
             </div>
             <button class="btn btn-primary" data-quota="chargers" onclick="showPage('addcharger')">+ Add charger</button>
           </div>
@@ -1841,11 +1850,30 @@ tr.rowlink:hover td{background:#f0f6fc;}
       <div class="page" id="page-sessions">
         <div class="filters">
           <select id="ses-complex-filter" onchange="renderSessions()"></select>
+          <select id="ses-client-filter" onchange="renderSessions()" style="display:none;"></select>
+          <select id="ses-charger-filter" onchange="renderSessions()"></select>
           <select id="ses-period-filter" onchange="renderSessions()">
             <option value="all">All time</option>
+            <option value="today">Today</option>
             <option value="week">This week</option>
             <option value="month">This month</option>
+            <option value="lastmonth">Last month</option>
+            <option value="custom">Choose dates</option>
           </select>
+          <span id="ses-dates" style="display:none;align-items:center;gap:6px;">
+            <input type="date" id="ses-from" onchange="renderSessions()"> <span>to</span> <input type="date" id="ses-to" onchange="renderSessions()">
+          </span>
+          <select id="ses-type-filter" onchange="renderSessions()">
+            <option value="all">All types</option>
+            <option value="paid">Paid</option>
+            <option value="discount">Group discount</option>
+            <option value="free">Free (access group)</option>
+            <option value="owner">Owner (my vehicles)</option>
+          </select>
+          <select id="ses-pay-filter" onchange="renderSessions()"></select>
+          <select id="ses-paystatus-filter" onchange="renderSessions()"></select>
+          <input class="search" type="text" id="ses-search" placeholder="Search driver, card or charger..." oninput="renderSessions()">
+          <button class="btn" type="button" onclick="resetFilters('sessions')">Reset filters</button>
         </div>
         <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);">
           <div class="kpi"><div class="kpi-label">Sessions shown</div><div class="kpi-value" id="ses-count">-</div></div>
@@ -1879,6 +1907,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
         <div id="rfid-list-view">
           <div class="filters">
             <select id="rfid-complex-filter" onchange="renderRfid()"></select>
+            <select id="rfid-client-filter" onchange="renderRfid()" style="display:none;"></select>
             <select id="rfid-status-filter" onchange="renderRfid()">
               <option value="all">All statuses</option>
               <option value="active">Active</option>
@@ -1886,6 +1915,18 @@ tr.rowlink:hover td{background:#f0f6fc;}
               <option value="stock">In stock</option>
               <option value="blocked">Blocked</option>
             </select>
+            <select id="rfid-balance-filter" onchange="renderRfid()">
+              <option value="all">Any balance</option>
+              <option value="empty">Empty balance</option>
+              <option value="positive">Has balance</option>
+            </select>
+            <select id="rfid-owner-filter" onchange="renderRfid()">
+              <option value="all">All cards</option>
+              <option value="mine">My vehicles</option>
+              <option value="others">Not my vehicles</option>
+            </select>
+            <input class="search" type="text" id="rfid-search" placeholder="Search number, UID or name..." oninput="renderRfid()">
+            <button class="btn" type="button" onclick="resetFilters('rfid')">Reset filters</button>
             <div style="margin-left:auto;">
               <button class="btn btn-primary" onclick="openAssignCard()">Assign a card</button>
             </div>
@@ -2600,6 +2641,8 @@ async function handleSignOut(reason){
   clearTimeout(opInactivityTimer);
   stopChargerLivePolling();
   stopRealtime();
+  // what was learned about the previous user's owner cards and groups must not carry over
+  ownerGroupIdSet = new Set(); ownerGroupsLoaded = false; ownerCardIds = new Set(); renderRfid.ownerLoaded = false;
   ['click','keydown'].forEach(evt => document.removeEventListener(evt, resetOperatorInactivityTimer));
   currentStaff = null;
   document.getElementById('app-root').style.display = 'none';
@@ -3999,21 +4042,64 @@ function backToSites(){ document.getElementById('sites-list-view').style.display
 
 function populateComplexFilter(selectId, includeAll){
   const sel = document.getElementById(selectId);
+  const prev = sel.value;   // the list is rebuilt on every render: keep the choice that was made
   const roots = locations.filter(l=>!l.parentId);
   sel.innerHTML = (includeAll?'<option value="all">All complexes</option>':'') + roots.map(r=>`<option value="${r.id}">${r.name}</option>`).join('');
+  if(prev && [...sel.options].some(o=>o.value===prev)) sel.value = prev;
+}
+
+// ---- Shared filter helpers ----
+function isPndAdmin(){ return !!currentStaff && currentStaff.role === 'plugndrive_admin'; }
+// Fills a select with "All ..." plus the given [value, label] pairs, keeping the current choice when it still exists.
+function fillFilterSelect(selectId, allLabel, pairs){
+  const sel = document.getElementById(selectId); if(!sel) return;
+  const prev = sel.value;
+  sel.innerHTML = `<option value="all">${escHtml(allLabel)}</option>` + pairs.map(([v,l])=>`<option value="${escHtml(v)}">${escHtml(l)}</option>`).join('');
+  if(prev && [...sel.options].some(o=>o.value===prev)) sel.value = prev;
+}
+// The client filter is for Plug n Drive only (a client only ever sees itself).
+function populateClientFilter(selectId){
+  const sel = document.getElementById(selectId); if(!sel) return;
+  if(!isPndAdmin()){ sel.style.display = 'none'; sel.innerHTML = ''; return; }
+  sel.style.display = '';
+  fillFilterSelect(selectId, 'All clients', clients.map(c=>[c.id, c.name||'']));
+}
+function filterVal(id){ const el = document.getElementById(id); return (el && el.value) || 'all'; }
+function rootClientOfLocation(locId){ const r = rootOf(locId); return r ? r.clientId : null; }
+function resetFilters(page){
+  const sets = {
+    chargers: { selects: ['chg-complex-filter','chg-client-filter','chg-status-filter','chg-vis-filter'], inputs: ['chg-search'], render: () => renderChargers() },
+    sessions: { selects: ['ses-complex-filter','ses-client-filter','ses-charger-filter','ses-period-filter','ses-type-filter','ses-pay-filter','ses-paystatus-filter'], inputs: ['ses-search','ses-from','ses-to'], render: () => renderSessions() },
+    rfid: { selects: ['rfid-complex-filter','rfid-client-filter','rfid-status-filter','rfid-balance-filter','rfid-owner-filter'], inputs: ['rfid-search'], render: () => renderRfid() },
+  };
+  const s = sets[page]; if(!s) return;
+  s.selects.forEach(id => { const el = document.getElementById(id); if(el) el.value = 'all'; });
+  s.inputs.forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  s.render();
 }
 
 function renderChargers(){
   document.getElementById('chargers-list-view').style.display='block';
   document.getElementById('charger-detail-view').style.display='none';
   populateComplexFilter('chg-complex-filter', true);
+  populateClientFilter('chg-client-filter');
   const cf = document.getElementById('chg-complex-filter').value || 'all';
   const sf = document.getElementById('chg-status-filter').value;
+  const clf = isPndAdmin() ? filterVal('chg-client-filter') : 'all';
+  const vf = filterVal('chg-vis-filter');
   const q = document.getElementById('chg-search').value.toLowerCase();
   let rows = chargers.slice();
   if(cf!=='all') rows = rows.filter(c=>{ const root=rootOf(c.locationId); return root && root.id===cf; });
-  if(sf!=='all') rows = rows.filter(c=>c.status===sf);
+  if(clf!=='all') rows = rows.filter(c=>rootClientOfLocation(c.locationId)===clf);
+  if(sf==='attention') rows = rows.filter(chargerNeedsAttention);
+  else if(sf!=='all') rows = rows.filter(c=>c.status===sf);
+  if(vf==='listed') rows = rows.filter(c=>c.listedPublicly);
+  else if(vf==='hidden') rows = rows.filter(c=>!c.listedPublicly);
   if(q) rows = rows.filter(c=>c.name.toLowerCase().includes(q));
+  if(!rows.length){
+    document.getElementById('chargers-body').innerHTML = `<tr><td colspan="7" class="empty">${chargers.length ? 'No chargers match these filters.' : 'No chargers yet.'}</td></tr>`;
+    return;
+  }
   document.getElementById('chargers-body').innerHTML = rows.map(c=>{
     const res = residentFor(c.id);
     return `<tr class="rowlink" onclick="openCharger('${c.id}')">
@@ -6740,22 +6826,80 @@ function fmtDuration(startedAt, endedAt){
   const h = Math.floor(mins/60), m = mins%60;
   return h + 'h' + (m ? ' ' + m + 'm' : '');
 }
+// Owner groups ("my vehicles") are told apart from other access groups by the server, once per sign-in.
+let ownerGroupIdSet = new Set(), ownerGroupsLoaded = false;
+async function ensureOwnerGroups(){
+  if(ownerGroupsLoaded) return;
+  ownerGroupsLoaded = true;   // one attempt only: a failure never turns into a request loop
+  try{
+    const { data, error } = await sb.rpc('owner_group_ids');
+    if(!error && Array.isArray(data)){ ownerGroupIdSet = new Set(data); if(rtPageIs('sessions')) renderSessions(); }
+  }catch(e){ /* owner sessions then count as their plain type */ }
+}
+function sessionKind(s){
+  if(s.groupId && ownerGroupIdSet.has(s.groupId)) return 'owner';
+  if(s.groupMode === 'free') return 'free';
+  if(s.groupMode === 'discount') return 'discount';
+  return 'paid';
+}
+// A calendar day in South African time, as YYYY-MM-DD (the day a session belongs to for drivers and hosts).
+function sastDay(ts){
+  try{ return new Date(ts).toLocaleDateString('en-CA', { timeZone: 'Africa/Johannesburg' }); }
+  catch(e){ return String(ts||'').slice(0,10); }
+}
 function renderSessions(){
+  ensureOwnerGroups();
   populateComplexFilter('ses-complex-filter', true);
+  populateClientFilter('ses-client-filter');
   const cf = document.getElementById('ses-complex-filter').value || 'all';
+  const clf = isPndAdmin() ? filterVal('ses-client-filter') : 'all';
+  const chargerOfSession = s => chargers.find(x=>x.id===s.chargerId);
+  // Charger list follows the site and client already chosen.
+  fillFilterSelect('ses-charger-filter', 'All chargers', chargers
+    .filter(c=>{ const root=rootOf(c.locationId); return (cf==='all' || (root && root.id===cf)) && (clf==='all' || (root && root.clientId===clf)); })
+    .map(c=>[c.id, c.name||'']).sort((a,b)=>a[1].localeCompare(b[1])));
+  const ended = sessions.filter(s=>s.endedAt);
+  fillFilterSelect('ses-pay-filter', 'All payment methods', [...new Set(ended.map(s=>s.payment).filter(Boolean))].sort().map(v=>[v,v]));
+  fillFilterSelect('ses-paystatus-filter', 'Any payment status', [...new Set(ended.map(s=>s.paymentStatus).filter(Boolean))].sort().map(v=>[v, v.charAt(0).toUpperCase()+v.slice(1)]));
+  const chf = filterVal('ses-charger-filter'), typeF = filterVal('ses-type-filter'), payF = filterVal('ses-pay-filter'), psF = filterVal('ses-paystatus-filter');
   const period = document.getElementById('ses-period-filter').value || 'all';
-  let rows = sessions.filter(s=>s.endedAt);
-  if(cf!=='all') rows = rows.filter(s=>{ const c=chargers.find(x=>x.id===s.chargerId); const root=c?rootOf(c.locationId):null; return root && root.id===cf; });
+  const q = (document.getElementById('ses-search').value || '').trim().toLowerCase();
+  const datesBox = document.getElementById('ses-dates'); if(datesBox) datesBox.style.display = period === 'custom' ? 'inline-flex' : 'none';
+  let rows = ended;
+  if(cf!=='all') rows = rows.filter(s=>{ const c=chargerOfSession(s); const root=c?rootOf(c.locationId):null; return root && root.id===cf; });
+  if(clf!=='all') rows = rows.filter(s=>{ const c=chargerOfSession(s); return c && rootClientOfLocation(c.locationId)===clf; });
+  if(chf!=='all') rows = rows.filter(s=>s.chargerId===chf);
+  if(typeF!=='all') rows = rows.filter(s=>sessionKind(s)===typeF);
+  if(payF!=='all') rows = rows.filter(s=>s.payment===payF);
+  if(psF!=='all') rows = rows.filter(s=>s.paymentStatus===psF);
   if(period==='week'){
     const cutoff = new Date(Date.now() - 7*24*60*60*1000);
     rows = rows.filter(s=>new Date(s.startedAt) >= cutoff);
   } else if(period==='month'){
     const monthStart = new Date(); monthStart.setUTCDate(1); monthStart.setUTCHours(0,0,0,0);
     rows = rows.filter(s=>new Date(s.startedAt) >= monthStart);
+  } else if(period==='lastmonth'){
+    const thisStart = new Date(); thisStart.setUTCDate(1); thisStart.setUTCHours(0,0,0,0);
+    const prevStart = new Date(thisStart); prevStart.setUTCMonth(prevStart.getUTCMonth() - 1);
+    rows = rows.filter(s=>{ const d = new Date(s.startedAt); return d >= prevStart && d < thisStart; });
+  } else if(period==='today'){
+    const today = sastDay(Date.now());
+    rows = rows.filter(s=>sastDay(s.startedAt) === today);
+  } else if(period==='custom'){
+    const from = document.getElementById('ses-from').value, to = document.getElementById('ses-to').value;
+    rows = rows.filter(s=>{ const d = sastDay(s.startedAt); return (!from || d >= from) && (!to || d <= to); });
   }
+  if(q) rows = rows.filter(s=>{
+    const c = chargerOfSession(s), u = users.find(x=>x.id===s.userId), card = rfidCards.find(x=>x.id===s.rfidCardId);
+    return [c&&c.name, u&&u.name, card&&card.uid, card&&card.number].some(v=>v && String(v).toLowerCase().includes(q));
+  });
   document.getElementById('ses-count').textContent = rows.length;
   document.getElementById('ses-kwh').textContent = rows.reduce((s,r)=>s+(r.kwh||0),0).toFixed(1)+' kWh';
   document.getElementById('ses-revenue').textContent = sumByCurrency(rows, 'cost');
+  if(!rows.length){
+    document.getElementById('sessions-body').innerHTML = `<tr><td colspan="7" class="empty">${ended.length ? 'No sessions match these filters.' : 'No sessions yet.'}</td></tr>`;
+    return;
+  }
   document.getElementById('sessions-body').innerHTML = rows.map(s=>{
     const c = chargers.find(x=>x.id===s.chargerId);
     const u = users.find(x=>x.id===s.userId);
@@ -6802,11 +6946,25 @@ function renderRfid(){
   document.getElementById('rfid-list-view').style.display = 'block';
   document.getElementById('card-detail-view').style.display = 'none';
   populateComplexFilter('rfid-complex-filter', true);
+  populateClientFilter('rfid-client-filter');
+  if(!renderRfid.ownerLoaded){ renderRfid.ownerLoaded = true; refreshOwnerCardIds().then(()=>{ if(rtPageIs('rfid')) renderRfid(); }); }
   const cf = document.getElementById('rfid-complex-filter').value || 'all';
   const sf = document.getElementById('rfid-status-filter').value;
+  const clf = isPndAdmin() ? filterVal('rfid-client-filter') : 'all';
+  const bf = filterVal('rfid-balance-filter'), ownF = filterVal('rfid-owner-filter');
+  const q = (document.getElementById('rfid-search').value || '').trim().toLowerCase();
   let rows = rfidCards.slice();
   if(cf!=='all') rows = rows.filter(r=>r.complexId===cf);
   if(sf!=='all') rows = rows.filter(r=>r.status===sf);
+  if(clf!=='all') rows = rows.filter(r=>(r.ownerClientId || rootClientOfLocation(r.complexId))===clf);
+  if(bf!=='all') rows = rows.filter(r=>{ const u = users.find(x=>x.id===r.userId); const tracked = u && u.balanceCurrency; const bal = tracked ? Number(u.balance||0) : null; return bf==='empty' ? (tracked && bal<=0) : (tracked && bal>0); });
+  if(ownF==='mine') rows = rows.filter(r=>ownerCardIds.has(r.id));
+  else if(ownF==='others') rows = rows.filter(r=>!ownerCardIds.has(r.id));
+  if(q) rows = rows.filter(r=>{ const u = users.find(x=>x.id===r.userId); return [r.uid, r.number, u&&u.name, u&&u.unit].some(v=>v && String(v).toLowerCase().includes(q)); });
+  if(!rows.length){
+    document.getElementById('rfid-body').innerHTML = `<tr><td colspan="6" class="empty">${rfidCards.length ? 'No cards match these filters.' : 'No cards yet.'}</td></tr>`;
+    return;
+  }
   document.getElementById('rfid-body').innerHTML = rows.map(r=>{
     const u = users.find(x=>x.id===r.userId);
     const complexName = (locations.find(l=>l.id===r.complexId)||{}).name || '-';
@@ -6889,6 +7047,7 @@ async function toggleOwnerCard(){
   btn.disabled = true;
   const { error } = await sb.rpc('set_owner_card', { p_card: card.id, p_on: !on });
   if(error){ alert('Could not change this card: ' + error.message); btn.disabled = false; return; }
+  ownerGroupsLoaded = false;   // the first "my vehicle" creates the owner group: sessions must learn about it
   await refreshOwnerCardIds();
   updateOwnerCardButton();
 }
