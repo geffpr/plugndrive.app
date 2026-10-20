@@ -115,6 +115,16 @@ tr.rowlink:hover td{background:var(--blue-light);}
 .trial-bar.locked{background:#fdecec;border-color:var(--red);color:var(--red);}
 .trial-bar .tb-text{flex:1;min-width:200px;}
 .trial-bar .tb-btn{flex:none;background:var(--blue);color:#fff;border:none;border-radius:8px;padding:7px 14px;font-weight:600;font-size:12px;cursor:pointer;}
+.reqb{display:none;margin-bottom:16px;}
+.reqb-card{background:#eaf8f0;border:2px solid #2fa66a;border-radius:12px;padding:14px 16px;margin-bottom:10px;box-shadow:0 4px 14px rgba(47,166,106,.18);}
+.reqb-card.ok{background:#fff;border:1px solid #2fa66a;box-shadow:none;}
+.reqb-title{font-weight:800;font-size:15px;color:#1d5c3f;margin-bottom:4px;}
+.reqb-sub{font-size:13px;color:var(--text-muted);line-height:1.5;}
+.reqb-act{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;}
+.reqb-act select{border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;background:#fff;}
+.reqb-yes{background:#2fa66a;color:#fff;border:none;border-radius:8px;padding:9px 18px;font-weight:700;font-size:13px;cursor:pointer;}
+.reqb-no{background:#fff;color:var(--red);border:1px solid var(--red);border-radius:8px;padding:9px 16px;font-weight:700;font-size:13px;cursor:pointer;}
+.reqb-yes:disabled,.reqb-no:disabled{opacity:.5;cursor:default;}
 .onb-card{display:none;margin-bottom:16px;}
 .onb-step{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--border);font-size:13px;}
 .onb-step:first-of-type{border-top:none;}
@@ -757,6 +767,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
     <div class="content">
 
       <div class="trial-bar" id="trial-bar" role="status"><div class="tb-text" id="trial-bar-text"></div><button class="tb-btn" onclick="showPage('billing')">Billing</button></div>
+      <div class="reqb" id="req-banner" role="alert" aria-live="polite"></div>
 
       <!-- BILLING -->
       <div class="page" id="page-billing"><div id="billing-root"></div></div>
@@ -2643,6 +2654,7 @@ async function handleSignOut(reason){
   stopRealtime();
   // what was learned about the previous user's owner cards and groups must not carry over
   ownerGroupIdSet = new Set(); ownerGroupsLoaded = false; ownerCardIds = new Set(); renderRfid.ownerLoaded = false;
+  chargeReqs = []; chargeReqMin = {}; chargeReqBusy = {}; renderChargeReqs();
   ['click','keydown'].forEach(evt => document.removeEventListener(evt, resetOperatorInactivityTimer));
   currentStaff = null;
   document.getElementById('app-root').style.display = 'none';
@@ -3456,6 +3468,51 @@ function refreshChargerDetailLive(){
     }).join('') : '<tr><td colspan="4" class="empty">No sessions yet.</td></tr>';
   }
 }
+// ---- Charge requests: drivers at private-home sites ask the host before coming ----
+let chargeReqs = [], chargeReqMin = {}, chargeReqBusy = {}, chargeReqTimer = null, chargeReqBaseTitle = null;
+function fmtReqEta(m){ return !m ? 'as soon as possible' : (m < 60 ? 'in about '+m+' minutes' : 'in about '+(m/60)+(m===60?' hour':' hours')); }
+function chargeReqCanSee(){ return !!currentStaff && (currentStaff.role === 'plugndrive_admin' || currentStaff.role === 'client_admin'); }
+async function loadChargeRequests(){
+  if(!chargeReqCanSee()){ chargeReqs = []; renderChargeReqs(); return; }
+  try{
+    const r = await sb.rpc('list_charge_requests');
+    if(r && !r.error && Array.isArray(r.data)){ chargeReqs = r.data; renderChargeReqs(); }
+  }catch(e){ /* the next refresh retries */ }
+}
+function renderChargeReqs(){
+  const box = document.getElementById('req-banner'); if(!box) return;
+  const pend = chargeReqs.filter(r => r.status === 'pending'), ok = chargeReqs.filter(r => r.status === 'accepted');
+  if(chargeReqBaseTitle === null) chargeReqBaseTitle = document.title;
+  document.title = (pend.length ? '(' + pend.length + ') ' : '') + chargeReqBaseTitle;
+  if(!chargeReqCanSee() || !chargeReqs.length){ if(box.dataset.h){ box.innerHTML = ''; box.dataset.h = ''; } box.style.display = 'none'; return; }
+  const hm = ts => new Date(ts).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+  let h = pend.map(r => {
+    const mins = chargeReqMin[r.id] || 120, busy = !!chargeReqBusy[r.id];
+    return `<div class="reqb-card"><div class="reqb-title">${escHtml(r.driver_name)} would like to charge at ${escHtml(r.site_name)}</div>
+      <div class="reqb-sub">${escHtml(r.charger_name)} · arriving ${escHtml(fmtReqEta(r.eta_minutes))}${r.note ? '<br>Message: ' + escHtml(r.note) : ''}</div>
+      <div class="reqb-act"><span class="reqb-sub">Green light for</span>
+        <select onchange="chargeReqMin['${escHtml(r.id)}']=parseInt(this.value,10)"><option value="60"${mins===60?' selected':''}>1 hour</option><option value="120"${mins===120?' selected':''}>2 hours</option><option value="240"${mins===240?' selected':''}>4 hours</option><option value="720"${mins===720?' selected':''}>12 hours</option></select>
+        <button class="reqb-yes" ${busy?'disabled':''} onclick="answerChargeReq('${escHtml(r.id)}',true)">Accept</button>
+        <button class="reqb-no" ${busy?'disabled':''} onclick="answerChargeReq('${escHtml(r.id)}',false)">Decline</button></div>
+      <div class="reqb-sub" style="margin-top:8px;font-size:12px;">Accepting shares the driver's phone number with you. The green light is only information: the driver still starts the charge from their phone.</div></div>`;
+  }).join('');
+  h += ok.map(r => `<div class="reqb-card ok"><div class="reqb-title" style="font-size:14px;">Green light given to ${escHtml(r.driver_name)} until ${escHtml(hm(r.valid_until))}</div>
+      <div class="reqb-sub">${escHtml(r.charger_name)} · ${escHtml(r.site_name)}${r.driver_phone ? ' · <a href="tel:' + escHtml(String(r.driver_phone).replace(/[^0-9+]/g,'')) + '">' + escHtml(r.driver_phone) + '</a>' : ''}${r.note ? '<br>Message: ' + escHtml(r.note) : ''}</div></div>`).join('');
+  if(box.dataset.h !== h){ box.innerHTML = h; box.dataset.h = h; }
+  box.style.display = 'block';
+}
+async function answerChargeReq(id, accept){
+  if(chargeReqBusy[id]) return;
+  chargeReqBusy[id] = true; renderChargeReqs();
+  let err = null;
+  try{
+    const r = await sb.rpc('respond_charge_request', {p_id:id, p_accept:accept, p_minutes:chargeReqMin[id] || 120});
+    if(r && r.error) err = r.error.message;
+  }catch(e){ err = 'network'; }
+  delete chargeReqBusy[id];
+  await loadChargeRequests();
+  if(err) alert(/no longer open/.test(err) ? 'This request is no longer open.' : 'Could not send your answer. Please try again.');
+}
 // Catch-up read (used when the live link is down, and when a hidden tab comes back).
 async function rtRefresh(){
   if(!currentStaff || currentStaff.role === 'operator') return;
@@ -3475,6 +3532,7 @@ async function rtRefresh(){
 function stopRealtime(){
   clearInterval(rtFallbackTimer); rtFallbackTimer = null;
   clearTimeout(rtHiddenTimer); rtHiddenTimer = null;
+  clearInterval(chargeReqTimer); chargeReqTimer = null;
   rtOk = false;
   if(rtChannel){ try{ sb.removeChannel(rtChannel); }catch(e){} rtChannel = null; }
 }
@@ -3485,9 +3543,13 @@ function startRealtime(){
     rtChannel = sb.channel('console-live')
       .on('postgres_changes', {event:'*', schema:'public', table:'chargers'}, p => { rtApply(chargers, mapCharger, p); rtScheduleRender(); })
       .on('postgres_changes', {event:'*', schema:'public', table:'sessions'}, p => { rtApply(sessions, mapSession, p); rtScheduleRender(); })
+      .on('postgres_changes', {event:'*', schema:'public', table:'charge_requests'}, () => { loadChargeRequests(); })
       .subscribe(status => { rtOk = (status === 'SUBSCRIBED'); });
   }catch(e){ rtOk = false; console.warn('live link failed', e); }
   rtFallbackTimer = setInterval(() => { if(!rtOk && !document.hidden) rtRefresh(); }, 30000);
+  clearInterval(chargeReqTimer);
+  chargeReqTimer = setInterval(() => { if(!document.hidden) loadChargeRequests(); }, 30000);   // also drops expired green lights
+  loadChargeRequests();
 }
 document.addEventListener('visibilitychange', () => {
   if(!currentStaff || currentStaff.role === 'operator') return;
