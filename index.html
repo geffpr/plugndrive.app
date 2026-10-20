@@ -3369,8 +3369,24 @@ function rtScheduleRender(){
     try{
       if(rtPageIs('dashboard')) renderDashboard();
       else if(rtChargerDetailOpen()) refreshChargerDetailLive();
+      else if(rtPageIs('chargers')) renderChargers();      // the list (search and status filter are read back from their fields)
+      else if(rtPageIs('sessions')) renderSessions();
+      else if(rtPageIs('load')) rtRefreshLoad();
+      else if(rtPageIs('sites')) rtRefreshSiteTree();
     }catch(e){ console.warn('live update render failed', e); }
   }, 300);
+}
+// Load management: the gauges move, but never while the visitor is using one of the switches.
+function rtRefreshLoad(){
+  const box = document.getElementById('load-list');
+  if(!box || (document.activeElement && box.contains(document.activeElement))) return;
+  renderLoad();
+}
+// Site page: only the charger tree is redrawn (the address and the map are left alone).
+function rtRefreshSiteTree(){
+  const v = document.getElementById('site-detail-view'), tree = document.getElementById('site-tree');
+  if(!v || !tree || v.style.display !== 'block' || !currentSiteId || !locations.find(l=>l.id===currentSiteId)) return;
+  tree.innerHTML = renderTreeNode(currentSiteId, 0);
 }
 // Updates only the live parts of an open charger page (the form fields and tabs are left alone).
 function refreshChargerDetailLive(){
