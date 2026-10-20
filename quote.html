@@ -1542,10 +1542,7 @@ function generatePDF(pdfLang) {
       }
       y += (vb.on ? 14 : 10) + 3;
     });
-    doc.setFont('helvetica','italic'); doc.setFontSize(8); doc.setTextColor(...muted);
-    doc.text(P('Nothing is payable once-off.', 'Nada é pago uma só vez.'), M, y + 2);
-    y += 6;
-    if (!vb.on) { doc.text(P('All prices exclude VAT.', 'Todos os preços não incluem IVA.'), M, y + 2); y += 5; }
+    if (!vb.on) { doc.setFont('helvetica','italic'); doc.setFontSize(8); doc.setTextColor(...muted); doc.text(P('All prices exclude VAT.', 'Todos os preços não incluem IVA.'), M, y + 2); y += 5; }
   } else {
   if (vb.on) {
     line2(P('Subtotal (excl. VAT)', 'Subtotal (sem IVA)'), vb.sub, false);
