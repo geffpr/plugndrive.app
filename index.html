@@ -1615,8 +1615,19 @@ tr.rowlink:hover td{background:#f0f6fc;}
           <div class="section-title" style="margin:0;">Campaigns</div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
             <select id="cs-env" onchange="selectCampaignEnv(this.value)" style="min-width:200px;"></select>
+            <button class="btn" id="cs-limits-btn" onclick="csLimitsToggle()">Sending limits</button>
             <button class="btn btn-primary" id="cs-new-btn" onclick="openCampaignSub()">+ New sub-account</button>
           </div>
+        </div>
+        <div id="cs-limits" class="card card-pad" style="display:none;max-width:640px;margin:12px 0;">
+          <div style="font-weight:600;margin-bottom:4px;">Sending limits</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">Plug n Drive protects drivers from too many messages. You can be stricter than these limits, never looser. Times are South Africa time.</div>
+          <div id="cs-limits-form" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;"></div>
+          <div style="display:flex;gap:8px;margin-top:12px;">
+            <button class="btn btn-primary" id="cs-limits-save" onclick="csLimitsSave()">Save</button>
+            <button class="btn" onclick="csLimitsToggle()">Close</button>
+          </div>
+          <div id="cs-limits-msg" style="font-size:12px;margin-top:8px;"></div>
         </div>
         <div id="cs-overview">
         <div style="color:var(--text-muted);font-size:12px;margin:6px 0 12px;max-width:680px;">A sub-account is a separate space for one brand or tenant. It only sees the sites you allow, and it never receives driver names, e-mails or phone numbers. Open its campaigns with the Campaigns button, or pick it in the menu above.</div>
@@ -1765,6 +1776,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
             <div id="cc-tab-scenario" style="display:none;">
               <div class="sc-bar">
                 <button class="btn btn-sm" type="button" onclick="scSimulate()">Simulate on history</button>
+                <button class="btn btn-sm" type="button" onclick="scSimulateVolume()">Simulate with limits</button>
                 <select id="sc-days" style="width:auto;"><option value="7">last 7 days</option><option value="30" selected>last 30 days</option><option value="90">last 90 days</option><option value="180">last 180 days</option></select>
                 <button class="btn btn-sm" type="button" onclick="scToggleTest()">Test with a fictional charge</button>
                 <span id="sc-msg" class="sc-msg">Nothing is sent: scenarios can only be simulated. Drivers are never identified.</span>
@@ -6952,6 +6964,8 @@ function csCleanMessage(msg){
   if(/limit of 5/i.test(m)) return 'This sub-account already has 5 active keys. Revoke one to create another.';
   if(/not_active/i.test(m)) return 'The sub-account must be active to create a key.';
   if(/key not found/i.test(m)) return 'This key was not found or is already revoked.';
+  if(/cap_too_loose:\s*(\w+)/i.test(m)) return 'You can only be stricter than Plug n Drive limits (' + /cap_too_loose:\s*(\w+)/i.exec(m)[1].replace(/_/g, ' ') + ').';
+  if(/invalid_quiet_hours/i.test(m)) return 'Fill both the start and the end of the quiet hours, or leave both empty.';
   return 'Could not complete this action. Please try again.';
 }
 // ---- keys of one sub-account ----
@@ -7506,6 +7520,58 @@ async function scSimulate(){
     <div>Charges that reach an action: <b>${bEsc(scRange(data.events && data.events.matched))}</b> out of ${bEsc(scRange(data.events && data.events.total))}</div>
     <div>Distinct drivers reached: <b>${bEsc(scRange(data.drivers && data.drivers.matched))}</b> out of ${bEsc(scRange(data.drivers && data.drivers.total))}</div>${per}
     <div style="font-size:11px;color:var(--text-muted);margin-top:6px;">Simulation only. Figures are rounded ranges (fewer than 10 is not shown precisely). The counts are shown on each block and link. ${data.width === 'narrow' ? 'Very few drivers would be reached. ' : ''}${data.capped ? 'Only the most recent charges were counted. ' : ''}${bEsc(data.note || '')}</div></div>`;
+}
+const MK_REASON = { cap_7d: 'Weekly limit reached', cap_30d: 'Monthly limit reached', one_per_session: 'Another message already sent for this charge', refused: 'Driver said no to offers', refused_platform: 'Driver said no to offers', unsubscribed: 'Driver unsubscribed', channel_unavailable: 'No usable contact (email or phone)', review: 'To review (conflicting consent)', still_delayed: 'Still waiting after 5 retries', invalid_channel: 'Channel not allowed', no_driver: 'Driver unknown', unknown_driver: 'Driver unknown' };
+async function scSimulateVolume(){
+  const err = document.getElementById('sc-error'), out = document.getElementById('sc-sim'); err.textContent = ''; out.innerHTML = '';
+  if(!scReady){ err.textContent = 'The scenario is not ready yet.'; return; }
+  if(!ccEditId){ err.textContent = 'Save the draft first, then simulate.'; return; }
+  const b = scBuild(); if(b.err){ err.textContent = b.err; return; }
+  if(!scStartReady()){ err.textContent = 'Choose when the scenario starts in the Start block first.'; return; }
+  out.textContent = 'Simulating…';
+  const days = Math.min(90, parseInt(document.getElementById('sc-days').value, 10));
+  const { data, error } = await sb.rpc('simulate_campaign_volume', { p_id: ccEditId, p_scenario: b.sc, p_days: days });
+  if(error || !data){ out.textContent = ''; err.textContent = csCleanMessage(error && error.message) || 'The simulation failed. Please try again.'; return; }
+  const bl = data.blocked || {}, keys = Object.keys(bl);
+  const rows = keys.length ? '<ul style="margin:4px 0 0;padding-left:20px;">' + keys.map(k => `<li>${bEsc(MK_REASON[k] || k)}: <b>${bEsc(scRange(bl[k]))}</b></li>`).join('') + '</ul>' : '';
+  const per = data.per_week_sent && !data.per_week_sent.lt10 ? `<div>About ${bEsc(scRange(data.per_week_sent))} messages per week.</div>` : '';
+  out.innerHTML = `<div class="card card-pad" style="background:var(--surface, #f7f9fb);"><b>With the sending limits, on the last ${bEsc(String(data.days || days))} days</b>
+    <div>Messages planned: <b>${bEsc(scRange(data.planned))}</b></div>
+    <div>Would be sent: <b>${bEsc(scRange(data.sent))}</b>, of which after a wait (quiet hours or spacing): ${bEsc(scRange(data.delayed_then_sent))}</div>
+    <div>Drivers reached: <b>${bEsc(scRange(data.drivers_reached))}</b> out of ${bEsc(scRange(data.drivers_total))}</div>${per}
+    <div style="margin-top:4px;">${keys.length ? 'Not sent:' : 'Nothing is blocked by the limits.'}</div>${rows}
+    <div style="font-size:11px;color:var(--text-muted);margin-top:6px;">Simulation only, nothing is sent. Figures are rounded ranges. Drivers who gave no consent are treated as existing customers (their own offers only, with a way to unsubscribe).</div></div>`;
+}
+let csLimits = null;
+async function csLimitsToggle(){
+  const box = document.getElementById('cs-limits');
+  if(box.style.display !== 'none'){ box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  const msg = document.getElementById('cs-limits-msg'); msg.style.color = 'var(--text-muted)'; msg.textContent = 'Loading…';
+  const { data, error } = await sb.rpc('get_marketing_caps');
+  if(error || !data){ msg.style.color = 'var(--red, #c0392b)'; msg.textContent = csCleanMessage(error && error.message); return; }
+  csLimits = data; msg.textContent = '';
+  const p = data.platform || {}, k = data.client || {};
+  const t = v => v ? String(v).slice(0, 5) : '';
+  const num = (id, label, val, ph, hint) => `<label style="font-weight:400;font-size:12px;display:flex;flex-direction:column;gap:2px;">${bEsc(label)}<input type="number" min="0" id="${id}" value="${val == null ? '' : bEsc(String(val))}" placeholder="${bEsc(String(ph))}" style="width:100%;"><span style="color:var(--text-muted);">${bEsc(hint)}</span></label>`;
+  document.getElementById('cs-limits-form').innerHTML =
+    num('mk-7', 'Messages per driver, 7 days', k.max_per_7d, p.max_per_7d, 'Plug n Drive: at most ' + p.max_per_7d) +
+    num('mk-30', 'Messages per driver, 30 days', k.max_per_30d, p.max_per_30d, 'Plug n Drive: at most ' + p.max_per_30d) +
+    num('mk-gap', 'Hours between two messages', k.min_gap_hours, p.min_gap_hours, 'Plug n Drive: at least ' + p.min_gap_hours + ' h') +
+    num('mk-pause', 'Hours of calm after an offer', k.offer_pause_hours, p.offer_pause_hours, 'Plug n Drive: at least ' + p.offer_pause_hours + ' h') +
+    `<label style="font-weight:400;font-size:12px;display:flex;flex-direction:column;gap:2px;">Quiet hours start<input type="time" id="mk-qs" value="${bEsc(t(k.quiet_start))}"><span style="color:var(--text-muted);">Plug n Drive: ${bEsc(t(p.quiet_start))} to ${bEsc(t(p.quiet_end))}, you can only extend it</span></label>` +
+    `<label style="font-weight:400;font-size:12px;display:flex;flex-direction:column;gap:2px;">Quiet hours end<input type="time" id="mk-qe" value="${bEsc(t(k.quiet_end))}"></label>`;
+}
+async function csLimitsSave(){
+  const msg = document.getElementById('cs-limits-msg'), btn = document.getElementById('cs-limits-save');
+  const n = id => { const v = document.getElementById(id).value.trim(); return v === '' ? null : parseInt(v, 10); };
+  const s = id => { const v = document.getElementById(id).value.trim(); return v === '' ? null : v; };
+  const body = { max_per_7d: n('mk-7'), max_per_30d: n('mk-30'), min_gap_hours: n('mk-gap'), offer_pause_hours: n('mk-pause'), quiet_start: s('mk-qs'), quiet_end: s('mk-qe') };
+  btn.disabled = true; msg.style.color = 'var(--text-muted)'; msg.textContent = 'Saving…';
+  const { data, error } = await sb.rpc('set_marketing_caps', { p: body });
+  btn.disabled = false;
+  if(error || !data){ msg.style.color = 'var(--red, #c0392b)'; msg.textContent = csCleanMessage(error && error.message); return; }
+  csLimits = data; msg.style.color = 'var(--green, #1a7f37)'; msg.textContent = 'Saved. Your limits apply to all your campaigns.';
 }
 function scToggleTest(){
   const box = document.getElementById('sc-test');
