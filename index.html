@@ -1535,9 +1535,13 @@ tr.rowlink:hover td{background:#f0f6fc;}
       <div class="page" id="page-campaigns">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
           <div class="section-title" style="margin:0;">Campaigns</div>
-          <button class="btn btn-primary" id="cs-new-btn" onclick="openCampaignSub()">+ New sub-account</button>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <select id="cs-env" onchange="selectCampaignEnv(this.value)" style="min-width:200px;"></select>
+            <button class="btn btn-primary" id="cs-new-btn" onclick="openCampaignSub()">+ New sub-account</button>
+          </div>
         </div>
-        <div style="color:var(--text-muted);font-size:12px;margin:6px 0 12px;max-width:680px;">A sub-account is a separate space for one brand or tenant. It only sees the sites you allow, and it never receives driver names, e-mails or phone numbers. Campaigns, API keys and reporting for each sub-account come next.</div>
+        <div id="cs-overview">
+        <div style="color:var(--text-muted);font-size:12px;margin:6px 0 12px;max-width:680px;">A sub-account is a separate space for one brand or tenant. It only sees the sites you allow, and it never receives driver names, e-mails or phone numbers. Open its campaigns with the Campaigns button, or pick it in the menu above.</div>
         <div id="cs-panel" class="card card-pad" style="display:none;max-width:520px;margin:12px 0;">
           <div class="form-row"><label>Sub-account name</label><input type="text" id="cs-name" maxlength="80" placeholder="e.g. Woolworths, Food court"></div>
           <div class="form-row"><label>Sites this sub-account can use</label><div id="cs-sites" style="max-height:220px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:8px;"></div></div>
@@ -1577,6 +1581,47 @@ tr.rowlink:hover td{background:#f0f6fc;}
             <thead><tr><th>Name</th><th>Key</th><th>Created</th><th>Last used</th><th>Status</th><th></th></tr></thead>
             <tbody id="cs-keys-body"></tbody>
           </table>
+        </div>
+        </div>
+
+        <div id="cs-env-view" style="display:none;">
+          <div class="card card-pad" style="margin:12px 0;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+            <div>Working in <b id="cs-env-name"></b> <span id="cs-env-status" style="color:var(--text-muted);font-size:12px;"></span></div>
+            <button class="btn btn-sm" onclick="selectCampaignEnv('')">&larr; Overview</button>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+            <div style="font-weight:600;">Campaigns</div>
+            <button class="btn btn-primary" id="cc-new-btn" onclick="openCampaignDraft()">+ New campaign</button>
+          </div>
+          <div style="color:var(--text-muted);font-size:12px;margin:6px 0 12px;max-width:680px;">Campaigns are saved as drafts. Nothing is sent yet: targeting, scenarios and sending come in the next steps.</div>
+          <div id="cc-panel" class="card card-pad" style="display:none;max-width:720px;margin:12px 0;">
+            <div class="form-row"><label>1. Name</label><input type="text" id="cc-name" maxlength="80" placeholder="e.g. Welcome offer"></div>
+            <div class="form-row"><label>Objective (what is this campaign for?)</label><textarea id="cc-objective" maxlength="500" rows="2" style="width:100%;" placeholder="e.g. Bring drivers who are charging into the food court"></textarea></div>
+            <div style="font-weight:600;margin:14px 0 4px;">2. Zone</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">The radius is measured from the starting site or point to the charger, not to the driver. Being near a charger does not prove a visit.</div>
+            <div class="form-row"><label>Starting sites (sites allowed for this sub-account)</label><div id="cc-sites" style="max-height:160px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:8px;"></div></div>
+            <div class="form-row"><label>Radius (km)</label><input type="number" id="cc-radius" min="0.1" max="50" step="0.1" value="1" style="max-width:120px;" oninput="ccPreview()"></div>
+            <div class="form-row"><label>Extra starting points (optional)</label><div id="cc-points"></div><button class="btn btn-sm" type="button" onclick="ccAddPoint()" style="margin-top:6px;">+ Add a point</button></div>
+            <div class="form-row"><label>Excluded sites (charges there never count)</label><div id="cc-excl" style="max-height:140px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:8px;"></div></div>
+            <div id="cc-preview" style="font-size:12px;color:var(--text-muted);margin:6px 0 10px;"></div>
+            <div style="font-weight:600;margin:14px 0 4px;">3. Period</div>
+            <div style="display:flex;gap:12px;flex-wrap:wrap;">
+              <div class="form-row"><label>Start date</label><input type="date" id="cc-start"></div>
+              <div class="form-row"><label>End date</label><input type="date" id="cc-end"></div>
+            </div>
+            <div style="font-size:12px;color:var(--text-muted);margin:10px 0;">Coming next: target audience, scenario, limits and activation.</div>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-primary" id="cc-save" onclick="submitCampaignDraft()">Save draft</button>
+              <button class="btn" onclick="closeCampaignDraft()">Cancel</button>
+            </div>
+            <div id="cc-error" style="color:var(--red, #c0392b);font-size:12px;margin-top:8px;"></div>
+          </div>
+          <div class="card">
+            <table>
+              <thead><tr><th>Name</th><th>Zone</th><th>Period</th><th>Status</th><th></th></tr></thead>
+              <tbody id="cc-body"></tbody>
+            </table>
+          </div>
         </div>
       </div>
 
@@ -6681,6 +6726,13 @@ let csEditId = null;
 let csBusy = false;
 function csCleanMessage(msg){
   const m = String(msg || '');
+  if(/name_taken: a campaign/i.test(m)) return 'A campaign with this name already exists in this sub-account.';
+  if(/invalid_zone:\s*(.+)/i.test(m)) return 'Zone: ' + /invalid_zone:\s*(.+)/i.exec(m)[1].replace(/\.$/, '') + '.';
+  if(/invalid_dates/i.test(m)) return 'The start date must not be after the end date.';
+  if(/not_draft/i.test(m)) return 'Only a draft can be changed for now.';
+  if(/limit of 200/i.test(m)) return 'This sub-account already has 200 campaigns. Archive some to create more.';
+  if(/unknown_campaign/i.test(m)) return 'This campaign was not found.';
+  if(/objective must be/i.test(m)) return 'The objective must be 500 characters or fewer.';
   if(/name_taken/i.test(m)) return 'A sub-account with this name already exists.';
   if(/limit of 50/i.test(m)) return 'You already have 50 active sub-accounts. Archive one to create another.';
   if(/name must be/i.test(m)) return 'Give the sub-account a name of 1 to 80 characters.';
@@ -6763,6 +6815,8 @@ async function renderCampaigns(){
   }
   csList = data;
   renderCampaignsTable();
+  fillCampaignEnv();
+  applyCampaignView();
 }
 function csSiteNames(ids){
   const names = (ids || []).map(id => { const l = locations.find(x => x.id === id); return l ? l.name : null; }).filter(Boolean);
@@ -6777,7 +6831,8 @@ function renderCampaignsTable(){
     const label = { active:'Active', suspended:'Suspended', archived:'Archived' }[s.status] || s.status;
     let actions = '';
     if(!arch){
-      actions = `<button class="btn btn-sm" data-sid="${bEsc(s.id)}" onclick="openCampaignSub(this.dataset.sid)">Edit</button> ` +
+      actions = `<button class="btn btn-sm" data-sid="${bEsc(s.id)}" onclick="selectCampaignEnv(this.dataset.sid)">Campaigns</button> ` +
+        `<button class="btn btn-sm" data-sid="${bEsc(s.id)}" onclick="openCampaignSub(this.dataset.sid)">Edit</button> ` +
         `<button class="btn btn-sm" data-sid="${bEsc(s.id)}" onclick="openCampaignKeys(this.dataset.sid)">Keys</button> ` +
         (s.status === 'active'
           ? `<button class="btn btn-sm" data-sid="${bEsc(s.id)}" data-st="suspended" onclick="setCampaignSubStatus(this)">Suspend</button> `
@@ -6834,6 +6889,184 @@ async function setCampaignSubStatus(btn){
   const { error } = await sb.rpc('update_campaign_subaccount', { p_id: id, p_status: st });
   if(error){ btn.disabled = false; alert(csCleanMessage(error.message)); return; }
   await renderCampaigns();
+}
+
+// ---- environment (sub-account) and campaign drafts ----
+let csEnv = '';
+let ccList = [], ccEditId = null, ccPoints = [], ccBusy = false;
+function fillCampaignEnv(){
+  const sel = document.getElementById('cs-env'); if(!sel) return;
+  const live = csList.filter(s => s.status !== 'archived');
+  if(csEnv && !live.some(s => s.id === csEnv)) csEnv = '';
+  sel.innerHTML = '<option value="">Overview</option>' + live.map(s => `<option value="${bEsc(s.id)}">${bEsc(s.name)}</option>`).join('');
+  sel.value = csEnv;
+}
+function selectCampaignEnv(id){
+  csEnv = id || '';
+  closeCampaignDraft(); closeCampaignKeys(); closeCampaignSub();
+  const sel = document.getElementById('cs-env'); if(sel) sel.value = csEnv;
+  applyCampaignView();
+}
+function applyCampaignView(){
+  const s = csEnv ? csList.find(x => x.id === csEnv) : null;
+  document.getElementById('cs-overview').style.display = s ? 'none' : '';
+  document.getElementById('cs-env-view').style.display = s ? '' : 'none';
+  document.getElementById('cs-new-btn').style.display = s ? 'none' : '';
+  if(s){
+    document.getElementById('cs-env-name').textContent = s.name;
+    document.getElementById('cs-env-status').textContent = s.status === 'active' ? '' : '(' + s.status + ')';
+    loadCampaignDrafts();
+  }
+}
+async function loadCampaignDrafts(){
+  const body = document.getElementById('cc-body');
+  body.innerHTML = '<tr><td colspan="5" class="empty">Loading…</td></tr>';
+  const sub = csEnv;
+  const { data, error } = await sb.rpc('list_campaigns', { p_sub: sub });
+  if(sub !== csEnv) return;   // the user switched environment while loading
+  if(error || !Array.isArray(data)){ body.innerHTML = '<tr><td colspan="5" class="empty">Could not load the campaigns. Please try again.</td></tr>'; return; }
+  ccList = data;
+  renderCampaignDraftsTable();
+}
+function ccZoneLabel(z){
+  z = z || {};
+  const n = (z.site_ids || []).length, p = (z.points || []).length;
+  if(!n && !p) return '<span style="color:var(--text-muted);">Not set</span>';
+  const parts = [];
+  if(n) parts.push(n + ' site' + (n === 1 ? '' : 's'));
+  if(p) parts.push(p + ' point' + (p === 1 ? '' : 's'));
+  return bEsc(z.radius_km + ' km around ' + parts.join(' + '));
+}
+function renderCampaignDraftsTable(){
+  const body = document.getElementById('cc-body'); if(!body) return;
+  const labels = { draft:'Draft', active:'Active', paused:'Paused', archived:'Archived' };
+  body.innerHTML = ccList.map(c => {
+    const arch = c.status === 'archived';
+    const period = (c.start_date || c.end_date) ? bEsc((c.start_date || '…') + ' to ' + (c.end_date || '…')) : '<span style="color:var(--text-muted);">No dates</span>';
+    const id = bEsc(c.id);
+    let actions = '';
+    if(c.status === 'draft') actions += `<button class="btn btn-sm" data-cid="${id}" onclick="openCampaignDraft(this.dataset.cid)">Edit</button> `;
+    actions += `<button class="btn btn-sm" data-cid="${id}" onclick="duplicateCampaignDraft(this)">Duplicate</button>`;
+    if(c.status === 'draft') actions += ` <button class="btn btn-sm btn-danger" data-cid="${id}" onclick="archiveCampaignDraft(this)">Archive</button>`;
+    const obj = c.objective ? `<div style="font-size:12px;color:var(--text-muted);">${bEsc(c.objective)}</div>` : '';
+    return `<tr${arch ? ' style="opacity:.55;"' : ''}><td>${bEsc(c.name)}${obj}</td><td>${ccZoneLabel(c.zone)}</td><td>${period}</td><td>${bEsc(labels[c.status] || c.status)}</td><td style="white-space:nowrap;">${actions}</td></tr>`;
+  }).join('') || '<tr><td colspan="5" class="empty">No campaigns yet. Create the first draft for this sub-account.</td></tr>';
+}
+function ccLocName(id){ const l = locations.find(x => x.id === id); return l ? l.name : 'Unknown site'; }
+function ccCheckList(ids, checkedIds, cls){
+  const sel = new Set(checkedIds || []);
+  return ids.map(id => `<label style="display:flex;gap:8px;align-items:center;padding:3px 0;font-weight:400;"><input type="checkbox" class="${cls}" value="${bEsc(id)}"${sel.has(id) ? ' checked' : ''} onchange="ccPreview()"> ${bEsc(ccLocName(id))}</label>`).join('');
+}
+function openCampaignDraft(id){
+  const sub = csList.find(x => x.id === csEnv); if(!sub) return;
+  const c = id ? ccList.find(x => x.id === id) : null;
+  ccEditId = c ? c.id : null;
+  const z = (c && c.zone) || {};
+  document.getElementById('cc-name').value = c ? c.name : '';
+  document.getElementById('cc-objective').value = c ? c.objective : '';
+  document.getElementById('cc-radius').value = z.radius_km != null ? z.radius_km : 1;
+  document.getElementById('cc-start').value = (c && c.start_date) || '';
+  document.getElementById('cc-end').value = (c && c.end_date) || '';
+  document.getElementById('cc-error').textContent = '';
+  document.getElementById('cc-sites').innerHTML = ccCheckList(sub.site_ids || [], z.site_ids, 'cc-site') || '<div style="color:var(--text-muted);font-size:12px;">This sub-account has no sites yet. Add some with Edit in the overview.</div>';
+  document.getElementById('cc-excl').innerHTML = ccCheckList(locations.map(l => l.id), z.excluded_site_ids, 'cc-ex') || '<div style="color:var(--text-muted);font-size:12px;">No sites.</div>';
+  ccPoints = (z.points || []).map(p => ({ label: p.label || '', lat: String(p.lat), lng: String(p.lng) }));
+  ccRenderPoints();
+  document.getElementById('cc-panel').style.display = 'block';
+  ccPreview();
+  document.getElementById('cc-name').focus();
+}
+function closeCampaignDraft(){ const p = document.getElementById('cc-panel'); if(p) p.style.display = 'none'; ccEditId = null; ccPoints = []; }
+function ccRenderPoints(){
+  document.getElementById('cc-points').innerHTML = ccPoints.map((p, i) =>
+    `<div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap;"><input type="text" placeholder="Label" maxlength="60" value="${bEsc(p.label)}" oninput="ccPointSet(${i},'label',this.value)" style="width:150px;"><input type="number" step="any" placeholder="Latitude" value="${bEsc(p.lat)}" oninput="ccPointSet(${i},'lat',this.value)" style="width:120px;"><input type="number" step="any" placeholder="Longitude" value="${bEsc(p.lng)}" oninput="ccPointSet(${i},'lng',this.value)" style="width:120px;"><button class="btn btn-sm" type="button" onclick="ccRemovePoint(${i})">Remove</button></div>`
+  ).join('');
+}
+function ccAddPoint(){ if(ccPoints.length >= 10) return; ccPoints.push({ label:'', lat:'', lng:'' }); ccRenderPoints(); ccPreview(); }
+function ccRemovePoint(i){ ccPoints.splice(i, 1); ccRenderPoints(); ccPreview(); }
+function ccPointSet(i, k, v){ if(ccPoints[i]){ ccPoints[i][k] = v; ccPreview(); } }
+function ccKm(aLat, aLng, bLat, bLng){
+  const R = 6371, rad = Math.PI / 180;
+  const dLat = (bLat - aLat) * rad, dLng = (bLng - aLng) * rad;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(aLat * rad) * Math.cos(bLat * rad) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+// Counts the chargers of the client's own sites that fall inside the zone (the radius measures the charger).
+function ccPreview(){
+  const el = document.getElementById('cc-preview'); if(!el) return;
+  const radius = parseFloat(document.getElementById('cc-radius').value);
+  const anchors = [];
+  document.querySelectorAll('#cc-sites .cc-site:checked').forEach(c => { const l = locations.find(x => x.id === c.value); if(l && l.latitude != null && l.longitude != null) anchors.push([Number(l.latitude), Number(l.longitude)]); });
+  ccPoints.forEach(p => { const a = parseFloat(p.lat), b = parseFloat(p.lng); if(isFinite(a) && isFinite(b)) anchors.push([a, b]); });
+  if(!anchors.length){ el.textContent = 'Pick a starting site or add a point to see how many of your chargers fall inside the zone.'; return; }
+  if(!(radius > 0)){ el.textContent = 'Enter a radius to see how many of your chargers fall inside the zone.'; return; }
+  const excluded = new Set([...document.querySelectorAll('#cc-excl .cc-ex:checked')].map(c => c.value));
+  let nSites = 0, nCh = 0, noCoords = 0;
+  locations.forEach(l => {
+    if(excluded.has(l.id)) return;
+    if(l.latitude == null || l.longitude == null){ noCoords++; return; }
+    if(anchors.some(a => ccKm(a[0], a[1], Number(l.latitude), Number(l.longitude)) <= radius)){
+      const k = chargers.filter(ch => ch.locationId === l.id).length;
+      if(k){ nSites++; nCh += k; }
+    }
+  });
+  el.textContent = `About ${nCh} charger${nCh === 1 ? '' : 's'} on ${nSites} of your sites fall inside this zone.` + (noCoords ? ` ${noCoords} site${noCoords === 1 ? ' has' : 's have'} no coordinates and cannot be matched.` : '');
+}
+async function submitCampaignDraft(){
+  if(ccBusy) return;
+  const errEl = document.getElementById('cc-error'); errEl.textContent = '';
+  const name = document.getElementById('cc-name').value.trim();
+  if(!name){ errEl.textContent = 'Give the campaign a name.'; return; }
+  const objective = document.getElementById('cc-objective').value.trim();
+  const radius = parseFloat(document.getElementById('cc-radius').value);
+  if(!(radius >= 0.1 && radius <= 50)){ errEl.textContent = 'The radius must be between 0.1 and 50 km.'; return; }
+  const pts = [];
+  for(const p of ccPoints){
+    const lat = parseFloat(p.lat), lng = parseFloat(p.lng);
+    if(!(isFinite(lat) && isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180)){ errEl.textContent = 'Each extra point needs a latitude (-90 to 90) and a longitude (-180 to 180).'; return; }
+    pts.push({ label: (p.label || '').trim(), lat, lng });
+  }
+  const zone = {
+    radius_km: radius,
+    site_ids: [...document.querySelectorAll('#cc-sites .cc-site:checked')].map(c => c.value),
+    points: pts,
+    excluded_site_ids: [...document.querySelectorAll('#cc-excl .cc-ex:checked')].map(c => c.value)
+  };
+  const start = document.getElementById('cc-start').value || null, end = document.getElementById('cc-end').value || null;
+  if(start && end && start > end){ errEl.textContent = 'The start date must not be after the end date.'; return; }
+  ccBusy = true; const btn = document.getElementById('cc-save'); btn.disabled = true;
+  let err = null, created = false;
+  if(!ccEditId){
+    const r = await sb.rpc('create_campaign', { p_sub: csEnv, p_name: name, p_objective: objective });
+    err = r.error;
+    if(!err && r.data && r.data.id){ ccEditId = r.data.id; created = true; }
+  }
+  if(!err && ccEditId){
+    const r2 = await sb.rpc('update_campaign', { p_id: ccEditId, p_name: name, p_objective: objective, p_zone: zone, p_start: start, p_end: end });
+    err = r2.error;
+  }
+  ccBusy = false; btn.disabled = false;
+  if(err){
+    errEl.textContent = (created ? 'The draft was created but its details were not saved. ' : '') + csCleanMessage(err.message);
+    await loadCampaignDrafts();
+    return;
+  }
+  closeCampaignDraft();
+  await loadCampaignDrafts();
+}
+async function duplicateCampaignDraft(btn){
+  btn.disabled = true;
+  const { error } = await sb.rpc('duplicate_campaign', { p_id: btn.dataset.cid });
+  if(error){ btn.disabled = false; alert(csCleanMessage(error.message)); return; }
+  await loadCampaignDrafts();
+}
+async function archiveCampaignDraft(btn){
+  const c = ccList.find(x => x.id === btn.dataset.cid); if(!c) return;
+  if(!confirm(`Archive "${c.name}"? It will no longer appear among your active campaigns.`)) return;
+  btn.disabled = true;
+  const { error } = await sb.rpc('archive_campaign', { p_id: c.id });
+  if(error){ btn.disabled = false; alert(csCleanMessage(error.message)); return; }
+  await loadCampaignDrafts();
 }
 
 async function renderMyOperators(){
