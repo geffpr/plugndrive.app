@@ -1856,6 +1856,16 @@ tr.rowlink:hover td{background:#f0f6fc;}
                 <span id="ct-ver-wrap" style="display:none;margin-left:auto;font-size:12px;">Versions <select id="ct-ver" style="width:auto;"></select> <button class="btn btn-sm" onclick="ctRestore()">Restore this version</button></span>
               </div>
               <div id="ct-check-out" style="font-size:12px;margin-top:10px;"></div>
+              <div id="ct-test-wrap" style="display:none;margin-top:12px;padding:10px;border:1px solid var(--border);border-radius:8px;">
+                <div style="font-weight:600;font-size:13px;">Send a test e-mail</div>
+                <div style="font-size:12px;color:var(--text-muted);margin:2px 0 8px;">Sends the saved version to one of your test addresses, with sample values. Nothing goes to drivers.</div>
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                  <select id="ct-test-to" style="width:auto;max-width:100%;"></select>
+                  <button class="btn btn-sm" id="ct-test-btn" onclick="ctTestSend()">Send test</button>
+                  <span id="ct-test-out" style="font-size:12px;"></span>
+                </div>
+              </div>
+              <div id="ct-test-none" style="display:none;font-size:12px;color:var(--text-muted);margin-top:12px;">To send a test e-mail, add a test address in this sub-account's channels first.</div>
               <div style="display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap;">
                 <div style="font-weight:600;">Preview</div>
                 <button class="btn btn-sm" id="ct-dev-d" onclick="ctDevice('d')">Computer</button>
@@ -7411,6 +7421,7 @@ async function ctEdit(id){
     document.getElementById('ct-name').value = ''; document.getElementById('ct-subject').value = '';
     document.getElementById('ct-html').value = CT_STARTER; document.getElementById('ct-text').value = '';
     document.getElementById('ct-ver-wrap').style.display = 'none';
+    document.getElementById('ct-test-wrap').style.display = 'none'; document.getElementById('ct-test-none').style.display = 'none';
     ed.style.display = 'block'; ctPreview(); document.getElementById('ct-name').focus(); return;
   }
   const sub = ctSub;
@@ -7421,7 +7432,49 @@ async function ctEdit(id){
   ctEditing = { id: t.id, version: t.version };
   document.getElementById('ct-name').value = t.name; document.getElementById('ct-subject').value = t.subject;
   document.getElementById('ct-html').value = t.html; document.getElementById('ct-text').value = t.text || '';
-  ed.style.display = 'block'; ctRenderCheck(data.check); ctPreview(); ctVersions();
+  ed.style.display = 'block'; ctRenderCheck(data.check); ctPreview(); ctVersions(); ctTestLoad();
+}
+let ctTestBusy = false;
+async function ctTestLoad(){
+  const wrap = document.getElementById('ct-test-wrap'), none = document.getElementById('ct-test-none'), sel = document.getElementById('ct-test-to');
+  document.getElementById('ct-test-out').textContent = '';
+  if(!ctEditing || !ctEditing.id){ wrap.style.display = 'none'; none.style.display = 'none'; return; }
+  const sub = ctSub, tid = ctEditing.id;
+  const { data } = await sb.rpc('list_campaign_channels', { p_sub: sub });
+  if(ctSub !== sub || !ctEditing || ctEditing.id !== tid) return;
+  const list = (data && Array.isArray(data.test_recipients)) ? data.test_recipients : [];
+  sel.innerHTML = list.map(t => `<option value="${bEsc(t.email)}">${bEsc(t.email)}</option>`).join('');
+  wrap.style.display = list.length ? 'block' : 'none'; none.style.display = list.length ? 'none' : 'block';
+}
+function ctTestMsg(m){
+  m = String(m || '');
+  if(/recipient_not_allowed/i.test(m)) return 'This address is not one of your test addresses.';
+  if(/rate_limited/i.test(m)) return 'Test limit reached. Please try again later.';
+  if(/not_active/i.test(m)) return 'The sub-account must be active to send a test.';
+  if(/unknown_template|archived_template/i.test(m)) return csCleanMessage(m);
+  if(/campaigns_unavailable|not permitted/i.test(m)) return 'Campaigns is not available on your account.';
+  return 'The test e-mail could not be sent. Please try again later.';
+}
+async function ctTestSend(){
+  if(ctTestBusy || !ctEditing || !ctEditing.id) return;
+  const out = document.getElementById('ct-test-out'), btn = document.getElementById('ct-test-btn'), to = document.getElementById('ct-test-to').value;
+  out.style.color = 'var(--text-muted)'; if(!to){ out.textContent = 'Choose a test address.'; return; }
+  ctTestBusy = true; btn.disabled = true; out.textContent = 'Sending...';
+  let msg = '', ok = false;
+  try {
+    const { data: s } = await sb.auth.getSession();
+    const token = s && s.session ? s.session.access_token : '';
+    const resp = await fetch(`${SUPABASE_URL}/functions/v1/campaign-mail/test`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token, 'apikey': SUPABASE_KEY },
+      body: JSON.stringify({ template_id: ctEditing.id, to })
+    });
+    const j = await resp.json().catch(() => ({}));
+    ok = !!(j && j.ok); if(!ok) msg = ctTestMsg(j && j.error);
+  } catch(e){ msg = 'Network problem. Please try again.'; }
+  ctTestBusy = false; btn.disabled = false;
+  out.style.color = ok ? 'var(--green, #1a7f37)' : 'var(--red, #c0392b)';
+  out.textContent = ok ? 'Test sent to ' + to + '. Check the inbox in a minute.' : msg;
 }
 async function ctVersions(){
   const wrap = document.getElementById('ct-ver-wrap'), sel = document.getElementById('ct-ver');
@@ -7466,7 +7519,7 @@ async function ctSave(){
   ctEditing = { id: data.template.id, version: data.template.version };
   ctRenderCheck(data.check);
   err.style.color = 'var(--green, #1a7f37)'; err.textContent = 'Saved (version ' + data.template.version + ').';
-  ctVersions(); ctLoad();
+  ctVersions(); ctLoad(); ctTestLoad();
 }
 async function ctArchive(btn){
   const id = btn.dataset.tid, arch = btn.dataset.arch === '1', err = document.getElementById('ct-error'); err.style.color = 'var(--red, #c0392b)'; err.textContent = '';
@@ -8101,7 +8154,8 @@ async function csRunSummary(id){
     <div style="font-size:12px;color:var(--text-muted);margin:4px 0 8px;">${data.mode === 'live' ? 'Live mode.' : 'Test mode: decisions are recorded and messages are held, nothing is sent to anyone.'} Figures are rounded ranges.</div>
     <div style="font-size:13px;line-height:1.7;">
       <div>${line('Waiting', data.steps, 'waiting')} &nbsp; ${line('Handled', data.steps, 'done')} &nbsp; ${line('Dropped', data.steps, 'dropped')}</div>
-      <div>${line('Messages held', data.messages, 'held')} &nbsp; ${line('Messages queued', data.messages, 'queued')} &nbsp; ${line('Messages sent', data.messages, 'sent')}</div>
+      <div>${line('Messages held', data.messages, 'held')} &nbsp; ${line('Messages queued', data.messages, 'queued')} &nbsp; ${line('Messages sent', data.messages, 'sent')} &nbsp; ${line('Not sent (errors)', data.messages, 'failed')}</div>
+      ${data.delivery && Object.keys(data.delivery).length ? `<div>Delivery: ${line('delivered', data.delivery, 'delivered')} &nbsp; ${line('bounced', data.delivery, 'bounced')} &nbsp; ${line('complaints', data.delivery, 'complained')}</div>` : ''}
       <div>Decisions in 30 days: ${line('allowed', data.decisions, 'allowed')} &nbsp; ${line('delayed', data.decisions, 'delayed')} &nbsp; ${line('blocked', data.decisions, 'blocked')} &nbsp; ${line('to review', data.decisions, 'review')}</div>
       ${rk.length ? '<div style="margin-top:4px;">Why some were not allowed:</div><ul style="margin:2px 0 0;padding-left:20px;">' + rk.map(k => `<li>${bEsc(MK_REASON[k] || k)}: <b>${bEsc(scRange(rs[k]))}</b></li>`).join('') + '</ul>' : ''}
     </div>`;
