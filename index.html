@@ -960,6 +960,74 @@ body.member-mode #sup-root,body.member-mode #trial-bar,body.member-mode #req-ban
                 </table>
               </div>
             </div>
+            <div class="rpt-block" data-block="fleet_kpis" style="display:none;">
+              <div id="rpt-fl-kpis" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:20px;"></div>
+            </div>
+            <div class="rpt-block" data-block="fleet_kwh_vehicle" style="display:none;">
+              <div class="card card-pad" style="margin-bottom:20px;">
+                <div class="section-title" style="margin:0 0 10px;">Fleet: kWh per vehicle</div>
+                <div id="rpt-fl-kwhveh-wrap" style="position:relative;height:260px;"><canvas id="rpt-fl-kwhveh"></canvas></div>
+              </div>
+            </div>
+            <div class="rpt-block" data-block="fleet_cost_vehicle" style="display:none;">
+              <div class="card card-pad" style="margin-bottom:20px;">
+                <div class="section-title" style="margin:0 0 10px;">Fleet: cost per vehicle</div>
+                <div id="rpt-fl-costveh-wrap" style="position:relative;height:260px;"><canvas id="rpt-fl-costveh"></canvas></div>
+              </div>
+            </div>
+            <div class="rpt-block" data-block="fleet_kwh_day" style="display:none;">
+              <div class="card card-pad" style="margin-bottom:20px;">
+                <div class="section-title" style="margin:0 0 10px;">Fleet: kWh charged per day</div>
+                <div id="rpt-fl-day-wrap" style="position:relative;height:260px;"><canvas id="rpt-fl-day"></canvas></div>
+              </div>
+            </div>
+            <div class="rpt-block" data-block="fleet_model" style="display:none;">
+              <div class="card card-pad" style="margin-bottom:20px;">
+                <div class="section-title" style="margin:0 0 10px;">Fleet: kWh per vehicle model</div>
+                <div id="rpt-fl-model-wrap" style="position:relative;height:260px;"><canvas id="rpt-fl-model"></canvas></div>
+              </div>
+            </div>
+            <div class="rpt-block" data-block="fleet_avg" style="display:none;">
+              <div class="card card-pad" style="margin-bottom:20px;">
+                <div class="section-title" style="margin:0 0 10px;">Fleet: average kWh per charge, per vehicle</div>
+                <div id="rpt-fl-avg-wrap" style="position:relative;height:260px;"><canvas id="rpt-fl-avg"></canvas></div>
+              </div>
+            </div>
+            <div class="rpt-block" data-block="fleet_hour" style="display:none;">
+              <div class="card card-pad" style="margin-bottom:20px;">
+                <div class="section-title" style="margin:0 0 10px;">Fleet: when charges start (hour of day)</div>
+                <div id="rpt-fl-hour-wrap" style="position:relative;height:260px;"><canvas id="rpt-fl-hour"></canvas></div>
+              </div>
+            </div>
+            <div class="rpt-block" data-block="fleet_weekday" style="display:none;">
+              <div class="card card-pad" style="margin-bottom:20px;">
+                <div class="section-title" style="margin:0 0 10px;">Fleet: kWh by day of the week</div>
+                <div id="rpt-fl-wd-wrap" style="position:relative;height:260px;"><canvas id="rpt-fl-wd"></canvas></div>
+              </div>
+            </div>
+            <div class="rpt-block" data-block="fleet_site" style="display:none;">
+              <div class="card card-pad" style="margin-bottom:20px;">
+                <div class="section-title" style="margin:0 0 10px;">Fleet: kWh per site</div>
+                <div id="rpt-fl-site-wrap" style="position:relative;height:260px;"><canvas id="rpt-fl-site"></canvas></div>
+              </div>
+            </div>
+            <div class="rpt-block" data-block="fleet_table" style="display:none;">
+              <div style="display:flex;align-items:center;gap:8px;"><div class="section-title">Fleet: by vehicle</div>
+                <button class="btn btn-sm" style="margin-left:auto;" onclick="fleetExportCsv('vehicles')">Export vehicles CSV</button>
+                <button class="btn btn-sm" onclick="fleetExportCsv('sessions')">Export charges CSV</button></div>
+              <div class="card" style="overflow-x:auto;margin-bottom:20px;">
+                <table>
+                  <thead><tr><th>Vehicle</th><th>Model</th><th>Plate</th><th>Charges</th><th>kWh</th><th>Cost</th><th>Avg kWh/charge</th><th>Avg duration</th><th>Last charge</th></tr></thead>
+                  <tbody id="rpt-fl-body"></tbody>
+                </table>
+              </div>
+            </div>
+            <div class="rpt-block" data-block="fleet_idle" style="display:none;">
+              <div class="card card-pad" style="margin-bottom:20px;">
+                <div class="section-title" style="margin:0 0 10px;">Fleet: vehicles without any charge in this period</div>
+                <div id="rpt-fl-idle" style="font-size:13px;"></div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -6423,30 +6491,37 @@ let rptData = null;
 let rptCurrency = null;
 let rptCharts = {};
 let rptLayout = null;
-const RPT_ALL_BLOCKS = ['kpis','fx_margin','revenue_chart','kwh_chart','paymethod_chart','weekday_chart','cashenergy_chart','bysite_table'];
+const RPT_FLEET_BLOCKS = ['fleet_kpis','fleet_kwh_vehicle','fleet_cost_vehicle','fleet_kwh_day','fleet_model','fleet_avg','fleet_hour','fleet_weekday','fleet_site','fleet_table','fleet_idle'];
+const RPT_BASE_BLOCKS = ['kpis','fx_margin','revenue_chart','kwh_chart','paymethod_chart','weekday_chart','cashenergy_chart','bysite_table'];
+const RPT_ALL_BLOCKS = [...RPT_BASE_BLOCKS, ...RPT_FLEET_BLOCKS];
 const RPT_BLOCK_LABELS = { kpis:'Key figures', fx_margin:'FX margin earned', revenue_chart:'Revenue over time', kwh_chart:'Volume charged (kWh)',
-  paymethod_chart:'RFID vs QR code', weekday_chart:'Busiest days of the week', cashenergy_chart:'Cash vs electricity sold', bysite_table:'By site table' };
+  paymethod_chart:'RFID vs QR code', weekday_chart:'Busiest days of the week', cashenergy_chart:'Cash vs electricity sold', bysite_table:'By site table',
+  fleet_kpis:'Fleet: key figures', fleet_kwh_vehicle:'Fleet: kWh per vehicle', fleet_cost_vehicle:'Fleet: cost per vehicle', fleet_kwh_day:'Fleet: kWh per day',
+  fleet_model:'Fleet: kWh per model', fleet_avg:'Fleet: average kWh per charge', fleet_hour:'Fleet: charge start hours', fleet_weekday:'Fleet: kWh by weekday',
+  fleet_site:'Fleet: kWh per site', fleet_table:'Fleet: vehicle table + CSV', fleet_idle:'Fleet: vehicles without charges' };
 
 function rptAvailableBlocks(){
   const isAdmin = currentStaff && currentStaff.role === 'plugndrive_admin';
-  return isAdmin ? RPT_ALL_BLOCKS : RPT_ALL_BLOCKS.filter(b => b !== 'fx_margin');
+  return RPT_ALL_BLOCKS.filter(b => (isAdmin || b !== 'fx_margin') && (fleetAllowed() || !RPT_FLEET_BLOCKS.includes(b)));
 }
+// Without a saved choice, the fleet blocks stay off: a fleet client picks the ones they want.
+function rptDefaultOrder(){ return rptAvailableBlocks().filter(b => !RPT_FLEET_BLOCKS.includes(b)); }
 function applyRptLayout(){
   const available = rptAvailableBlocks();
-  const order = (rptLayout || available).filter(b => available.includes(b));
+  const order = (rptLayout || rptDefaultOrder()).filter(b => available.includes(b));
   const container = document.getElementById('rpt-blocks-container');
   order.forEach(key => {
     const el = container.querySelector(`.rpt-block[data-block="${key}"]`);
     if(el){ el.style.display = ''; container.appendChild(el); }
   });
-  available.filter(b => !order.includes(b)).forEach(key => {
+  [...available.filter(b => !order.includes(b)), ...RPT_FLEET_BLOCKS.filter(b => !available.includes(b))].forEach(key => {
     const el = container.querySelector(`.rpt-block[data-block="${key}"]`);
     if(el) el.style.display = 'none';
   });
 }
 function openRptCustomize(){
   const available = rptAvailableBlocks();
-  const order = (rptLayout || available).filter(b => available.includes(b));
+  const order = (rptLayout || rptDefaultOrder()).filter(b => available.includes(b));
   const hidden = available.filter(b => !order.includes(b));
   const full = [...order, ...hidden];
   document.getElementById('rpt-customize-list').innerHTML = full.map((key, i) => `
@@ -6471,11 +6546,16 @@ function moveRptBlock(key, dir){
 async function saveRptCustomize(){
   const rows = [...document.getElementById('rpt-customize-list').children];
   const order = rows.filter(r => r.querySelector('input').checked).map(r => r.dataset.key);
-  const { error } = await sb.rpc('save_reporting_layout', { p_blocks: order });
+  // Choices for blocks this account cannot see right now (e.g. Fleet Control switched off) are kept, so they come back with the option.
+  const available = rptAvailableBlocks();
+  const kept = (rptLayout || []).filter(b => RPT_ALL_BLOCKS.includes(b) && !available.includes(b));
+  const toSave = [...order, ...kept];
+  const { error } = await sb.rpc('save_reporting_layout', { p_blocks: toSave });
   if(error){ alert('Could not save: ' + error.message); return; }
-  rptLayout = order;
+  rptLayout = toSave;
   document.getElementById('rpt-customize-panel').style.display = 'none';
   applyRptLayout();
+  if(fleetWanted() && !rptFleetRows) loadReporting();   // fleet figures were not fetched until a fleet block was chosen
 }
 
 function applyRptPreset(days){
@@ -6561,6 +6641,7 @@ async function loadReporting(){
   renderRptCurrencyTabs(currencies);
   renderRptForCurrency();
   applyRptLayout();
+  rptFleetRefresh(clientId, from, to);
 }
 
 function renderRptCurrencyTabs(currencies){
@@ -6574,6 +6655,7 @@ function selectRptCurrency(cur){
   rptCurrency = cur;
   renderRptCurrencyTabs([...new Set(rptData.summary.map(r=>r.currency))]);
   renderRptForCurrency();
+  rptFleetRender();
 }
 
 function renderRptForCurrency(){
@@ -6678,6 +6760,127 @@ function renderRptCharts(){
     ] },
     options: { maintainAspectRatio:false, scales:{y:{beginAtZero:true}} }
   });
+}
+
+
+// ---------- Fleet reports (blocks inside Reporting; shown only with the Fleet Control option) ----------
+let rptFleetRows = null, rptFleetSeq = 0;
+function fleetWanted(){
+  if(!fleetAllowed()) return false;
+  const order = rptLayout || [];
+  return RPT_FLEET_BLOCKS.some(b => order.includes(b));
+}
+async function rptFleetRefresh(clientId, from, to){
+  rptFleetRows = null;
+  if(!fleetWanted()){ return; }
+  const seq = ++rptFleetSeq;
+  try {
+    let all = [], off = 0;
+    for(;;){
+      const { data, error } = await sb.rpc('report_fleet_sessions', { p_client_id: clientId, p_from: from, p_to: to, p_offset: off, p_limit: 1000 });
+      if(error) throw error;
+      all = all.concat(data || []);
+      if(!data || data.length < 1000 || all.length >= 50000) break;
+      off += 1000;
+    }
+    if(seq !== rptFleetSeq) return;      // a newer Apply click replaced this one
+    rptFleetRows = all;
+  } catch(e){
+    if(seq !== rptFleetSeq) return;
+    rptFleetRows = [];
+    const el = document.getElementById('rpt-fl-kpis');
+    if(el) el.innerHTML = `<div class="card card-pad" style="grid-column:1/-1;color:var(--text-muted);font-size:13px;">Fleet figures could not load: ${escHtml((e && e.message) || 'error')}</div>`;
+    return;
+  }
+  rptFleetRender();
+}
+function fleetLabel(r){ return r.vehicle_name || ('Card ' + (r.card_number || r.card_uid || '')); }
+function fleetFull(r){ return fleetLabel(r) + (r.vehicle_model ? ' (' + r.vehicle_model + ')' : ''); }
+function fleetAgg(rows){
+  const by = {};
+  rows.forEach(r => {
+    const k = r.card_id; const a = by[k] || (by[k] = { card_id:k, name:fleetLabel(r), full:fleetFull(r), model:r.vehicle_model || '', plate:r.vehicle_plate || '', n:0, kwh:0, cost:0, dur:0, durN:0, last:null });
+    a.n++; a.kwh += Number(r.kwh || 0); a.cost += Number(r.net_amount != null ? r.net_amount : r.gross_amount || 0);
+    if(r.duration_seconds != null){ a.dur += Number(r.duration_seconds); a.durN++; }
+    if(!a.last || r.started_at > a.last) a.last = r.started_at;
+  });
+  return Object.values(by);
+}
+function fleetBarChart(id, labels, data, color, opts){
+  destroyRptChart(id);
+  const wrap = document.getElementById(id + '-wrap'), horiz = opts && opts.horizontal;
+  if(wrap && horiz) wrap.style.height = Math.max(200, labels.length * 26 + 50) + 'px';
+  rptCharts[id] = new Chart(document.getElementById(id), { type:'bar',
+    data:{ labels, datasets:[{ label:(opts && opts.label) || '', data, backgroundColor: color }] },
+    options:{ maintainAspectRatio:false, indexAxis: horiz ? 'y' : 'x', plugins:{legend:{display:false}}, scales:{ [horiz ? 'x' : 'y']:{beginAtZero:true} } } });
+}
+function rptFleetRender(){
+  if(!rptFleetRows || !fleetAllowed()) return;
+  const rows = rptFleetRows.filter(r => r.currency === rptCurrency);
+  const veh = fleetAgg(rows).sort((a, b) => b.kwh - a.kwh);
+  const tot = veh.reduce((t, v) => ({ n:t.n+v.n, kwh:t.kwh+v.kwh, cost:t.cost+v.cost }), { n:0, kwh:0, cost:0 });
+  const card = (l, v) => `<div class="card card-pad"><div style="color:var(--text-muted);font-size:12px;">${l}</div><div style="font-size:22px;font-weight:700;">${v}</div></div>`;
+  document.getElementById('rpt-fl-kpis').innerHTML = [
+    ['Vehicles charged', veh.length], ['Fleet kWh', tot.kwh.toFixed(1)], ['Charges', tot.n],
+    ['Fleet cost', fmtMoney(tot.cost, rptCurrency)], ['Avg kWh per charge', tot.n ? (tot.kwh / tot.n).toFixed(1) : '-'],
+    ['Avg cost per kWh', tot.kwh ? fmtMoney(tot.cost / tot.kwh, rptCurrency) : '-'] ].map(([l, v]) => card(l, v)).join('');
+
+  // table
+  const dash = '-';
+  document.getElementById('rpt-fl-body').innerHTML = veh.length ? veh.map(v => `<tr><td><b>${escHtml(v.name)}</b></td><td>${v.model ? escHtml(v.model) : dash}</td><td>${v.plate ? escHtml(v.plate) : dash}</td>`
+    + `<td>${v.n}</td><td>${v.kwh.toFixed(1)}</td><td>${fmtMoney(v.cost, rptCurrency)}</td><td>${(v.kwh / v.n).toFixed(1)}</td><td>${fmtRptDuration(v.durN ? v.dur / v.durN : null)}</td>`
+    + `<td>${v.last ? new Date(v.last).toLocaleDateString() : dash}</td></tr>`).join('') : '<tr><td colspan="9" class="empty">No card charges in this period.</td></tr>';
+
+  // idle vehicles: active cards of the account with no charge in the period
+  const seen = new Set(veh.map(v => v.card_id));
+  const clSel = isPndAdmin() ? (document.getElementById('rpt-client-select').value || '') : '';
+  const idle = rfidCards.filter(c => c.status === 'active' && !seen.has(c.id) && (!clSel || (c.ownerClientId || rootClientOfLocation(c.complexId)) === clSel));
+  document.getElementById('rpt-fl-idle').innerHTML = idle.length ? idle.map(c => escHtml(c.vehicleName ? c.vehicleName + (c.vehicleModel ? ' (' + c.vehicleModel + ')' : '') : 'Card ' + (c.number || c.uid))).join(' · ') : 'Every active card charged in this period.';
+
+  if(typeof Chart === 'undefined') return;
+  try {
+    const top = veh.slice(0, 30);
+    fleetBarChart('rpt-fl-kwhveh', top.map(v => v.full), top.map(v => +v.kwh.toFixed(2)), '#2bb5c8', { horizontal:true, label:'kWh' });
+    const byCost = veh.slice().sort((a, b) => b.cost - a.cost).slice(0, 30);
+    fleetBarChart('rpt-fl-costveh', byCost.map(v => v.full), byCost.map(v => +v.cost.toFixed(2)), '#3a8fd4', { horizontal:true, label:'Cost' });
+    const byAvg = veh.slice().sort((a, b) => b.kwh / b.n - a.kwh / a.n).slice(0, 30);
+    fleetBarChart('rpt-fl-avg', byAvg.map(v => v.full), byAvg.map(v => +(v.kwh / v.n).toFixed(2)), '#1a3260', { horizontal:true, label:'kWh' });
+    // per day
+    const day = {}; rows.forEach(r => { const d = String(r.started_at).slice(0, 10); day[d] = (day[d] || 0) + Number(r.kwh || 0); });
+    const days = Object.keys(day).sort();
+    destroyRptChart('rpt-fl-day');
+    rptCharts['rpt-fl-day'] = new Chart(document.getElementById('rpt-fl-day'), { type:'line', data:{ labels:days, datasets:[{ label:'kWh', data:days.map(d => +day[d].toFixed(2)), borderColor:'#2bb5c8', backgroundColor:'rgba(43,181,200,0.12)', fill:true, tension:0.3 }] },
+      options:{ maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}} } });
+    // per model
+    const mod = {}; veh.forEach(v => { const k = v.model || 'No model'; mod[k] = (mod[k] || 0) + v.kwh; });
+    const mk = Object.keys(mod).sort((a, b) => mod[b] - mod[a]);
+    fleetBarChart('rpt-fl-model', mk, mk.map(k => +mod[k].toFixed(2)), '#1a7f37', { horizontal:true, label:'kWh' });
+    // start hour + weekday + site
+    const hr = Array(24).fill(0), wd = Array(7).fill(0), site = {};
+    rows.forEach(r => { const d = new Date(r.started_at); hr[d.getHours()]++; wd[d.getDay()] += Number(r.kwh || 0); site[r.site_name] = (site[r.site_name] || 0) + Number(r.kwh || 0); });
+    fleetBarChart('rpt-fl-hour', hr.map((_, h) => String(h).padStart(2, '0') + 'h'), hr, '#3a8fd4', { label:'Charges' });
+    fleetBarChart('rpt-fl-wd', ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'], wd.map(x => +x.toFixed(2)), '#3a8fd4', { label:'kWh' });
+    const sk = Object.keys(site).sort((a, b) => site[b] - site[a]);
+    fleetBarChart('rpt-fl-site', sk, sk.map(k => +site[k].toFixed(2)), '#1a3260', { horizontal:true, label:'kWh' });
+  } catch(e){ /* charts are optional: the table and figures above stay correct */ }
+}
+function fleetCsvCell(v){ v = v == null ? '' : String(v); return /[",\n;]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+function fleetExportCsv(kind){
+  if(!rptFleetRows) return;
+  const rows = rptFleetRows.filter(r => r.currency === rptCurrency);
+  let head, body;
+  if(kind === 'sessions'){
+    head = ['Date','Vehicle','Model','Plate','Card','Site','Charger','kWh','Duration (min)','Cost','Currency'];
+    body = rows.map(r => [r.started_at, fleetLabel(r), r.vehicle_model, r.vehicle_plate, r.card_number || r.card_uid, r.site_name, r.charger_name, Number(r.kwh || 0).toFixed(2), r.duration_seconds != null ? Math.round(r.duration_seconds / 60) : '', Number(r.net_amount != null ? r.net_amount : r.gross_amount || 0).toFixed(2), r.currency]);
+  } else {
+    head = ['Vehicle','Model','Plate','Charges','kWh','Cost','Avg kWh per charge','Currency'];
+    body = fleetAgg(rows).sort((a, b) => b.kwh - a.kwh).map(v => [v.name, v.model, v.plate, v.n, v.kwh.toFixed(2), v.cost.toFixed(2), (v.kwh / v.n).toFixed(2), rptCurrency]);
+  }
+  const csv = '﻿' + [head, ...body].map(l => l.map(fleetCsvCell).join(',')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type:'text/csv;charset=utf-8' }));
+  a.download = 'fleet-' + kind + '-' + (document.getElementById('rpt-from').value || 'all') + '_' + (document.getElementById('rpt-to').value || 'now') + '.csv';
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
 }
 
 function fmtRptDuration(seconds){
