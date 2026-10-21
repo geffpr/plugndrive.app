@@ -2452,6 +2452,7 @@ body.member-mode #sup-root,body.member-mode #trial-bar,body.member-mode #req-ban
         <div style="display:flex;gap:8px;margin-bottom:16px;">
           <button class="btn btn-sm btn-primary" id="fleet-tabbtn-vehicles" onclick="fleetTab('vehicles')">Vehicles</button>
           <button class="btn btn-sm" id="fleet-tabbtn-start" onclick="fleetTab('start')">Start charging</button>
+          <button class="btn btn-sm" id="fleet-tabbtn-schedule" onclick="fleetTab('schedule')">Schedule</button>
         </div>
         <div id="fleet-tab-vehicles">
           <div class="section-title">Vehicles</div>
@@ -2496,6 +2497,26 @@ body.member-mode #sup-root,body.member-mode #trial-bar,body.member-mode #req-ban
               <thead><tr><th>Site</th><th>Charger</th><th>Status</th><th>Vehicle on this charger</th><th></th></tr></thead>
               <tbody id="fleet-start-body"></tbody>
             </table>
+          </div>
+        </div>
+        <div id="fleet-tab-schedule" style="display:none;">
+          <div class="section-title">Schedule</div>
+          <div class="filters"><select id="fleet-sched-client" style="display:none;" onchange="renderFleetSchedule()"></select></div>
+          <div id="fleet-sched-body" style="max-width:560px;">
+            <div class="card card-pad" style="margin-bottom:16px;">
+              <label style="display:flex;gap:8px;align-items:center;font-weight:600;"><input type="checkbox" id="fleet-s-auto"> Start the plugged-in vehicles every day</label>
+              <div style="font-size:12px;color:var(--text-muted);margin:6px 0 10px;">At this time, every charger that has a vehicle plugged in and a vehicle chosen on the Start charging tab is started. Chargers with nothing plugged in are skipped.</div>
+              <div class="form-row"><label>Time (South Africa)</label><input type="time" id="fleet-s-auto-time" value="07:00"></div>
+            </div>
+            <div class="card card-pad" style="margin-bottom:16px;">
+              <label style="display:flex;gap:8px;align-items:center;font-weight:600;"><input type="checkbox" id="fleet-s-sum"> Send a summary e-mail every morning</label>
+              <div style="font-size:12px;color:var(--text-muted);margin:6px 0 10px;">Yesterday's charges per vehicle, vehicles that did not charge, and how the daily start went.</div>
+              <div class="form-row"><label>Time (South Africa)</label><input type="time" id="fleet-s-sum-time" value="07:30"></div>
+              <div class="form-row"><label>E-mail</label><input type="text" id="fleet-s-email" maxlength="200" placeholder=""></div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;"><button class="btn btn-primary" id="fleet-sched-save" onclick="fleetSaveSchedule()">Save</button><span id="fleet-sched-msg" style="font-size:13px;"></span></div>
+            <div class="section-title" style="margin-top:22px;">Recent daily starts</div>
+            <div class="card" style="overflow-x:auto;"><table><thead><tr><th>When</th><th>Charger</th><th>Result</th></tr></thead><tbody id="fleet-sched-recent"></tbody></table></div>
           </div>
         </div>
       </div>
@@ -6855,7 +6876,7 @@ function rptFleetRender(){
   // idle vehicles: active cards of the account with no charge in the period
   const seen = new Set(veh.map(v => v.card_id));
   const clSel = isPndAdmin() ? (document.getElementById('rpt-client-select').value || '') : '';
-  const idle = rfidCards.filter(c => c.status === 'active' && !seen.has(c.id) && (!clSel || (c.ownerClientId || rootClientOfLocation(c.complexId)) === clSel));
+  const idle = rfidCards.filter(c => c.status === 'active' && !/^WEB-/.test(c.uid || '') && !seen.has(c.id) && (!clSel || (c.ownerClientId || rootClientOfLocation(c.complexId)) === clSel));
   document.getElementById('rpt-fl-idle').innerHTML = idle.length ? idle.map(c => escHtml(c.vehicleName ? c.vehicleName + (c.vehicleModel ? ' (' + c.vehicleModel + ')' : '') : 'Card ' + (c.number || c.uid))).join(' · ') : 'Every active card charged in this period.';
 
   if(typeof Chart === 'undefined') return;
@@ -9545,7 +9566,7 @@ let fleetEditId = null;
 function fleetRows(){
   const clf = isPndAdmin() ? filterVal('fleet-client-filter') : 'all';
   const q = (document.getElementById('fleet-search').value || '').trim().toLowerCase();
-  let rows = rfidCards.slice();
+  let rows = rfidCards.filter(r => !/^WEB-/.test(r.uid || ''));   // web pay-per-charge customers are not fleet vehicles
   if(clf !== 'all') rows = rows.filter(r => (r.ownerClientId || rootClientOfLocation(r.complexId)) === clf);
   if(q) rows = rows.filter(r => [r.vehicleName, r.vehicleModel, r.vehiclePlate, r.vehicleNote, r.uid, r.number].some(v => v && String(v).toLowerCase().includes(q)));
   const labeled = r => !!(r.vehicleName || r.vehicleModel || r.vehiclePlate);
@@ -9608,7 +9629,9 @@ function fleetTab(t){
   document.getElementById('fleet-tab-start').style.display = t === 'start' ? '' : 'none';
   document.getElementById('fleet-tabbtn-vehicles').className = 'btn btn-sm' + (t === 'vehicles' ? ' btn-primary' : '');
   document.getElementById('fleet-tabbtn-start').className = 'btn btn-sm' + (t === 'start' ? ' btn-primary' : '');
-  if(t === 'start') renderFleetStart(true); else renderFleet();
+  document.getElementById('fleet-tab-schedule').style.display = t === 'schedule' ? '' : 'none';
+  document.getElementById('fleet-tabbtn-schedule').className = 'btn btn-sm' + (t === 'schedule' ? ' btn-primary' : '');
+  if(t === 'start') renderFleetStart(true); else if(t === 'schedule') renderFleetSchedule(); else renderFleet();
 }
 function fleetStartAuto(){   // keeps the list live while the tab is open
   if(fleetStartTimer) return;
@@ -9619,7 +9642,7 @@ function fleetStartAuto(){   // keeps the list live while the tab is open
   }, 15000);
 }
 function fleetCardLabel(c){ return (c.vehicleName || ('Card ' + (c.number || c.uid))) + (c.vehicleModel ? ' (' + c.vehicleModel + ')' : '') + (c.vehiclePlate ? ' · ' + c.vehiclePlate : ''); }
-function fleetCardsFor(clientId){ return rfidCards.filter(c => c.status === 'active' && (c.ownerClientId || rootClientOfLocation(c.complexId)) === clientId); }
+function fleetCardsFor(clientId){ return rfidCards.filter(c => c.status === 'active' && !/^WEB-/.test(c.uid || '') && (c.ownerClientId || rootClientOfLocation(c.complexId)) === clientId); }
 function fleetReady(r){ return r.status === 'Preparing' && !r.busy; }
 async function renderFleetStart(reload){
   if(!fleetAllowed()) return;
@@ -9693,6 +9716,44 @@ async function fleetStartAll(){
 }
 async function fleetRefreshSoon(){
   for(let i = 0; i < 3; i++){ await new Promise(r => setTimeout(r, 2000)); await renderFleetStart(true); }
+}
+
+// ---------- Fleet Control: Schedule (daily start + morning summary) ----------
+let fleetSchedClient = null;
+async function renderFleetSchedule(keepMsg){
+  if(!fleetAllowed()) return;
+  const sel = document.getElementById('fleet-sched-client'), body = document.getElementById('fleet-sched-body'), msg = document.getElementById('fleet-sched-msg');
+  if(!keepMsg) msg.textContent = '';
+  let cl = null;
+  if(isPndAdmin()){
+    if(!sel.options.length){ sel.innerHTML = '<option value="">Choose a client</option>' + clients.map(c => `<option value="${c.id}">${escHtml(c.name || '')}</option>`).join(''); }
+    sel.style.display = ''; cl = sel.value || null;
+    if(!cl){ body.style.display = 'none'; return; }
+  } else sel.style.display = 'none';
+  body.style.display = '';
+  const { data, error } = await sb.rpc('fleet_get_settings', { p_client_id: cl });
+  if(error){ msg.style.color = 'var(--red, #c0392b)'; msg.textContent = error.message || 'Could not load.'; return; }
+  fleetSchedClient = data.client_id;
+  document.getElementById('fleet-s-auto').checked = !!data.auto_start_enabled;
+  document.getElementById('fleet-s-auto-time').value = data.auto_start_time;
+  document.getElementById('fleet-s-sum').checked = !!data.summary_enabled;
+  document.getElementById('fleet-s-sum-time').value = data.summary_time;
+  document.getElementById('fleet-s-email').value = data.summary_email || '';
+  document.getElementById('fleet-s-email').placeholder = data.default_email ? 'Default: ' + data.default_email : 'name@company.com';
+  const rec = data.recent || [];
+  const WHEN = t => new Date(t).toLocaleString([], { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+  document.getElementById('fleet-sched-recent').innerHTML = rec.length ? rec.map(r => `<tr><td>${escHtml(WHEN(r.at))}</td><td>${escHtml(r.charger || '-')}</td><td>${escHtml(r.result)}${r.detail ? ' <span style="color:var(--text-muted);">(' + escHtml(r.detail) + ')</span>' : ''}</td></tr>`).join('') : '<tr><td colspan="3" class="empty">Nothing yet.</td></tr>';
+}
+async function fleetSaveSchedule(){
+  const btn = document.getElementById('fleet-sched-save'), msg = document.getElementById('fleet-sched-msg');
+  btn.disabled = true; msg.style.color = ''; msg.textContent = 'Saving…';
+  const { error } = await sb.rpc('fleet_save_settings', { p_client_id: fleetSchedClient, p_auto_enabled: document.getElementById('fleet-s-auto').checked,
+    p_auto_time: document.getElementById('fleet-s-auto-time').value || '07:00', p_summary_enabled: document.getElementById('fleet-s-sum').checked,
+    p_summary_time: document.getElementById('fleet-s-sum-time').value || '07:30', p_email: document.getElementById('fleet-s-email').value });
+  btn.disabled = false;
+  if(error){ msg.style.color = 'var(--red, #c0392b)'; msg.textContent = /bad_email/.test(error.message || '') ? 'That e-mail address does not look right.' : /bad_time/.test(error.message || '') ? 'Check the times.' : /forbidden/.test(error.message || '') ? 'This account cannot change the schedule.' : (error.message || 'Could not save.'); return; }
+  msg.textContent = 'Saved.';
+  renderFleetSchedule(true);
 }
 
 // Set to true once the charging server has the priority rule installed (until then the switches are saved but do nothing).
