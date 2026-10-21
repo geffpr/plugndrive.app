@@ -352,6 +352,12 @@ tr.rowlink:hover td{background:#f0f6fc;}
 
 /* Mobile bottom navigation (hidden on desktop) */
 .bottom-nav{display:none;}
+/* Invited people (read-only access to some sub-accounts): only the Campaigns page, none of the account's other sections */
+body:not(.member-mode) .cs-member-only{display:none !important;}
+body.member-mode .cs-admin-only{display:none !important;}
+body.member-mode .sidebar .navitem:not(#campaigns-nav),body.member-mode .sidebar .nav-section-label{display:none !important;}
+body.member-mode #bottom-nav .bn-item:not(.cs-member-only):not(#bn-more){display:none !important;}
+body.member-mode #sup-root,body.member-mode #trial-bar,body.member-mode #req-banner{display:none !important;}
 @media(max-width:900px){
   body{padding-bottom:calc(64px + env(safe-area-inset-bottom,0px));}
   #mobile-menu-toggle{display:none !important;}
@@ -791,6 +797,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
     <button type="button" class="bn-item" data-page="sites" onclick="showPage('sites')"><svg viewBox="0 0 24 24"><path d="M3 21V8l7-4 7 4v13"/><path d="M17 21V11l4 2v8"/><path d="M8 21v-5h4v5"/></svg>Sites</button>
     <button type="button" class="bn-item" data-page="chargers" onclick="showPage('chargers')"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg>Chargers</button>
     <button type="button" class="bn-item" data-page="sessions" onclick="showPage('sessions')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Sessions</button>
+    <button type="button" class="bn-item cs-member-only" data-page="campaigns" onclick="showPage('campaigns')"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>Campaigns</button>
     <button type="button" class="bn-item" id="bn-more" onclick="toggleMobileSidebar()"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>More</button>
   </nav>
 
@@ -1616,9 +1623,19 @@ tr.rowlink:hover td{background:#f0f6fc;}
           <div class="section-title" style="margin:0;">Campaigns</div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
             <select id="cs-env" onchange="selectCampaignEnv(this.value)" style="min-width:200px;"></select>
-            <button class="btn" id="cs-limits-btn" onclick="csLimitsToggle()">Sending limits</button>
-            <button class="btn btn-primary" id="cs-new-btn" onclick="openCampaignSub()">+ New sub-account</button>
+            <button class="btn cs-admin-only" id="cs-access-btn" onclick="csAccToggle()">Access</button>
+            <button class="btn cs-admin-only" id="cs-limits-btn" onclick="csLimitsToggle()">Sending limits</button>
+            <button class="btn btn-primary cs-admin-only" id="cs-new-btn" onclick="openCampaignSub()">+ New sub-account</button>
           </div>
+        </div>
+        <div id="cs-access" class="card card-pad cs-admin-only" style="display:none;max-width:760px;margin:12px 0;">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+            <div style="font-weight:600;">Access for your team and partners</div>
+            <button class="btn btn-sm" onclick="csAccToggle()">Close</button>
+          </div>
+          <div style="font-size:12px;color:var(--text-muted);margin:6px 0 10px;max-width:640px;">Invite people to see the results of the sub-accounts you choose. They receive an e-mail and sign in with their own account. They can only read the campaigns and results of those sub-accounts, nothing else in your account, and they cannot change anything.</div>
+          <div id="cs-acc-body"></div>
+          <div id="cs-acc-msg" style="font-size:12px;margin-top:8px;"></div>
         </div>
         <div id="cs-limits" class="card card-pad" style="display:none;max-width:640px;margin:12px 0;">
           <div style="font-weight:600;margin-bottom:4px;">Sending limits</div>
@@ -1631,7 +1648,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
           <div id="cs-limits-msg" style="font-size:12px;margin-top:8px;"></div>
         </div>
         <div id="cs-overview">
-        <div style="color:var(--text-muted);font-size:12px;margin:6px 0 12px;max-width:680px;">A sub-account is a separate space for one brand or tenant. It only sees the sites you allow, and it never receives driver names, e-mails or phone numbers. Open its campaigns with the Campaigns button, or pick it in the menu above.</div>
+        <div class="cs-admin-only" style="color:var(--text-muted);font-size:12px;margin:6px 0 12px;max-width:680px;">A sub-account is a separate space for one brand or tenant. It only sees the sites you allow, and it never receives driver names, e-mails or phone numbers. Open its campaigns with the Campaigns button, or pick it in the menu above.</div>
         <div id="cs-panel" class="card card-pad" style="display:none;max-width:520px;margin:12px 0;">
           <div class="form-row"><label>Sub-account name</label><input type="text" id="cs-name" maxlength="80" placeholder="e.g. Woolworths, Food court"></div>
           <div class="form-row"><label>Sites this sub-account can use</label><div id="cs-sites" style="max-height:220px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:8px;"></div></div>
@@ -1691,12 +1708,12 @@ tr.rowlink:hover td{background:#f0f6fc;}
           <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
             <div style="font-weight:600;">Campaigns</div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
-              <a class="btn" id="cc-redeem-link" href="/redeem.html" target="_blank" rel="noopener" style="text-decoration:none;">Redeem a coupon</a>
-              <button class="btn" id="ct-open-btn" onclick="openCampaignTemplates()">E-mail templates</button>
-              <button class="btn btn-primary" id="cc-new-btn" onclick="openCampaignDraft()">+ New campaign</button>
+              <a class="btn cs-admin-only" id="cc-redeem-link" href="/redeem.html" target="_blank" rel="noopener" style="text-decoration:none;">Redeem a coupon</a>
+              <button class="btn cs-admin-only" id="ct-open-btn" onclick="openCampaignTemplates()">E-mail templates</button>
+              <button class="btn btn-primary cs-admin-only" id="cc-new-btn" onclick="openCampaignDraft()">+ New campaign</button>
             </div>
           </div>
-          <div style="color:var(--text-muted);font-size:12px;margin:6px 0 12px;max-width:680px;">Campaigns are saved as drafts. Nothing is sent yet: scenarios can only be simulated. Limits, connections and sending come in the next steps.</div>
+          <div class="cs-admin-only" style="color:var(--text-muted);font-size:12px;margin:6px 0 12px;max-width:680px;">Campaigns are saved as drafts. Nothing is sent yet: scenarios can only be simulated. Limits, connections and sending come in the next steps.</div>
           <style>
             .cc-top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px;}
             .cc-tabs{display:flex;gap:6px;}
@@ -3009,6 +3026,8 @@ async function handleSignOut(reason){
   resetAppData();   // the next person to sign in on this page must never see this account's sites, chargers or sessions
   ['click','keydown'].forEach(evt => document.removeEventListener(evt, resetOperatorInactivityTimer));
   currentStaff = null;
+  currentMember = null; document.body.classList.remove('member-mode');   // an invited person's restricted view ends with the session
+  csList = []; csEnv = ''; ccList = [];
   document.getElementById('app-root').style.display = 'none';
   document.getElementById('operator-placeholder-screen').style.display = 'none';
   document.getElementById('auth-screen').style.display = 'flex';
@@ -3016,6 +3035,7 @@ async function handleSignOut(reason){
   setLoginNotice(reason === 'inactive' ? 'inactive' : null);
 }
 let currentStaff = null;
+let currentMember = null;   // set for an invited person (read-only access to some sub-accounts); then currentStaff stays null
 // What was loaded for the previous account (sites, chargers, sessions, cards, users, tariffs, clients).
 // Cleared at sign-out and again before every sign-in, so nothing can show another account's data.
 function resetAppData(){
@@ -3045,7 +3065,12 @@ async function enterAppInner(){
   const { data: staffRow } = await sb.from('staff').select('*').eq('auth_user_id', user.id).maybeSingle();
   currentStaff = staffRow;
 
-  if(!currentStaff){ await showTrialQuestions(user); return; }
+  if(!currentStaff){
+    // an invited person has no staff record: they only get the campaigns they were given
+    const { data: acc } = await sb.rpc('my_campaign_access');
+    if(acc){ enterMemberApp(acc); return; }
+    await showTrialQuestions(user); return;
+  }
 
   if(currentStaff && currentStaff.role === 'operator'){
     document.getElementById('operator-placeholder-screen').style.display = 'flex';
@@ -3060,6 +3085,17 @@ async function enterAppInner(){
   updateSidebarIdentity();
   routeFromLocation();
   startRealtime();
+}
+
+// Invited person: the Campaigns page only, with the sub-accounts the client ticked. Nothing else of the account is loaded.
+function enterMemberApp(acc){
+  currentMember = acc;
+  document.body.classList.add('member-mode');
+  const cn = document.getElementById('campaigns-nav'); if(cn) cn.style.display = '';
+  const idEl = document.getElementById('sidebar-identity');
+  if(idEl) idEl.textContent = (acc.name || 'Guest') + (acc.client_name ? ' · ' + acc.client_name : '');
+  document.getElementById('app-root').style.display = '';
+  showPage('campaigns');
 }
 
 // --- Operator screen (card credit) ---
@@ -3538,6 +3574,7 @@ async function opgRemove(memberId){
 function updateSidebarIdentity(){
   const el = document.getElementById('sidebar-identity');
   if(!el) return;
+  if(currentMember){ el.textContent = currentMember.name + ' · ' + currentMember.client_name; return; }
   if(currentStaff && currentStaff.role === 'client_admin'){
     const cl = clients.find(c=>c.id===currentStaff.client_id);
     el.textContent = cl ? cl.name : 'Client account';
@@ -4275,6 +4312,7 @@ function navigate(path){
 
 function showPage(id, opts){
   opts = opts || {};
+  if(currentMember) id = 'campaigns';   // an invited person has no other page
   if(isLockedAccount() && id !== 'billing') id = 'billing';   // a locked trial can only reach the billing page
   // A page the plan does not include opens the "available from plan X" message instead.
   let lockKey = null;
@@ -4326,6 +4364,7 @@ function showPage(id, opts){
 // Reads the current URL and shows the matching page/detail view.
 // Called on first load and whenever the user hits back/forward.
 function routeFromLocation(){
+  if(currentMember){ showPage('campaigns', {skipNav:true}); return; }
   const parts = location.pathname.split('/').filter(Boolean); // e.g. ['sites','<id>']
   const page = parts[0] || 'dashboard';
   const knownPages = ['dashboard','sites','addsite','chargers','addcharger','sessions','rfid','load','tariffs','clients','addclient','myoperators','apikeys','campaigns','walletactivity','payments','shop','proshop','photos','settings','exchangerates','reporting','access','billing'];
@@ -7205,9 +7244,14 @@ async function revokeCampaignKey(btn){
   await loadCampaignKeys();
 }
 async function renderCampaigns(){
-  if(!(currentStaff && currentStaff.role === 'client_admin' && featOn('campaigns'))){ showPage('dashboard'); return; }
+  if(!currentMember && !(currentStaff && currentStaff.role === 'client_admin' && featOn('campaigns'))){ showPage('dashboard'); return; }
   closeCampaignSub();
   const body = document.getElementById('cs-body');
+  if(currentMember && !currentMember.active){
+    csList = []; fillCampaignEnv(); applyCampaignView();
+    body.innerHTML = '<tr><td colspan="5" class="empty">Your access is paused or no longer available. Please contact the person who invited you.</td></tr>';
+    return;
+  }
   body.innerHTML = '<tr><td colspan="5" class="empty">Loading…</td></tr>';
   const { data, error } = await sb.rpc('list_campaign_subaccounts');
   if(error || !Array.isArray(data)){
@@ -7215,6 +7259,7 @@ async function renderCampaigns(){
     return;
   }
   csList = data;
+  if(currentMember && !csEnv && csList.filter(s => s.status !== 'archived').length === 1) csEnv = csList.filter(s => s.status !== 'archived')[0].id;   // one sub-account: open it directly
   renderCampaignsTable();
   fillCampaignEnv();
   applyCampaignView();
@@ -7231,7 +7276,9 @@ function renderCampaignsTable(){
     const arch = s.status === 'archived';
     const label = { active:'Active', suspended:'Suspended', archived:'Archived' }[s.status] || s.status;
     let actions = '';
-    if(!arch){
+    if(!arch && currentMember){
+      actions = `<button class="btn btn-sm" data-sid="${bEsc(s.id)}" onclick="selectCampaignEnv(this.dataset.sid)">Campaigns</button>`;
+    } else if(!arch){
       actions = `<button class="btn btn-sm" data-sid="${bEsc(s.id)}" onclick="selectCampaignEnv(this.dataset.sid)">Campaigns</button> ` +
         `<button class="btn btn-sm" data-sid="${bEsc(s.id)}" onclick="openCampaignSub(this.dataset.sid)">Edit</button> ` +
         `<button class="btn btn-sm" data-sid="${bEsc(s.id)}" onclick="openCampaignKeys(this.dataset.sid)">Keys</button> ` +
@@ -7241,7 +7288,8 @@ function renderCampaignsTable(){
           : `<button class="btn btn-sm" data-sid="${bEsc(s.id)}" data-st="active" onclick="setCampaignSubStatus(this)">Reactivate</button> `) +
         `<button class="btn btn-sm btn-danger" data-sid="${bEsc(s.id)}" data-st="archived" onclick="setCampaignSubStatus(this)">Archive</button>`;
     }
-    return `<tr${arch ? ' style="opacity:.55;"' : ''}><td>${bEsc(s.name)}</td><td>${csSiteNames(s.site_ids)}</td><td>${bEsc(akDate(s.created_at))}</td><td>${label}</td><td style="white-space:nowrap;">${actions}</td></tr>`;
+    const sitesCell = currentMember ? ((s.site_ids || []).length + ' site' + ((s.site_ids || []).length === 1 ? '' : 's')) : csSiteNames(s.site_ids);   // site names belong to the account holder
+    return `<tr${arch ? ' style="opacity:.55;"' : ''}><td>${bEsc(s.name)}</td><td>${sitesCell}</td><td>${bEsc(akDate(s.created_at))}</td><td>${label}</td><td style="white-space:nowrap;">${actions}</td></tr>`;
   }).join('') || '<tr><td colspan="5" class="empty">No sub-accounts yet. Create one for each brand or tenant you run campaigns for.</td></tr>';
 }
 function openCampaignSub(id){
@@ -7347,6 +7395,10 @@ function renderCampaignDraftsTable(){
     const period = (c.start_date || c.end_date) ? bEsc((c.start_date || '…') + ' to ' + (c.end_date || '…')) : '<span style="color:var(--text-muted);">No dates</span>';
     const id = bEsc(c.id);
     let actions = '';
+    if(currentMember){
+      // read-only: results only
+      if(c.status === 'active' || c.status === 'paused') actions = `<button class="btn btn-sm" data-cid="${id}" onclick="csRunSummary(this.dataset.cid)">Results</button>`;
+    } else {
     if(c.status === 'draft') actions += `<button class="btn btn-sm" data-cid="${id}" onclick="openCampaignDraft(this.dataset.cid)">Edit</button> `;
     actions += `<button class="btn btn-sm" data-cid="${id}" onclick="duplicateCampaignDraft(this)">Duplicate</button>`;
     if(c.status === 'draft') actions += ` <button class="btn btn-sm btn-danger" data-cid="${id}" onclick="archiveCampaignDraft(this)">Archive</button>`;
@@ -7354,6 +7406,7 @@ function renderCampaignDraftsTable(){
     if(c.status === 'active') actions += ` <button class="btn btn-sm" data-cid="${id}" data-act="pause" onclick="csRunAction(this)">Pause</button>`;
     if(c.status === 'paused') actions += ` <button class="btn btn-sm" data-cid="${id}" data-act="resume" onclick="csRunAction(this)">Resume</button>`;
     if(c.status === 'active' || c.status === 'paused') actions += ` <button class="btn btn-sm" data-cid="${id}" data-act="stop" onclick="csRunAction(this)">Stop</button> <button class="btn btn-sm" data-cid="${id}" onclick="csRunSummary(this.dataset.cid)">Results</button>`;
+    }
     const scTxt = c.scenario ? (c.scenario_complete ? 'Scenario ready (simulation only)' : 'Scenario incomplete') : '';
     const obj = (c.objective ? `<div style="font-size:12px;color:var(--text-muted);">${bEsc(c.objective)}</div>` : '') + (scTxt ? `<div style="font-size:12px;color:var(--text-muted);">${scTxt}</div>` : '');
     return `<tr${arch ? ' style="opacity:.55;"' : ''}><td>${bEsc(c.name)}${obj}</td><td>${ccZoneLabel(c.zone)}</td><td>${period}</td><td>${bEsc(labels[c.status] || c.status)}${c.status === 'active' || c.status === 'paused' ? '<div style="font-size:11px;color:var(--text-muted);">Test mode: nothing is sent</div>' : ''}</td><td style="white-space:nowrap;">${actions}</td></tr>`;
@@ -7935,6 +7988,120 @@ async function csLimitsSave(){
   btn.disabled = false;
   if(error || !data){ msg.style.color = 'var(--red, #c0392b)'; msg.textContent = csCleanMessage(error && error.message); return; }
   csLimits = data; msg.style.color = 'var(--green, #1a7f37)'; msg.textContent = 'Saved. Your limits apply to all your campaigns.';
+}
+// ---- access for invited people (client administrator): read-only view of the sub-accounts ticked for them ----
+let csAcc = null, csAccBusy = false, csAccEdit = null;
+function csAccMsg(text, ok){
+  const m = document.getElementById('cs-acc-msg'); if(!m) return;
+  m.style.color = ok ? 'var(--green, #1a7f37)' : (text ? 'var(--red, #c0392b)' : 'var(--text-muted)');
+  m.textContent = text || '';
+}
+function csAccClean(msg){
+  const m = String(msg || '');
+  if(/seat_limit/i.test(m)) return 'All your access seats are used. Contact Plug n Drive (hello@plugndrive.co.za) to add more.';
+  if(/invalid_email/i.test(m)) return 'Enter a valid e-mail address.';
+  if(/already_member/i.test(m)) return 'This e-mail already has access.';
+  if(/email_in_use/i.test(m)) return 'This e-mail cannot be used for an invitation: it already has another kind of Plug n Drive account.';
+  if(/rate_limited/i.test(m)) return 'Too many invitations. Please try again later.';
+  if(/no_subaccount/i.test(m)) return 'Choose at least one sub-account.';
+  if(/unknown_member/i.test(m)) return 'This person was not found.';
+  if(/name must be/i.test(m)) return 'Give a name of 1 to 80 characters.';
+  return csCleanMessage(m);
+}
+async function csAccToggle(){
+  const box = document.getElementById('cs-access');
+  if(box.style.display !== 'none'){ box.style.display = 'none'; return; }
+  box.style.display = 'block'; csAccEdit = null; csAccMsg('Loading…');
+  await csAccLoad();
+}
+async function csAccLoad(){
+  const { data, error } = await sb.rpc('list_campaign_members');
+  if(error || !data){ csAccMsg(csAccClean(error && error.message)); return; }
+  csAcc = data; csAccMsg(''); csAccRender();
+}
+function csAccSubChecks(cls, checked){
+  const sel = new Set(checked || []);
+  return csList.filter(s => s.status !== 'archived').map(s =>
+    `<label style="display:flex;gap:8px;align-items:center;padding:2px 0;font-weight:400;"><input type="checkbox" class="${cls}" value="${bEsc(s.id)}"${sel.has(s.id) ? ' checked' : ''} style="width:auto;flex:none;margin:0;"> ${bEsc(s.name)}</label>`).join('')
+    || '<div style="color:var(--text-muted);font-size:12px;">Create a sub-account first.</div>';
+}
+function csAccRender(){
+  const body = document.getElementById('cs-acc-body'); if(!body || !csAcc) return;
+  const d = csAcc, free = d.used < d.seats;
+  const subName = id => { const s = csList.find(x => x.id === id); return s ? s.name : 'Archived sub-account'; };
+  const rows = (d.members || []).map(m => {
+    const id = bEsc(m.id), paused = m.status === 'suspended';
+    const edit = csAccEdit === m.id
+      ? `<tr><td colspan="5"><div style="padding:6px 0 10px;"><div style="font-size:12px;margin-bottom:4px;">Sub-accounts ${bEsc(m.name)} can see:</div>${csAccSubChecks('cs-acc-edit', m.sub_ids)}
+          <div style="display:flex;gap:8px;margin-top:8px;"><button class="btn btn-primary btn-sm" data-mid="${id}" onclick="csAccSaveSubs(this)">Save</button><button class="btn btn-sm" onclick="csAccEditClose()">Cancel</button></div></div></td></tr>` : '';
+    return `<tr><td>${bEsc(m.name)}</td><td>${bEsc(m.email)}</td><td>${(m.sub_ids || []).map(x => bEsc(subName(x))).join(', ') || '-'}</td><td>${paused ? 'Paused' : 'Active'}</td>
+      <td style="white-space:nowrap;"><button class="btn btn-sm" data-mid="${id}" onclick="csAccEditOpen(this.dataset.mid)">Sub-accounts</button>
+      <button class="btn btn-sm" data-mid="${id}" data-st="${paused ? 'active' : 'suspended'}" onclick="csAccStatus(this)">${paused ? 'Resume' : 'Pause'}</button>
+      <button class="btn btn-sm btn-danger" data-mid="${id}" onclick="csAccRemove(this)">Remove</button></td></tr>${edit}`;
+  }).join('') || '<tr><td colspan="5" class="empty">Nobody has access yet.</td></tr>';
+  const invite = free
+    ? `<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);"><div style="font-weight:600;margin-bottom:6px;">Invite someone</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;">
+          <label style="font-weight:400;font-size:12px;display:flex;flex-direction:column;gap:2px;">Name<input type="text" id="cs-acc-name" maxlength="80" placeholder="e.g. Sam Naidoo"></label>
+          <label style="font-weight:400;font-size:12px;display:flex;flex-direction:column;gap:2px;">E-mail<input type="email" id="cs-acc-email" maxlength="254" placeholder="name@company.com"></label>
+        </div>
+        <div style="font-size:12px;margin:10px 0 4px;">Sub-accounts this person can see (read only):</div>${csAccSubChecks('cs-acc-new', [])}
+        <button class="btn btn-primary" id="cs-acc-invite" onclick="csAccInvite()" style="margin-top:10px;">Send invitation</button></div>`
+    : `<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);font-size:13px;">All your access seats are used. To add more, contact Plug n Drive at <a href="mailto:hello@plugndrive.co.za">hello@plugndrive.co.za</a>.</div>`;
+  body.innerHTML = `<div style="font-size:13px;margin-bottom:8px;">Seats used: <b>${bEsc(String(d.used))}</b> of <b>${bEsc(String(d.seats))}</b></div>
+    <div class="card" style="overflow:auto;"><table><thead><tr><th>Name</th><th>E-mail</th><th>Sub-accounts</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>${invite}`;
+}
+function csAccEditOpen(id){ csAccEdit = id; csAccRender(); }
+function csAccEditClose(){ csAccEdit = null; csAccRender(); }
+async function csAccCall(body){
+  const { data: s } = await sb.auth.getSession();
+  const token = s && s.session ? s.session.access_token : '';
+  const resp = await fetch(`${SUPABASE_URL}/functions/v1/campaign-access`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token, 'apikey': SUPABASE_KEY },
+    body: JSON.stringify(body)
+  });
+  return await resp.json();
+}
+async function csAccInvite(){
+  if(csAccBusy) return;
+  const name = document.getElementById('cs-acc-name').value.trim(), email = document.getElementById('cs-acc-email').value.trim();
+  const ids = [...document.querySelectorAll('.cs-acc-new:checked')].map(c => c.value);
+  if(!name){ csAccMsg('Enter the person’s name.'); return; }
+  if(!email){ csAccMsg('Enter an e-mail address.'); return; }
+  if(!ids.length){ csAccMsg('Choose at least one sub-account.'); return; }
+  csAccBusy = true; const btn = document.getElementById('cs-acc-invite'); btn.disabled = true; csAccMsg('Sending the invitation…');
+  let res = null;
+  try { res = await csAccCall({ action: 'invite', email, name, sub_ids: ids }); } catch(e){ res = null; }
+  csAccBusy = false; btn.disabled = false;
+  if(!res || res.ok !== true){ csAccMsg(res && res.error ? csAccClean(res.error) : 'The invitation could not be sent. Please try again.'); return; }
+  await csAccLoad();
+  csAccMsg(res.mail_sent === false ? 'Access created, but the e-mail could not be sent. Ask the person to use "Forgot password?" on the sign-in page with this address.' : 'Invitation sent to ' + email + '.', true);
+}
+async function csAccSaveSubs(btn){
+  if(csAccBusy) return; csAccBusy = true; btn.disabled = true;
+  const ids = [...document.querySelectorAll('.cs-acc-edit:checked')].map(c => c.value);
+  const { data, error } = await sb.rpc('set_campaign_member', { p_id: btn.dataset.mid, p_sub_ids: ids });
+  csAccBusy = false; btn.disabled = false;
+  if(error || !data){ csAccMsg(csAccClean(error && error.message)); return; }
+  csAcc = data; csAccEdit = null; csAccRender(); csAccMsg('Saved.', true);
+}
+async function csAccStatus(btn){
+  if(csAccBusy) return; csAccBusy = true; btn.disabled = true;
+  const { data, error } = await sb.rpc('set_campaign_member', { p_id: btn.dataset.mid, p_status: btn.dataset.st });
+  csAccBusy = false; btn.disabled = false;
+  if(error || !data){ csAccMsg(csAccClean(error && error.message)); return; }
+  csAcc = data; csAccRender(); csAccMsg(btn.dataset.st === 'suspended' ? 'Access paused.' : 'Access resumed.', true);
+}
+async function csAccRemove(btn){
+  const m = ((csAcc && csAcc.members) || []).find(x => x.id === btn.dataset.mid); if(!m || csAccBusy) return;
+  if(!confirm(`Remove ${m.name}? They lose access right away, and the seat becomes free.`)) return;
+  csAccBusy = true; btn.disabled = true;
+  let res = null;
+  try { res = await csAccCall({ action: 'remove', member_id: m.id }); } catch(e){ res = null; }
+  csAccBusy = false; btn.disabled = false;
+  if(!res || res.ok !== true){ csAccMsg(res && res.error ? csAccClean(res.error) : 'The access could not be removed. Please try again.'); return; }
+  await csAccLoad(); csAccMsg('Access removed.', true);
 }
 function scToggleTest(){
   const box = document.getElementById('sc-test');
