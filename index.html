@@ -9328,8 +9328,9 @@ async function toggleChargerPriority(chargerId, checked){
   renderLoad();   // shows what is really saved
 }
 async function toggleLoadManagement(locationId, enabled){
-  const { error: lmErr } = await sb.from('locations').update({ load_management_enabled: enabled }).eq('id', locationId);
-  if(lmErr && !handleFeatureError(lmErr.message)) alert(lmErr.message);
+  const { data: lmData, error: lmErr } = await sb.from('locations').update({ load_management_enabled: enabled }).eq('id', locationId).select();
+  if(lmErr){ if(!handleFeatureError(lmErr.message)) alert(lmErr.message); }
+  else if(!lmData || !lmData.length) alert('This account cannot change the load management settings. Ask Plug n Drive to do it for you.');
   await loadAll();
   renderLoad();
 }
