@@ -1415,6 +1415,12 @@ body.member-mode #sup-root,body.member-mode #trial-bar,body.member-mode #req-ban
                   <span id="cl-guest-access-label"></span>
                 </label>
               </td></tr>
+              <tr id="cl-billing-demo-row"><td style="color:var(--text-muted);" title="For demos to prospects: shows this client the real Billing page (plans and prices) in read-only mode. Nothing can be bought or changed from it. Only you can change this. Turn it off after the demo.">Show billing (demo)</td><td style="text-align:right;">
+                <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
+                  <input type="checkbox" id="cl-billing-demo" onchange="toggleClientBillingDemo(this.checked)">
+                  <span id="cl-billing-demo-label"></span>
+                </label>
+              </td></tr>
               <tr><td style="color:var(--text-muted);">Total sites</td><td id="cl-total-sites" style="text-align:right;"></td></tr>
               <tr><td style="color:var(--text-muted);">Total chargers</td><td id="cl-total-chargers" style="text-align:right;"></td></tr>
             </table>
@@ -3786,7 +3792,7 @@ function describeCommission(cl){
   // is negotiated — payouts are never paused while that happens.
   return `0% <span style="color:var(--red, #c0392b);">(previous ${cl.commissionRate}% deal ended ${end} — not renegotiated)</span>`;
 }
-function mapClient(c){ return {id:c.id, name:c.name, businessType:c.business_type, contactName:c.contact_name, contactPhone:c.contact_phone, contactEmail:c.contact_email, address:c.address, commissionRate:c.commission_rate, commissionStartDate:c.commission_start_date, commissionDurationMonths:c.commission_duration_months, contractStart:c.contract_start_date, payoutBankCode:c.payout_bank_code, payoutBankName:c.payout_bank_name, payoutAccountNumber:c.payout_account_number, payoutAccountName:c.payout_account_name, paystackRecipientCode:c.paystack_recipient_code, paystackConnectedAt:c.paystack_connected_at, cashRecharges:c.cash_recharges_enabled, guestAccess:c.guest_access_enabled, accountType:c.account_type, accountStatus:c.account_status, plan:c.plan, trialStartedAt:c.trial_started_at, trialEndsAt:c.trial_ends_at, declaredChargers:c.declared_chargers, declaredModel:c.declared_charger_model, ocpp16jAnswer:c.ocpp16j_answer, signupCountry:c.signup_country, subscriptionStatus:c.subscription_status, paidUntil:c.paid_until, closedAt:c.closed_at}; }
+function mapClient(c){ return {id:c.id, name:c.name, businessType:c.business_type, contactName:c.contact_name, contactPhone:c.contact_phone, contactEmail:c.contact_email, address:c.address, commissionRate:c.commission_rate, commissionStartDate:c.commission_start_date, commissionDurationMonths:c.commission_duration_months, contractStart:c.contract_start_date, payoutBankCode:c.payout_bank_code, payoutBankName:c.payout_bank_name, payoutAccountNumber:c.payout_account_number, payoutAccountName:c.payout_account_name, paystackRecipientCode:c.paystack_recipient_code, paystackConnectedAt:c.paystack_connected_at, cashRecharges:c.cash_recharges_enabled, guestAccess:c.guest_access_enabled,billingDemo:!!c.billing_demo, accountType:c.account_type, accountStatus:c.account_status, plan:c.plan, trialStartedAt:c.trial_started_at, trialEndsAt:c.trial_ends_at, declaredChargers:c.declared_chargers, declaredModel:c.declared_charger_model, ocpp16jAnswer:c.ocpp16j_answer, signupCountry:c.signup_country, subscriptionStatus:c.subscription_status, paidUntil:c.paid_until, closedAt:c.closed_at}; }
 
 async function loadAll(){
   const [locRes, chgRes, sesRes, rfidRes, userRes, tarRes, clientRes] = await Promise.all([
@@ -4114,6 +4120,7 @@ async function renderBilling(){
   if(!root) return;
   const c = myClient();
   if(!c){ root.innerHTML = '<div class="card card-pad">Billing is available to client accounts.</div>'; return; }
+  if(c.accountType !== 'self_serve' && c.billingDemo){ await renderBillingDemo(root, c); return; }
   if(c.accountType !== 'self_serve'){
     root.innerHTML = '<div class="card card-pad"><div style="font-weight:700;margin-bottom:6px;">Under contract</div>Your account is managed under a Plug n Drive agreement. For any change, contact <a href="mailto:hello@plugndrive.co.za">hello@plugndrive.co.za</a>.</div>';
     return;
@@ -4193,6 +4200,33 @@ async function renderBilling(){
     ${manage}
     <div style="font-size:12px;color:var(--text-secondary);margin-top:12px;">All prices in South African rand, plus a 5% fee on charging payments (15% on Neighbour Host, which has no monthly fee). Yearly plans are paid once a year and cost 10% less than 12 months. Secure card payment by Paystack. Cancel any time: your plan stays active until the end of the paid period.</div>`;
   billingAfterPayment();
+}
+// Demo view of Billing for contract / offline accounts: real plans and prices, read-only, nothing can be bought.
+async function renderBillingDemo(root, c){
+  const plans = await ensurePlanLimits();
+  if(!billingView.set){ billingView.interval = 'monthly'; billingView.set = true; }
+  const annualView = billingView.interval === 'annual';
+  const money = v => 'R ' + Number(v).toLocaleString('en-ZA');
+  const grid = (plans || []).filter(p => p.plan !== 'trial' && p.plan !== 'neighbour').map(p => {
+    const feats = PLAN_FEATURE_LABELS.filter(([k]) => p.features && p.features[k]).map(([,l]) => l);
+    const range = p.max_chargers == null ? `${p.min_chargers}+ chargers` : (p.min_chargers === p.max_chargers ? `${p.max_chargers} charger` : `${p.min_chargers} to ${p.max_chargers} chargers`);
+    const hasAnnual = p.annual_price_zar != null;
+    let price;
+    if(!p.monthly_price_zar) price = 'On quote';
+    else if(annualView && hasAnnual) price = `${money(p.annual_price_zar)}<small> / year</small><div style="font-size:11.5px;font-weight:500;color:var(--text-secondary);">${money(Math.round(p.annual_price_zar / 12))} / month, 10% off</div>`;
+    else price = `${money(p.monthly_price_zar)}<small> / month</small>`;
+    return `<div class="plan-card"><div class="pc-name">${bEsc(p.label)}</div><div class="pc-price">${price}</div>
+      <div style="font-size:12.5px;">${bEsc(range)}</div><div style="font-size:12.5px;">RFID cards sold separately</div>
+      <ul>${feats.slice(0,8).map(f => `<li>${bEsc(f)}</li>`).join('')}</ul>
+      <span class="badge">Demo: read only</span></div>`;
+  }).join('');
+  const toggle = `<div style="display:inline-flex;border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:2px 0 12px;">
+      <button class="btn" style="border:0;border-radius:0;${annualView ? '' : 'background:var(--blue);color:#fff;'}" onclick="setBillingInterval('monthly')">Monthly</button>
+      <button class="btn" style="border:0;border-radius:0;${annualView ? 'background:var(--blue);color:#fff;' : ''}" onclick="setBillingInterval('annual')">Yearly: save 10%</button></div>`;
+  root.innerHTML = `<div class="card card-pad"><div style="font-weight:700;font-size:16px;">Billing: demo view</div>
+      <div style="margin-top:4px;font-size:13px;">This is how plans and prices are shown to clients on a standard subscription. Your account is managed under a Plug n Drive agreement, so nothing can be bought or changed here. For any change, contact <a href="mailto:hello@plugndrive.co.za">hello@plugndrive.co.za</a>.</div></div>
+    <div class="section-title">Plans</div>${toggle}<div class="plan-grid">${grid || '<div class="card card-pad">Plans are not available right now.</div>'}</div>
+    <div style="font-size:12px;color:var(--text-secondary);margin-top:12px;">All prices in South African rand, plus a 5% fee on charging payments. Yearly plans are paid once a year and cost 10% less than 12 months. Secure card payment by Paystack. Cancel any time: your plan stays active until the end of the paid period.</div>`;
 }
 async function billingCall(action, extra){
   const { data, error } = await sb.functions.invoke('billing-subscribe', { body: Object.assign({ action }, extra || {}) });
@@ -5262,6 +5296,17 @@ async function toggleClientGuestAccess(checked){
   await loadAll();
   openClient(currentClientId, {skipNav:true});
 }
+async function toggleClientBillingDemo(checked){
+  const box = document.getElementById('cl-billing-demo');
+  const { data, error } = await sb.from('clients').update({ billing_demo: checked }).eq('id', currentClientId).select();
+  if(error || !data || !data.length){
+    alert(error?.message || 'Could not change this setting.');
+    box.checked = !checked;   // a failed change must never look applied
+    return;
+  }
+  await loadAll();
+  openClient(currentClientId, {skipNav:true});
+}
 let currentClientId = null;
 // Energy sold (what this client is owed) minus cash collected (what this
 // client owes) — the running balance from the two-line ledger. Shown per
@@ -5520,6 +5565,9 @@ function openClient(id, opts){
   document.getElementById('cl-cash-recharges-label').textContent = cl.cashRecharges ? 'Enabled' : 'Disabled';
   document.getElementById('cl-guest-access').checked = !!cl.guestAccess;
   document.getElementById('cl-guest-access-label').textContent = cl.guestAccess ? 'Enabled' : 'Disabled';
+  document.getElementById('cl-billing-demo').checked = !!cl.billingDemo;
+  document.getElementById('cl-billing-demo-label').textContent = cl.billingDemo ? 'On' : 'Off';
+  document.getElementById('cl-billing-demo-row').style.display = cl.accountType === 'self_serve' ? 'none' : '';
   renderFeaturesPanel(cl);
   renderClientAdminLoginPanel(id);
   renderClientLedgerBalance(id);
