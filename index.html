@@ -1691,6 +1691,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
           <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
             <div style="font-weight:600;">Campaigns</div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <a class="btn" id="cc-redeem-link" href="/redeem.html" target="_blank" rel="noopener" style="text-decoration:none;">Redeem a coupon</a>
               <button class="btn" id="ct-open-btn" onclick="openCampaignTemplates()">E-mail templates</button>
               <button class="btn btn-primary" id="cc-new-btn" onclick="openCampaignDraft()">+ New campaign</button>
             </div>
@@ -1838,7 +1839,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
               <div style="font-weight:600;">E-mail templates for <span id="ct-sub-name"></span></div>
               <div style="display:flex;gap:8px;"><button class="btn btn-primary btn-sm" onclick="ctEdit('')">+ New template</button><button class="btn btn-sm" onclick="closeCampaignTemplates()">Close</button></div>
             </div>
-            <div style="font-size:12px;color:var(--text-muted);margin:6px 0 10px;max-width:760px;">Build your e-mail in the tool you already use, paste its HTML here and save it as a template. Nothing is sent from this page. Write {{first_name}}, {{site}}, {{brand}}, {{offer_name}}, {{offer_code}} or {{unsubscribe_url}} where you want them filled in. Scripts, forms and unsafe links are refused.</div>
+            <div style="font-size:12px;color:var(--text-muted);margin:6px 0 10px;max-width:760px;">Build your e-mail in the tool you already use, paste its HTML here and save it as a template. Nothing is sent from this page. Write {{first_name}}, {{site}}, {{brand}}, {{offer_name}}, {{offer_code}}, {{coupon_url}} (the coupon page with its QR code) or {{unsubscribe_url}} where you want them filled in. Scripts, forms and unsafe links are refused.</div>
             <div id="ct-error" style="color:var(--red, #c0392b);font-size:12px;margin-bottom:8px;"></div>
             <label style="display:flex;gap:8px;align-items:center;font-weight:400;font-size:12px;margin-bottom:8px;"><input type="checkbox" id="ct-arch" style="width:auto;" onchange="ctToggleArch()"> Show archived templates</label>
             <div id="ct-list" class="card" style="overflow:auto;"></div>
@@ -7030,6 +7031,7 @@ function csCleanMessage(msg){
   if(/key not found/i.test(m)) return 'This key was not found or is already revoked.';
   if(/invalid_status[:\s]+(.+)/i.test(m)){ const t = /invalid_status[:\s]+(.+)/i.exec(m)[1].replace(/\.$/, '').split('\n')[0]; return t.charAt(0).toUpperCase() + t.slice(1) + '.'; }
   if(/invalid_channel[:\s]+(.+)/i.test(m)) return 'Channels: ' + /invalid_channel[:\s]+(.+)/i.exec(m)[1].replace(/\.$/, '').split('\n')[0] + '.';
+  if(/invalid_days/i.test(m)) return 'Enter a number of days between 1 and 365.';
   if(/limit of 10 test/i.test(m)) return 'You can keep up to 10 test addresses.';
   if(/unknown_subaccount/i.test(m)) return 'This sub-account was not found.';
   if(/cap_too_loose:\s*(\w+)/i.test(m)) return 'You can only be stricter than Plug n Drive limits (' + /cap_too_loose:\s*(\w+)/i.exec(m)[1].replace(/_/g, ' ') + ').';
@@ -7067,6 +7069,11 @@ function csChRender(){
       </div>
       <label style="display:flex;gap:8px;align-items:center;font-weight:400;font-size:13px;margin-top:10px;"><input type="checkbox" id="cs-ch-e-on" style="width:auto;"${e.enabled ? ' checked' : ''}> Use e-mail for this brand</label>
       <div style="margin-top:8px;"><button class="btn btn-primary btn-sm" onclick="csChSaveEmail()">Save e-mail settings</button></div></div>
+    <div style="${box}"><div style="font-weight:600;">Offer codes</div>
+      <div style="font-size:12px;color:var(--text-muted);margin:4px 0 8px;">Each offer carries a one-time code. Drivers see it in the e-mail and on a coupon page with a QR code. Your staff check and mark it as used on the <a href="/redeem.html" target="_blank" rel="noopener">redeem page</a>.</div>
+      <label style="font-weight:400;font-size:12px;display:flex;flex-direction:column;gap:2px;max-width:200px;">Codes stay valid for (days)<input type="number" id="cs-ch-vd" min="1" max="365" step="1" value="${bEsc(String(d.offer_valid_days || 30))}"></label>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Applies to e-mails sent from now on.</div>
+      <div style="margin-top:8px;"><button class="btn btn-primary btn-sm" onclick="csChSaveValidity()">Save</button></div></div>
     <div style="${box}"><div style="font-weight:600;">Events sent to your own system (webhook)</div>
       <div style="font-size:12px;color:var(--text-muted);margin:4px 0 8px;">Your system receives each event with a signature, and sends the message itself. Plug n Drive never shares driver names, e-mails or phone numbers this way.</div>
       <label style="font-weight:400;font-size:12px;display:flex;flex-direction:column;gap:2px;">Address that receives the events (https)<input type="text" id="cs-ch-url" maxlength="300" value="${bEsc(w.url)}" placeholder="https://hooks.yourbrand.co.za/plugndrive"></label>
@@ -7098,6 +7105,12 @@ async function csChCall(fn, args, okMsg){
 async function csChSaveEmail(){
   const d = await csChCall('set_campaign_channel', { p_sub: csChSub, p_channel: 'email', p_config: { from_name: document.getElementById('cs-ch-fn').value.trim(), reply_to: document.getElementById('cs-ch-rt').value.trim() }, p_enabled: document.getElementById('cs-ch-e-on').checked }, 'E-mail settings saved.');
   if(d){ csChData = d; csChRender(); }
+}
+async function csChSaveValidity(){
+  const days = parseInt(document.getElementById('cs-ch-vd').value, 10);
+  if(!(days >= 1 && days <= 365)){ const err = document.getElementById('cs-ch-error'); err.style.color = 'var(--red, #c0392b)'; err.textContent = 'Enter a number of days between 1 and 365.'; return; }
+  const d = await csChCall('set_offer_validity', { p_sub: csChSub, p_days: days }, 'Saved. Codes stay valid for ' + days + ' day' + (days === 1 ? '' : 's') + '.');
+  if(d && csChData){ csChData.offer_valid_days = d.offer_valid_days; }
 }
 async function csChSaveWebhook(){
   const d = await csChCall('set_campaign_channel', { p_sub: csChSub, p_channel: 'webhook', p_config: { url: document.getElementById('cs-ch-url').value.trim() }, p_enabled: document.getElementById('cs-ch-w-on').checked }, 'Webhook settings saved.');
@@ -7378,7 +7391,7 @@ function closeCampaignDraft(){ const p = document.getElementById('cc-panel'); if
 let ctSub = null, ctList = [], ctEditing = null, ctBusy = false, ctTimer = null, ctDev = 'd';
 let csTplCache = { sub: null, list: [], loading: null };
 const CT_STARTER = '<!DOCTYPE html>\n<html>\n<body style="margin:0;padding:0;background:#f4f4f4;">\n  <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:24px 12px;">\n    <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:8px;">\n      <tr><td style="padding:24px;font-family:Arial,sans-serif;font-size:16px;color:#222222;">\n        <p>Hi {{first_name}},</p>\n        <p>Thanks for charging at {{site}}. Here is a little something from {{brand}}: <b>{{offer_name}}</b>.</p>\n        <p style="text-align:center;"><a href="https://example.com" style="background:#0a7d5a;color:#ffffff;padding:12px 20px;border-radius:6px;text-decoration:none;display:inline-block;">Claim your offer</a></p>\n        <p style="font-size:12px;color:#777777;"><a href="{{unsubscribe_url}}">Unsubscribe</a></p>\n      </td></tr>\n    </table>\n  </td></tr></table>\n</body>\n</html>';
-function ctVals(){ const s = csList.find(x => x.id === ctSub) || {}; return { first_name: 'Alex', site: 'Your site', brand: s.name || 'Your brand', offer_name: 'Free coffee', offer_code: 'THANKS10', unsubscribe_url: '#' }; }
+function ctVals(){ const s = csList.find(x => x.id === ctSub) || {}; return { first_name: 'Alex', site: 'Your site', brand: s.name || 'Your brand', offer_name: 'Free coffee', offer_code: 'THANKS10', unsubscribe_url: '#', coupon_url: '#' }; }
 function ctFill(str, esc){ const v = ctVals(); return String(str || '').replace(/\{\{\s*([a-z_]+)\s*\}\}/g, (m, k) => Object.prototype.hasOwnProperty.call(v, k) ? (esc ? bEsc(v[k]) : v[k]) : m); }
 async function openCampaignTemplates(){
   const s = csList.find(x => x.id === csEnv); if(!s) return;
@@ -8173,7 +8186,7 @@ async function csStatsLoad(id){
   const keys = Object.keys(groups);
   let h = `<div style="font-weight:600;">Engagement</div>
     <div style="font-size:12px;color:var(--text-muted);margin:2px 0 6px;">Clicks go through our own tracked links, robots such as mail scanners are left out. Opens are indicative only: some mail apps load images in advance and others block them.</div>
-    <div style="font-size:13px;line-height:1.7;">E-mails sent: <b>${bEsc(scRange(data.sent))}</b> &nbsp; People who clicked: <b>${bEsc(scRange(data.clickers))}</b> &nbsp; Opens (indicative): <b>${bEsc(scRange(data.opens))}</b> &nbsp; Robot hits filtered out: <b>${bEsc(scRange(data.suspected_bots))}</b></div>`;
+    <div style="font-size:13px;line-height:1.7;">E-mails sent: <b>${bEsc(scRange(data.sent))}</b> &nbsp; People who clicked: <b>${bEsc(scRange(data.clickers))}</b> &nbsp; Opens (indicative): <b>${bEsc(scRange(data.opens))}</b> &nbsp; Offers used: <b>${bEsc(scRange(data.redeemed))}</b> &nbsp; Robot hits filtered out: <b>${bEsc(scRange(data.suspected_bots))}</b></div>`;
   keys.forEach((k, i) => {
     const g = groups[k];
     h += `<div style="margin-top:10px;font-weight:600;font-size:13px;">${bEsc(g.name)}</div>

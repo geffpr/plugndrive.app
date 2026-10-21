@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plug n Drive - Redeem a coupon</title>
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<style>
+:root{--navy:#1a3260;--blue:#3a8fd4;--off:#f5f8fc;--border:#dde5f0;--muted:#6b7a9a;--green:#16a34a;--red:#dc2626;--amber:#b8791a}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--off);color:var(--navy);font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:1.5;min-height:100vh;padding:16px}
+.wrap{width:100%;max-width:460px;margin:0 auto}
+h1{font-size:20px;margin:6px 0 4px}
+.sub{color:var(--muted);font-size:13px;margin-bottom:14px}
+.card{background:#fff;border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:14px}
+input{width:100%;font:700 22px/1.2 ui-monospace,Menlo,Consolas,monospace;letter-spacing:2px;text-transform:uppercase;padding:14px;border:1px solid var(--border);border-radius:10px;margin-bottom:10px}
+button{width:100%;min-height:50px;font-size:16px;font-weight:700;border:0;border-radius:10px;background:var(--blue);color:#fff;cursor:pointer;margin-top:6px}
+button.ghost{background:#fff;color:var(--navy);border:1px solid var(--border)}
+button.go{background:var(--green)}
+button[disabled]{opacity:.6;cursor:default}
+.badge{display:inline-block;font-weight:700;font-size:14px;border-radius:999px;padding:4px 14px;margin-bottom:8px}
+.valid,.redeemed{background:#e6f6ec;color:var(--green)} .used,.not_found{background:#fdecec;color:var(--red)} .expired{background:#fdf3e1;color:var(--amber)}
+.offer{font-size:20px;font-weight:700}
+.muted{color:var(--muted);font-size:13px}
+.err{color:var(--red);font-weight:700;margin-top:8px}
+video{width:100%;border-radius:10px;background:#000;margin-top:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Redeem a coupon</h1>
+  <p class="sub" id="who">Checking your session...</p>
+  <div class="card" id="auth" style="display:none;">
+    <p>Please sign in to the Plug n Drive console first, then come back to this page.</p>
+    <a href="https://app.plugndrive.co.za/"><button type="button">Open the console</button></a>
+  </div>
+  <div class="card" id="form" style="display:none;">
+    <label class="muted" for="code">Coupon code</label>
+    <input id="code" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="20" placeholder="PND-XXXXXXXX">
+    <button type="button" id="check">Check</button>
+    <button type="button" class="ghost" id="scan" style="display:none;">Scan the QR code</button>
+    <video id="video" playsinline muted style="display:none;"></video>
+    <div class="err" id="err"></div>
+  </div>
+  <div class="card" id="result" style="display:none;"></div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+(function(){
+  var sb = window.supabase.createClient('https://ozlnxhtguaoeuhjeejxq.supabase.co', 'sb_publishable_91dDeI3PSGTwwz2wkFlqMg_Mct2dvKX');
+  var $ = function(id){ return document.getElementById(id); };
+  var busy = false, current = null, stream = null, timer = null;
+  function el(tag, cls, text){ var e = document.createElement(tag); if(cls) e.className = cls; if(text != null) e.textContent = text; return e; }
+  function fmt(s){ try { return new Date(s).toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch(e){ return ''; } }
+  function clean(m){
+    m = String(m || '');
+    if(/rate_limited/i.test(m)) return 'Too many wrong codes. Please wait 10 minutes.';
+    if(/campaigns_unavailable|not permitted/i.test(m)) return 'Your account cannot redeem coupons.';
+    return 'Something went wrong. Please try again.';
+  }
+  var LABEL = { valid: 'Valid', used: 'Already used', expired: 'Expired', not_found: 'Code not found', redeemed: 'Redeemed' };
+  function show(d){
+    var box = $('result'); box.textContent = ''; box.style.display = 'block'; current = null;
+    box.appendChild(el('div', 'badge ' + d.status, LABEL[d.status] || d.status));
+    if(d.status === 'not_found'){ box.appendChild(el('p', 'muted', 'No valid offer matches this code for your organisation. Check the code and try again.')); return; }
+    if(d.brand) box.appendChild(el('div', 'muted', d.brand));
+    box.appendChild(el('div', 'offer', d.offer_name || 'Offer'));
+    if(d.message) box.appendChild(el('p', 'muted', d.message));
+    box.appendChild(el('p', 'muted', 'Code ' + d.code));
+    if(d.status === 'valid' && d.expires_at) box.appendChild(el('p', 'muted', 'Valid until ' + fmt(d.expires_at)));
+    if(d.status === 'used' && d.redeemed_at) box.appendChild(el('p', 'muted', 'Used on ' + fmt(d.redeemed_at)));
+    if(d.status === 'expired' && d.expires_at) box.appendChild(el('p', 'muted', 'Expired on ' + fmt(d.expires_at)));
+    if(d.status === 'redeemed') box.appendChild(el('p', 'muted', 'Marked as used. This code cannot be used again.'));
+    if(d.status === 'valid'){
+      current = d.code;
+      var b = el('button', 'go', 'Mark as used'); b.type = 'button'; b.addEventListener('click', confirmUse); box.appendChild(b);
+    }
+  }
+  async function check(){
+    if(busy) return; var code = $('code').value.trim(); $('err').textContent = ''; if(!code) return;
+    busy = true; $('check').disabled = true;
+    var r = await sb.rpc('redeem_lookup', { p_code: code });
+    busy = false; $('check').disabled = false;
+    if(r.error || !r.data){ $('err').textContent = clean(r.error && r.error.message); return; }
+    show(r.data);
+  }
+  async function confirmUse(){
+    if(busy || !current) return; busy = true;
+    var btns = $('result').querySelectorAll('button'); btns.forEach(function(b){ b.disabled = true; });
+    var r = await sb.rpc('redeem_confirm', { p_code: current });
+    busy = false;
+    if(r.error || !r.data){ $('err').textContent = clean(r.error && r.error.message); btns.forEach(function(b){ b.disabled = false; }); return; }
+    show(r.data); $('code').value = '';
+  }
+  function stopScan(){ if(timer){ clearInterval(timer); timer = null; } if(stream){ stream.getTracks().forEach(function(t){ t.stop(); }); stream = null; } $('video').style.display = 'none'; }
+  async function scan(){
+    if(stream){ stopScan(); return; }
+    try {
+      var det = new BarcodeDetector({ formats: ['qr_code'] });
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+      var v = $('video'); v.srcObject = stream; v.style.display = 'block'; await v.play();
+      timer = setInterval(async function(){
+        try { var found = await det.detect(v); if(found && found.length){ $('code').value = found[0].rawValue || ''; stopScan(); check(); } } catch(e){ /* keep trying */ }
+      }, 300);
+    } catch(e){ stopScan(); $('err').textContent = 'The camera is not available. Type the code instead.'; }
+  }
+  $('check').addEventListener('click', check);
+  $('code').addEventListener('keydown', function(e){ if(e.key === 'Enter') check(); });
+  $('code').addEventListener('input', function(){ $('result').style.display = 'none'; $('err').textContent = ''; current = null; });
+  $('scan').addEventListener('click', scan);
+  if('BarcodeDetector' in window && navigator.mediaDevices) $('scan').style.display = 'block';
+  sb.auth.getSession().then(function(r){
+    var s = r && r.data && r.data.session;
+    if(!s){ $('who').textContent = 'You are not signed in.'; $('auth').style.display = 'block'; return; }
+    $('who').textContent = 'Signed in as ' + (s.user && s.user.email ? s.user.email : 'staff');
+    $('form').style.display = 'block'; $('code').focus();
+  });
+})();
+</script>
+</body>
+</html>

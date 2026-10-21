@@ -6,6 +6,7 @@
   "rewrites": [
     { "source": "/quote", "destination": "/quote.html" },
     { "source": "/faq", "destination": "/faq.html" },
+    { "source": "/redeem", "destination": "/redeem.html" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
