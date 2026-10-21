@@ -2449,6 +2449,10 @@ body.member-mode #sup-root,body.member-mode #trial-bar,body.member-mode #req-ban
 
       <!-- FLEET CONTROL -->
       <div class="page" id="page-fleet">
+        <div style="display:flex;gap:8px;margin-bottom:16px;">
+          <button class="btn btn-sm btn-primary" id="fleet-tabbtn-vehicles" onclick="fleetTab('vehicles')">Vehicles</button>
+          <button class="btn btn-sm" id="fleet-tabbtn-start" onclick="fleetTab('start')">Start charging</button>
+        </div>
         <div id="fleet-tab-vehicles">
           <div class="section-title">Vehicles</div>
           <div style="font-size:13px;color:var(--text-muted);max-width:760px;margin-bottom:14px;">One card per vehicle. Give each card the name, model and plate of its vehicle, so charges and reports show the vehicle instead of a card number. Click a row to edit it.</div>
@@ -2474,6 +2478,23 @@ body.member-mode #sup-root,body.member-mode #trial-bar,body.member-mode #req-ban
             <table>
               <thead><tr><th>Vehicle</th><th>Model</th><th>Plate</th><th>Card</th><th>Status</th><th>Note</th></tr></thead>
               <tbody id="fleet-body"></tbody>
+            </table>
+          </div>
+        </div>
+        <div id="fleet-tab-start" style="display:none;">
+          <div class="section-title">Start charging</div>
+          <div style="font-size:13px;color:var(--text-muted);max-width:760px;margin-bottom:14px;">Chargers with a vehicle plugged in show as Preparing. Choose which vehicle is on each charger (it is remembered), then start it, or start them all at once.</div>
+          <div class="filters">
+            <select id="fleet-start-client" style="display:none;" onchange="renderFleetStart(true)"></select>
+            <button class="btn btn-sm" onclick="renderFleetStart(true)">Refresh</button>
+            <div id="fleet-start-count" style="font-size:13px;color:var(--text-muted);"></div>
+            <button class="btn btn-primary" id="fleet-startall-btn" style="margin-left:auto;" onclick="fleetStartAll()" disabled>Start all</button>
+          </div>
+          <div id="fleet-start-msg" style="font-size:13px;margin-bottom:10px;"></div>
+          <div class="card" style="overflow-x:auto;">
+            <table>
+              <thead><tr><th>Site</th><th>Charger</th><th>Status</th><th>Vehicle on this charger</th><th></th></tr></thead>
+              <tbody id="fleet-start-body"></tbody>
             </table>
           </div>
         </div>
@@ -4499,7 +4520,7 @@ function showPage(id, opts){
   if(id==='exchangerates') renderExchangeRates();
   if(id==='reporting') renderReporting();
   if(id==='access') renderAccess();
-  if(id==='fleet') renderFleet();
+  if(id==='fleet') fleetTab(fleetTabNow);
 }
 
 // Reads the current URL and shows the matching page/detail view.
@@ -9577,6 +9598,101 @@ async function fleetSave(){
   fleetCancel();
   await loadAll();    // shows what is really saved
   renderFleet();
+}
+
+// ---------- Fleet Control: Start charging (manager starts plugged-in vehicles) ----------
+let fleetTabNow = 'vehicles', fleetStartRows = [], fleetStartBusy = false, fleetStartTimer = null;
+function fleetTab(t){
+  fleetTabNow = t;
+  document.getElementById('fleet-tab-vehicles').style.display = t === 'vehicles' ? '' : 'none';
+  document.getElementById('fleet-tab-start').style.display = t === 'start' ? '' : 'none';
+  document.getElementById('fleet-tabbtn-vehicles').className = 'btn btn-sm' + (t === 'vehicles' ? ' btn-primary' : '');
+  document.getElementById('fleet-tabbtn-start').className = 'btn btn-sm' + (t === 'start' ? ' btn-primary' : '');
+  if(t === 'start') renderFleetStart(true); else renderFleet();
+}
+function fleetStartAuto(){   // keeps the list live while the tab is open
+  if(fleetStartTimer) return;
+  fleetStartTimer = setInterval(() => {
+    const pg = document.getElementById('page-fleet');
+    if(!pg || !pg.classList.contains('active') || fleetTabNow !== 'start' || fleetStartBusy || document.hidden) return;
+    renderFleetStart(true);
+  }, 15000);
+}
+function fleetCardLabel(c){ return (c.vehicleName || ('Card ' + (c.number || c.uid))) + (c.vehicleModel ? ' (' + c.vehicleModel + ')' : '') + (c.vehiclePlate ? ' · ' + c.vehiclePlate : ''); }
+function fleetCardsFor(clientId){ return rfidCards.filter(c => c.status === 'active' && (c.ownerClientId || rootClientOfLocation(c.complexId)) === clientId); }
+function fleetReady(r){ return r.status === 'Preparing' && !r.busy; }
+async function renderFleetStart(reload){
+  if(!fleetAllowed()) return;
+  fleetStartAuto();
+  const sel = document.getElementById('fleet-start-client');
+  if(isPndAdmin()){ if(!sel.options.length) fillFilterSelect('fleet-start-client', 'All clients', clients.map(c => [c.id, c.name || ''])); sel.style.display = ''; } else sel.style.display = 'none';
+  if(reload){
+    const cl = isPndAdmin() ? (sel.value && sel.value !== 'all' ? sel.value : null) : null;
+    const { data, error } = await sb.rpc('fleet_start_list', { p_client_id: cl });
+    if(error){ document.getElementById('fleet-start-body').innerHTML = `<tr><td colspan="5" class="empty">${escHtml(error.message || 'Could not load.')}</td></tr>`; return; }
+    fleetStartRows = data || [];
+  }
+  const rows = fleetStartRows.slice().sort((a, b) => (fleetReady(b) ? 1 : 0) - (fleetReady(a) ? 1 : 0) || String(a.site_name).localeCompare(String(b.site_name)) || String(a.charger_name).localeCompare(String(b.charger_name)));
+  const ready = rows.filter(r => fleetReady(r)), startable = ready.filter(r => r.card_id);
+  document.getElementById('fleet-start-count').textContent = `${ready.length} plugged in · ${startable.length} ready to start`;
+  const btn = document.getElementById('fleet-startall-btn'); btn.disabled = fleetStartBusy || !startable.length; btn.textContent = startable.length ? `Start all (${startable.length})` : 'Start all';
+  if(!rows.length){ document.getElementById('fleet-start-body').innerHTML = '<tr><td colspan="5" class="empty">No chargers on this account.</td></tr>'; return; }
+  document.getElementById('fleet-start-body').innerHTML = rows.map(r => {
+    const opts = fleetCardsFor(r.client_id), id = r.charger_id;
+    const sel = `<select ${fleetStartBusy ? 'disabled' : ''} onchange="fleetSetCard('${id}', this.value)"><option value="">Choose a vehicle</option>`
+      + opts.map(c => `<option value="${c.id}" ${c.id === r.card_id ? 'selected' : ''}>${escHtml(fleetCardLabel(c))}</option>`).join('') + '</select>';
+    const label = r.busy ? 'Charging' : r.status === 'Preparing' ? 'Plugged in' : escHtml(r.status || '-');
+    const can = fleetReady(r) && r.card_id && !fleetStartBusy;
+    return `<tr style="${fleetReady(r) ? '' : 'opacity:.6;'}"><td>${escHtml(r.site_name || '')}</td><td>${escHtml(r.charger_name || '')}</td><td>${label}</td><td>${sel}</td>`
+      + `<td><button class="btn btn-sm btn-primary" ${can ? '' : 'disabled'} onclick="fleetStartOne('${id}')">Start</button> <span id="fleet-row-${id}" style="font-size:12px;"></span></td></tr>`;
+  }).join('');
+}
+async function fleetSetCard(chargerId, cardId){
+  const { error } = await sb.rpc('fleet_set_charger_card', { p_charger: chargerId, p_card: cardId || null });
+  const msg = document.getElementById('fleet-start-msg');
+  if(error){ msg.style.color = 'var(--red, #c0392b)'; msg.textContent = 'Could not save this choice: ' + (error.message || 'error'); await renderFleetStart(true); return; }
+  msg.textContent = '';
+  const r = fleetStartRows.find(x => x.charger_id === chargerId); if(r) r.card_id = cardId || null;
+  renderFleetStart(false);
+}
+const FLEET_WHY = { forbidden:'Fleet Control is not available for this account.' };
+async function fleetStartCall(r){
+  const { data, error } = await sb.functions.invoke('fleet-start', { body: { chargerId: r.charger_id, cardId: r.card_id } });
+  if(error || (data && data.error)){
+    let m = data && data.error;
+    if(!m && error && error.context && typeof error.context.json === 'function'){ try{ m = (await error.context.json()).error; }catch(e){} }
+    return { ok:false, msg: m || (error && error.message) || 'Could not start.' };
+  }
+  return { ok:true };
+}
+async function fleetStartOne(chargerId){
+  const r = fleetStartRows.find(x => x.charger_id === chargerId); if(!r || !r.card_id || fleetStartBusy) return;
+  fleetStartBusy = true; renderFleetStart(false);
+  const res = await fleetStartCall(r);
+  fleetStartBusy = false; renderFleetStart(false);
+  const msg = document.getElementById('fleet-start-msg');
+  msg.style.color = res.ok ? '' : 'var(--red, #c0392b)';
+  msg.textContent = res.ok ? `Start sent to ${r.charger_name}.` : `${r.charger_name}: ${res.msg}`;
+  await fleetRefreshSoon();
+}
+async function fleetStartAll(){
+  if(fleetStartBusy) return;
+  const todo = fleetStartRows.filter(r => fleetReady(r) && r.card_id);
+  if(!todo.length) return;
+  showModal('Start all charges', `Start ${todo.length} charge${todo.length === 1 ? '' : 's'} now? Each plugged-in vehicle starts with the vehicle chosen on its charger.`, async () => {
+    closeModal();
+    fleetStartBusy = true; renderFleetStart(false);
+    const msg = document.getElementById('fleet-start-msg'); msg.style.color = ''; msg.textContent = 'Starting…';
+    let ok = 0; const bad = [];
+    for(const r of todo){ const res = await fleetStartCall(r); if(res.ok) ok++; else bad.push(`${r.charger_name}: ${res.msg}`); }
+    fleetStartBusy = false; renderFleetStart(false);
+    msg.style.color = bad.length ? 'var(--red, #c0392b)' : '';
+    msg.innerHTML = `${ok} started${bad.length ? `, ${bad.length} not started:<br>` + bad.map(escHtml).join('<br>') : '.'}`;
+    await fleetRefreshSoon();
+  }, 'Start all');
+}
+async function fleetRefreshSoon(){
+  for(let i = 0; i < 3; i++){ await new Promise(r => setTimeout(r, 2000)); await renderFleetStart(true); }
 }
 
 // Set to true once the charging server has the priority rule installed (until then the switches are saved but do nothing).
