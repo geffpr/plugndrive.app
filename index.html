@@ -8158,7 +8158,55 @@ async function csRunSummary(id){
       ${data.delivery && Object.keys(data.delivery).length ? `<div>Delivery: ${line('delivered', data.delivery, 'delivered')} &nbsp; ${line('bounced', data.delivery, 'bounced')} &nbsp; ${line('complaints', data.delivery, 'complained')}</div>` : ''}
       <div>Decisions in 30 days: ${line('allowed', data.decisions, 'allowed')} &nbsp; ${line('delayed', data.decisions, 'delayed')} &nbsp; ${line('blocked', data.decisions, 'blocked')} &nbsp; ${line('to review', data.decisions, 'review')}</div>
       ${rk.length ? '<div style="margin-top:4px;">Why some were not allowed:</div><ul style="margin:2px 0 0;padding-left:20px;">' + rk.map(k => `<li>${bEsc(MK_REASON[k] || k)}: <b>${bEsc(scRange(rs[k]))}</b></li>`).join('') + '</ul>' : ''}
-    </div>`;
+    </div>
+    <div id="cc-stats" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);"></div>`;
+  csStatsLoad(id);
+}
+// Engagement: clicks per link and a heat map drawn on the e-mail itself. Figures are rounded ranges.
+async function csStatsLoad(id){
+  const box = document.getElementById('cc-stats'); if(!box) return;
+  const { data, error } = await sb.rpc('campaign_stats', { p_id: id });
+  if(!document.getElementById('cc-stats')) return;
+  if(error || !data){ box.innerHTML = ''; return; }
+  const groups = {};
+  (data.links || []).forEach(l => { const k = l.template_id || ''; (groups[k] = groups[k] || { name: l.template_name || 'E-mail', id: l.template_id, rows: [] }).rows.push(l); });
+  const keys = Object.keys(groups);
+  let h = `<div style="font-weight:600;">Engagement</div>
+    <div style="font-size:12px;color:var(--text-muted);margin:2px 0 6px;">Clicks go through our own tracked links, robots such as mail scanners are left out. Opens are indicative only: some mail apps load images in advance and others block them.</div>
+    <div style="font-size:13px;line-height:1.7;">E-mails sent: <b>${bEsc(scRange(data.sent))}</b> &nbsp; People who clicked: <b>${bEsc(scRange(data.clickers))}</b> &nbsp; Opens (indicative): <b>${bEsc(scRange(data.opens))}</b> &nbsp; Robot hits filtered out: <b>${bEsc(scRange(data.suspected_bots))}</b></div>`;
+  keys.forEach((k, i) => {
+    const g = groups[k];
+    h += `<div style="margin-top:10px;font-weight:600;font-size:13px;">${bEsc(g.name)}</div>
+      <div id="cc-heat-note-${i}" style="font-size:12px;color:var(--text-muted);"></div>
+      <iframe id="cc-heat-${i}" sandbox="" title="Heat map" style="display:none;width:100%;height:420px;border:1px solid var(--border);border-radius:8px;background:#fff;margin:6px 0;"></iframe>
+      <table><thead><tr><th>#</th><th>Link</th><th>People who clicked</th></tr></thead><tbody>${g.rows.map(r => `<tr><td>${bEsc(String(r.n))}</td><td style="word-break:break-all;">${bEsc(r.url)}</td><td>${bEsc(scRange(r.clicks))}</td></tr>`).join('')}</tbody></table>`;
+  });
+  if(!keys.length) h += '<div style="font-size:13px;color:var(--text-muted);margin-top:6px;">No tracked link in the e-mails sent so far.</div>';
+  box.innerHTML = h;
+  for(let i = 0; i < keys.length; i++) csHeat(i, groups[keys[i]]);
+}
+async function csHeat(i, g){
+  const fr = document.getElementById('cc-heat-' + i), note = document.getElementById('cc-heat-note-' + i); if(!fr || !note || !g.id) return;
+  const { data } = await sb.rpc('get_campaign_template', { p_id: g.id });
+  if(!document.getElementById('cc-heat-' + i)) return;
+  const html = data && data.template && data.template.html;
+  if(!html){ note.textContent = 'The template is no longer available, so the heat map cannot be drawn.'; return; }
+  const doc = new DOMParser().parseFromString(ctFill(html, true), 'text/html');
+  const as = doc.querySelectorAll('a[href]');
+  const maxN = Math.max.apply(null, g.rows.map(r => r.n));
+  if(maxN > as.length){ note.textContent = 'This template was changed after these e-mails were sent, so the heat map cannot be drawn. The table below is still correct.'; return; }
+  g.rows.forEach(r => {
+    const a = as[r.n - 1]; if(!a) return;
+    const rel = Number(r.rel) || 0, hue = Math.round(210 - 210 * rel);
+    a.style.cssText += `;outline:3px solid hsl(${hue},80%,50%);outline-offset:2px;background-color:hsla(${hue},80%,50%,.18);`;
+    const b = doc.createElement('span');
+    b.textContent = ' ' + (r.clicks && !r.clicks.lt10 ? r.clicks.low + '-' + r.clicks.high : '<10') + ' ';
+    b.setAttribute('style', `font:700 11px Arial,sans-serif;color:#fff;background:hsl(${hue},80%,40%);border-radius:8px;padding:1px 6px;margin-left:4px;`);
+    a.insertAdjacentElement('afterend', b);
+  });
+  fr.srcdoc = '<base target="_blank">' + doc.documentElement.outerHTML;
+  fr.style.display = 'block';
+  note.textContent = "Colour shows each link's share of the clicks on this e-mail: blue is cold, red is hot. Sample values are used for the variables.";
 }
 async function archiveCampaignDraft(btn){
   const c = ccList.find(x => x.id === btn.dataset.cid); if(!c) return;
