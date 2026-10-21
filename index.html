@@ -3756,7 +3756,7 @@ let tariffs = [];
 let clients = [];
 
 function mapLocation(l){ return {id:l.id, name:l.name, type:l.type, parentId:l.parent_id, city:l.city, address:l.address, capacityKVA:l.capacity_kva, currency:l.currency, clientId:l.client_id, timezone:l.timezone, contactName:l.contact_name, contactPhone:l.contact_phone, contactEmail:l.contact_email, status:l.status, loadManagementEnabled:l.load_management_enabled, latitude:l.latitude, longitude:l.longitude, siteDescription:l.site_description, accessMode:l.access_mode, hostPhone:l.host_phone, openingHours:l.opening_hours||null}; }
-function mapCharger(c){ return {id:c.id, locationId:c.location_id, name:c.name, ocppId:c.ocpp_id, vendor:c.vendor, connector:c.connector, powerKW:c.power_kw, ocpp:c.ocpp_version, status:c.status, currentKW:c.current_kw, ocppPassword:c.ocpp_password, lastSeenAt:c.last_seen_at, ocppStatus:c.ocpp_status, listedPublicly:c.listed_publicly}; }
+function mapCharger(c){ return {id:c.id, locationId:c.location_id, name:c.name, ocppId:c.ocpp_id, vendor:c.vendor, connector:c.connector, powerKW:c.power_kw, ocpp:c.ocpp_version, status:c.status, currentKW:c.current_kw, ocppPassword:c.ocpp_password, lastSeenAt:c.last_seen_at, ocppStatus:c.ocpp_status, listedPublicly:c.listed_publicly, loadPriority:!!c.load_priority}; }
 function mapSession(s){ return {id:s.id, chargerId:s.charger_id, userId:s.user_id, rfidCardId:s.rfid_card_id, kwh:s.kwh, cost:s.cost, currency:s.currency, startedAt:s.started_at, endedAt:s.ended_at, paymentStatus:s.payment_status, payment:s.payment_method, groupId:s.access_group_id, groupMode:s.group_pricing_mode, groupPercent:s.group_discount_percent, offered:s.offered_value}; }
 function mapRfid(r){ return {id:r.id, uid:r.uid, userId:r.user_id, complexId:r.location_id, status:r.status, number:r.card_number||null, ownerClientId:r.owner_client_id||null}; }
 function mapUser(u){ return {id:u.id, name:u.name, unit:u.unit, locationId:u.location_id, role:u.role, phone:u.phone, email:u.email, balance:u.balance, balanceCurrency:u.balance_currency}; }
@@ -9277,6 +9277,8 @@ async function resendActivation(cardId){
   box.style.display = 'block';
 }
 
+// Set to true once the charging server has the priority rule installed (until then the switches are saved but do nothing).
+const LM_PRIORITY_LIVE = false;
 function renderLoad(){
   const roots = locations.filter(l=>!l.parentId);
   document.getElementById('load-list').innerHTML = roots.map(r=>{
@@ -9285,6 +9287,23 @@ function renderLoad(){
     const cap = r.capacityKVA||1;
     const pct = Math.min(100, Math.round(used/cap*100));
     const fillClass = pct>90?'over':pct>70?'high':'';
+    const prio = under.filter(c=>c.loadPriority);
+    const held = prio.filter(c=>c.status==='Available').reduce((s,c)=>s+(Number(c.powerKW)||0),0);
+    let prioHtml = '';
+    if(r.loadManagementEnabled && under.length){
+      const rows = under.slice().sort((a,b)=>(b.loadPriority?1:0)-(a.loadPriority?1:0) || String(a.name).localeCompare(String(b.name))).map(c=>
+        `<label style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid var(--border);font-size:13px;cursor:pointer;">
+          <span><b>${escHtml(c.name)}</b> <span style="color:var(--text-muted);">· ${Number(c.powerKW)||0} kW · ${escHtml(c.status||'')}</span></span>
+          <span style="display:flex;align-items:center;gap:6px;white-space:nowrap;"><input type="checkbox" ${c.loadPriority?'checked':''} onchange="toggleChargerPriority('${c.id}', this.checked)"> Priority</span>
+        </label>`).join('');
+      prioHtml = `<div style="margin-top:14px;">
+        <div style="font-weight:600;font-size:13px;">Charger priority</div>
+        <div style="font-size:12px;color:var(--text-muted);margin:2px 0 6px;">A priority charger always keeps its power in reserve while it is free. Other chargers can only start if the site still has room after that reserve, so a priority charger is never locked out by the others. A charge in progress is never interrupted.</div>
+        ${prio.length ? `<div style="font-size:12px;margin-bottom:4px;">Reserved right now: <b>${held} kW</b></div>` : ''}
+        ${LM_PRIORITY_LIVE ? '' : '<div style="font-size:12px;color:var(--amber, #b45309);margin-bottom:4px;">Your choices are saved, and take effect once the charging server update is installed.</div>'}
+        ${rows}
+      </div>`;
+    }
     return `<div class="card card-pad" style="margin-bottom:12px;">
       <div style="display:flex;justify-content:space-between;align-items:center;">
         <div><div style="font-weight:600;">${r.name}</div><div class="path">${r.city||''} · ${under.length} chargers</div></div>
@@ -9298,8 +9317,15 @@ function renderLoad(){
         <div class="gauge-labels"><span>${used} kW used</span><span>${cap} kVA capacity</span></div>
       </div>
       ${r.loadManagementEnabled ? '<div style="font-size:12px;color:var(--text-muted);margin-top:6px;">A new charging session that would exceed this site\'s capacity is refused (not power-shared) until room frees up.</div>' : ''}
+      ${prioHtml}
     </div>`;
   }).join('');
+}
+async function toggleChargerPriority(chargerId, checked){
+  const { data, error } = await sb.from('chargers').update({ load_priority: checked }).eq('id', chargerId).select();
+  if(error || !data || !data.length) alert(error ? error.message : 'You cannot change this setting on this account. Ask Plug n Drive.');
+  await loadAll();
+  renderLoad();   // shows what is really saved
 }
 async function toggleLoadManagement(locationId, enabled){
   const { error: lmErr } = await sb.from('locations').update({ load_management_enabled: enabled }).eq('id', locationId);
