@@ -823,6 +823,7 @@ body.member-mode #sup-root,body.member-mode #trial-bar,body.member-mode #req-ban
     <a class="navitem" data-page="sessions" onclick="showPage('sessions')"><span class="ic">◷</span>Sessions</a>
     <a class="navitem" data-page="walletactivity" onclick="showPage('walletactivity')"><span class="ic">◐</span>Wallet activity</a>
     <a class="navitem" data-page="reporting" onclick="showPage('reporting')"><span class="ic">◈</span>Reporting</a>
+    <a class="navitem" data-page="fleet" id="fleet-nav" onclick="showPage('fleet')" style="display:none;"><span class="ic">◩</span>Fleet Control</a>
     <div class="nav-section-label" id="nav-lbl-account" style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:rgba(255,255,255,.45);padding:14px 10px 4px;">Account</div>
     <a class="navitem" data-page="myoperators" id="myoperators-nav" onclick="showPage('myoperators')" style="display:none;"><span class="ic">◉</span>My operators</a>
     <a class="navitem" data-page="apikeys" id="apikeys-nav" onclick="showPage('apikeys')" style="display:none;"><span class="ic">&lt;/&gt;</span>API &amp; Keys</a>
@@ -2378,6 +2379,38 @@ body.member-mode #sup-root,body.member-mode #trial-bar,body.member-mode #req-ban
         </div>
       </div>
 
+      <!-- FLEET CONTROL -->
+      <div class="page" id="page-fleet">
+        <div id="fleet-tab-vehicles">
+          <div class="section-title">Vehicles</div>
+          <div style="font-size:13px;color:var(--text-muted);max-width:760px;margin-bottom:14px;">One card per vehicle. Give each card the name, model and plate of its vehicle, so charges and reports show the vehicle instead of a card number. Click a row to edit it.</div>
+          <div class="filters">
+            <select id="fleet-client-filter" onchange="renderFleet()" style="display:none;"></select>
+            <input class="search" type="text" id="fleet-search" placeholder="Search vehicle, plate, model or card..." oninput="renderFleet()">
+            <div id="fleet-count" style="margin-left:auto;font-size:13px;color:var(--text-muted);"></div>
+          </div>
+          <div id="fleet-edit" class="card card-pad" style="display:none;max-width:520px;margin-bottom:16px;">
+            <div style="font-weight:600;margin-bottom:2px;">Vehicle for card <span id="fleet-edit-card"></span></div>
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;" id="fleet-edit-sub"></div>
+            <div class="form-row"><label>Vehicle name</label><input type="text" id="fleet-f-name" maxlength="80" placeholder="Van 12"></div>
+            <div class="form-row"><label>Model</label><input type="text" id="fleet-f-model" maxlength="80" placeholder="Toyota Hilux EV"></div>
+            <div class="form-row"><label>Plate</label><input type="text" id="fleet-f-plate" maxlength="20" placeholder="CA 123-456"></div>
+            <div class="form-row"><label>Note</label><input type="text" id="fleet-f-note" maxlength="300" placeholder="Deliveries north"></div>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-primary" id="fleet-save-btn" onclick="fleetSave()">Save</button>
+              <button class="btn" onclick="fleetCancel()">Cancel</button>
+            </div>
+            <div id="fleet-edit-error" style="color:var(--red, #c0392b);font-size:12px;margin-top:8px;"></div>
+          </div>
+          <div class="card" style="overflow-x:auto;">
+            <table>
+              <thead><tr><th>Vehicle</th><th>Model</th><th>Plate</th><th>Card</th><th>Status</th><th>Note</th></tr></thead>
+              <tbody id="fleet-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
       <!-- LOAD MANAGEMENT -->
       <div class="page" id="page-load">
         <div class="section-title">Site capacity</div>
@@ -3635,13 +3668,14 @@ function applyRoleBasedNav(){
 // ---------- Features by plan (self-serve) or by manual switches (contract accounts) ----------
 let myFeat = null;   // result of my_features(); null until loaded or for non client accounts
 const FEAT_PAGE = { access:'access_groups', myoperators:'operator_accounts', apikeys:'api_keys', load:'load_management', reporting:'reporting' };
-const FEAT_LABEL = { reporting:'Reporting', load_management:'Load management', tariff_advanced:'Day and night tariffs and idle fee', sms_activation:'Automatic SMS activation', resident_billing:'Resident billing', white_label:'White label', max_chargers:'Chargers', api_keys:'API keys', access_groups:'Access groups', operator_accounts:'Operator accounts' };
+const FEAT_LABEL = { fleet_control:'Fleet Control', reporting:'Reporting', load_management:'Load management', tariff_advanced:'Day and night tariffs and idle fee', sms_activation:'Automatic SMS activation', resident_billing:'Resident billing', white_label:'White label', max_chargers:'Chargers', api_keys:'API keys', access_groups:'Access groups', operator_accounts:'Operator accounts' };
 const PLAN_NAME = { trial:'Trial', neighbour:'Neighbour', starter:'Starter', host:'Host', operator:'Operator', cpo:'CPO', enterprise:'Enterprise' };
 async function loadMyFeatures(){
   if(!(currentStaff && currentStaff.role === 'client_admin')){ myFeat = null; return; }
   try { const { data, error } = await sb.rpc('my_features'); myFeat = (!error && data && data.features) ? data : null; } catch(e){ myFeat = null; }
   applyRoleBasedNav();
 }
+function fleetAllowed(){ if(currentMember) return false; if(!currentStaff) return false; if(currentStaff.role === 'plugndrive_admin') return true; return currentStaff.role === 'client_admin' && featOn('fleet_control'); }
 function featOn(k){ const v = myFeat && myFeat.features ? myFeat.features[k] : undefined; return v === true || v === null || (typeof v === 'number' && v > 0); }
 // Access and My operators on contract accounts keep their historical switches unless a manual override is set.
 function featGoverns(k){
@@ -3676,6 +3710,8 @@ function applyFeatureNav(){
   });
   const cn = document.getElementById('campaigns-nav');
   if(cn) cn.style.display = (isCA && featOn('campaigns')) ? '' : 'none';
+  const fn = document.getElementById('fleet-nav');
+  if(fn) fn.style.display = fleetAllowed() ? '' : 'none';
   refreshQuotaButtons();
 }
 function quotaCount(key){
@@ -3758,7 +3794,7 @@ let clients = [];
 function mapLocation(l){ return {id:l.id, name:l.name, type:l.type, parentId:l.parent_id, city:l.city, address:l.address, capacityKVA:l.capacity_kva, currency:l.currency, clientId:l.client_id, timezone:l.timezone, contactName:l.contact_name, contactPhone:l.contact_phone, contactEmail:l.contact_email, status:l.status, loadManagementEnabled:l.load_management_enabled, latitude:l.latitude, longitude:l.longitude, siteDescription:l.site_description, accessMode:l.access_mode, hostPhone:l.host_phone, openingHours:l.opening_hours||null}; }
 function mapCharger(c){ return {id:c.id, locationId:c.location_id, name:c.name, ocppId:c.ocpp_id, vendor:c.vendor, connector:c.connector, powerKW:c.power_kw, ocpp:c.ocpp_version, status:c.status, currentKW:c.current_kw, ocppPassword:c.ocpp_password, lastSeenAt:c.last_seen_at, ocppStatus:c.ocpp_status, listedPublicly:c.listed_publicly, loadPriority:!!c.load_priority}; }
 function mapSession(s){ return {id:s.id, chargerId:s.charger_id, userId:s.user_id, rfidCardId:s.rfid_card_id, kwh:s.kwh, cost:s.cost, currency:s.currency, startedAt:s.started_at, endedAt:s.ended_at, paymentStatus:s.payment_status, payment:s.payment_method, groupId:s.access_group_id, groupMode:s.group_pricing_mode, groupPercent:s.group_discount_percent, offered:s.offered_value}; }
-function mapRfid(r){ return {id:r.id, uid:r.uid, userId:r.user_id, complexId:r.location_id, status:r.status, number:r.card_number||null, ownerClientId:r.owner_client_id||null}; }
+function mapRfid(r){ return {id:r.id, uid:r.uid, userId:r.user_id, complexId:r.location_id, status:r.status, number:r.card_number||null, ownerClientId:r.owner_client_id||null, vehicleName:r.vehicle_name||'', vehicleModel:r.vehicle_model||'', vehiclePlate:r.vehicle_plate||'', vehicleNote:r.vehicle_note||''}; }
 function mapUser(u){ return {id:u.id, name:u.name, unit:u.unit, locationId:u.location_id, role:u.role, phone:u.phone, email:u.email, balance:u.balance, balanceCurrency:u.balance_currency}; }
 function mapTariff(t){ return {id:t.id, locationId:t.location_id, chargerId:t.charger_id, priceDay:t.price_day, priceNight:t.price_night, nightStart:t.night_start, nightEnd:t.night_end, idleFeePerMin:t.idle_fee_per_min, idleGraceMinutes:t.idle_grace_minutes, monthlyFee:t.monthly_ocpp_fee, monthlyKwhIncluded:t.monthly_kwh_included, overagePrice:t.overage_price, currency:t.currency}; }
 // Whether a client's negotiated commission is currently in force is always
@@ -4337,6 +4373,7 @@ const ROUTES = {
   photos: () => '/photos',
   exchangerates: () => '/exchangerates',
   reporting: () => '/reporting',
+  fleet: () => '/fleet',
   access: () => '/access',
   billing: () => '/billing',
 };
@@ -4347,6 +4384,7 @@ function navigate(path){
 function showPage(id, opts){
   opts = opts || {};
   if(currentMember) id = 'campaigns';   // an invited person has no other page
+  if(id === 'fleet' && !fleetAllowed()) id = 'dashboard';   // Fleet Control only where the option is on
   if(isLockedAccount() && id !== 'billing') id = 'billing';   // a locked trial can only reach the billing page
   // A page the plan does not include opens the "available from plan X" message instead.
   let lockKey = null;
@@ -4366,7 +4404,7 @@ function showPage(id, opts){
   const parentNav = { addsite:'sites', addcharger:'chargers', addclient:'clients' };
   const navEl = document.querySelector(`.navitem[data-page="${parentNav[id] || id}"]`);
   if(navEl) navEl.classList.add('active');
-  const titles={billing:'Billing',dashboard:'Dashboard',sites:'Sites',addsite:'Add site',chargers:'Chargers',addcharger:'Add charger',sessions:'Sessions',rfid:'RFID cards',load:'Load management',tariffs:'Tariffs',clients:'Clients',addclient:'Add client',myoperators:'My operators',apikeys:'API & Keys',campaigns:'Campaigns',walletactivity:'Wallet activity',payments:'Payments',shop:'Shop',proshop:'Shop',photos:'Site photos',settings:'Settings',exchangerates:'Exchange rates',reporting:'Reporting',access:'Access'};
+  const titles={billing:'Billing',dashboard:'Dashboard',sites:'Sites',addsite:'Add site',chargers:'Chargers',addcharger:'Add charger',sessions:'Sessions',rfid:'RFID cards',load:'Load management',tariffs:'Tariffs',clients:'Clients',addclient:'Add client',myoperators:'My operators',apikeys:'API & Keys',campaigns:'Campaigns',walletactivity:'Wallet activity',payments:'Payments',shop:'Shop',proshop:'Shop',photos:'Site photos',settings:'Settings',exchangerates:'Exchange rates',reporting:'Reporting',access:'Access',fleet:'Fleet Control'};
   document.getElementById('topbar-title').textContent = titles[id];
   if(!opts.skipNav) navigate(ROUTES[id] ? ROUTES[id]() : '/'+id);
   if(id==='sites') renderSites();
@@ -4393,6 +4431,7 @@ function showPage(id, opts){
   if(id==='exchangerates') renderExchangeRates();
   if(id==='reporting') renderReporting();
   if(id==='access') renderAccess();
+  if(id==='fleet') renderFleet();
 }
 
 // Reads the current URL and shows the matching page/detail view.
@@ -4401,7 +4440,7 @@ function routeFromLocation(){
   if(currentMember){ showPage('campaigns', {skipNav:true}); return; }
   const parts = location.pathname.split('/').filter(Boolean); // e.g. ['sites','<id>']
   const page = parts[0] || 'dashboard';
-  const knownPages = ['dashboard','sites','addsite','chargers','addcharger','sessions','rfid','load','tariffs','clients','addclient','myoperators','apikeys','campaigns','walletactivity','payments','shop','proshop','photos','settings','exchangerates','reporting','access','billing'];
+  const knownPages = ['dashboard','sites','addsite','chargers','addcharger','sessions','rfid','load','tariffs','clients','addclient','myoperators','apikeys','campaigns','walletactivity','payments','shop','proshop','photos','settings','exchangerates','reporting','access','billing','fleet'];
   if(!knownPages.includes(page)){ showPage('dashboard'); return; }
 
   showPage(page, {skipNav:true});
@@ -5405,7 +5444,7 @@ async function importClientCards(){
   document.getElementById('cl-cards-count').textContent = `${n} in stock, ${mine.length - n} assigned.`;
 }
 // ---------- Features panel (Plug n Drive admin, on the client page) ----------
-const FT_BOOLS = [['reporting','Reporting'],['load_management','Load management'],['tariff_advanced','Day and night tariffs, idle fee'],['sms_activation','Automatic SMS activation'],['resident_billing','Resident billing (coming soon)'],['white_label','White label (coming soon)'],['campaigns','Campaigns (needs API keys)']];
+const FT_BOOLS = [['reporting','Reporting'],['load_management','Load management'],['tariff_advanced','Day and night tariffs, idle fee'],['sms_activation','Automatic SMS activation'],['resident_billing','Resident billing (coming soon)'],['white_label','White label (coming soon)'],['campaigns','Campaigns (needs API keys)'],['fleet_control','Fleet Control']];
 const FT_LIMITS = [['max_chargers','Chargers'],['api_keys','API keys'],['access_groups','Access groups'],['operator_accounts','Operator accounts']];
 const FT_PRESETS = {
   starter:    { reporting:true, load_management:false, tariff_advanced:false, sms_activation:false, resident_billing:false, white_label:false, max_chargers:1,    api_keys:1,    access_groups:0,    operator_accounts:0 },
@@ -9275,6 +9314,66 @@ async function resendActivation(cardId){
   const box = document.getElementById('cad-code-box');
   box.innerHTML = codeBoxHtml(data.code, data.phone, note);
   box.style.display = 'block';
+}
+
+// ---------- Fleet Control: Vehicles (one card = one vehicle) ----------
+let fleetEditId = null;
+function fleetRows(){
+  const clf = isPndAdmin() ? filterVal('fleet-client-filter') : 'all';
+  const q = (document.getElementById('fleet-search').value || '').trim().toLowerCase();
+  let rows = rfidCards.slice();
+  if(clf !== 'all') rows = rows.filter(r => (r.ownerClientId || rootClientOfLocation(r.complexId)) === clf);
+  if(q) rows = rows.filter(r => [r.vehicleName, r.vehicleModel, r.vehiclePlate, r.vehicleNote, r.uid, r.number].some(v => v && String(v).toLowerCase().includes(q)));
+  const labeled = r => !!(r.vehicleName || r.vehicleModel || r.vehiclePlate);
+  rows.sort((a, b) => (labeled(b) ? 1 : 0) - (labeled(a) ? 1 : 0) || String(a.vehicleName || a.number || a.uid).localeCompare(String(b.vehicleName || b.number || b.uid)));
+  return rows;
+}
+function renderFleet(){
+  if(!fleetAllowed()) return;
+  const sel = document.getElementById('fleet-client-filter');
+  if(isPndAdmin()){ populateClientFilter('fleet-client-filter'); sel.style.display = ''; } else sel.style.display = 'none';
+  const rows = fleetRows();
+  const labeled = r => !!(r.vehicleName || r.vehicleModel || r.vehiclePlate);
+  const nLab = rows.filter(labeled).length;
+  document.getElementById('fleet-count').textContent = rows.length ? `${nLab} vehicle${nLab === 1 ? '' : 's'} · ${rows.length - nLab} card${rows.length - nLab === 1 ? '' : 's'} without a vehicle` : '';
+  if(!rows.length){
+    document.getElementById('fleet-body').innerHTML = `<tr><td colspan="6" class="empty">${rfidCards.length ? 'No cards match this search.' : 'No cards yet. Cards appear here once they are delivered to your account.'}</td></tr>`;
+    return;
+  }
+  document.getElementById('fleet-body').innerHTML = rows.map(r => {
+    const dash = '<span style="color:var(--text-muted);">-</span>';
+    return `<tr class="rowlink" onclick="fleetEdit('${r.id}')"><td>${r.vehicleName ? '<b>' + escHtml(r.vehicleName) + '</b>' : '<span style="color:var(--text-muted);">No vehicle yet</span>'}</td>`
+      + `<td>${r.vehicleModel ? escHtml(r.vehicleModel) : dash}</td><td>${r.vehiclePlate ? escHtml(r.vehiclePlate) : dash}</td>`
+      + `<td>${escHtml(r.number ? r.number : r.uid)}${r.number ? ' <span style="color:var(--text-muted);font-size:12px;">' + escHtml(r.uid) + '</span>' : ''}</td>`
+      + `<td><span class="badge ${r.status}">${RFID_STATUS_LABEL[r.status] || escHtml(r.status)}</span></td><td>${r.vehicleNote ? escHtml(r.vehicleNote) : dash}</td></tr>`;
+  }).join('');
+}
+function fleetEdit(cardId){
+  const c = rfidCards.find(x => x.id === cardId); if(!c) return;
+  fleetEditId = cardId;
+  document.getElementById('fleet-edit-card').textContent = c.number ? c.number : c.uid;
+  document.getElementById('fleet-edit-sub').textContent = c.number ? 'UID ' + c.uid : '';
+  document.getElementById('fleet-f-name').value = c.vehicleName;
+  document.getElementById('fleet-f-model').value = c.vehicleModel;
+  document.getElementById('fleet-f-plate').value = c.vehiclePlate;
+  document.getElementById('fleet-f-note').value = c.vehicleNote;
+  document.getElementById('fleet-edit-error').textContent = '';
+  document.getElementById('fleet-edit').style.display = 'block';
+  document.getElementById('fleet-f-name').focus();
+}
+function fleetCancel(){ fleetEditId = null; document.getElementById('fleet-edit').style.display = 'none'; }
+async function fleetSave(){
+  if(!fleetEditId) return;
+  const btn = document.getElementById('fleet-save-btn'), err = document.getElementById('fleet-edit-error');
+  btn.disabled = true; err.textContent = '';
+  const { error } = await sb.rpc('fleet_set_card_vehicle', { p_card: fleetEditId,
+    p_name: document.getElementById('fleet-f-name').value, p_model: document.getElementById('fleet-f-model').value,
+    p_plate: document.getElementById('fleet-f-plate').value, p_note: document.getElementById('fleet-f-note').value });
+  btn.disabled = false;
+  if(error){ err.textContent = /forbidden/.test(error.message || '') ? 'This account cannot change vehicles. Ask Plug n Drive.' : (error.message || 'Could not save.'); return; }
+  fleetCancel();
+  await loadAll();    // shows what is really saved
+  renderFleet();
 }
 
 // Set to true once the charging server has the priority rule installed (until then the switches are saved but do nothing).
