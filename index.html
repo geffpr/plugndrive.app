@@ -9644,7 +9644,7 @@ function fleetStartAuto(){   // keeps the list live while the tab is open
 }
 function fleetCardLabel(c){ return (c.vehicleName || ('Card ' + (c.number || c.uid))) + (c.vehicleModel ? ' (' + c.vehicleModel + ')' : '') + (c.vehiclePlate ? ' · ' + c.vehiclePlate : ''); }
 function fleetCardsFor(clientId){ return rfidCards.filter(c => c.status === 'active' && !/^WEB-/.test(c.uid || '') && (c.ownerClientId || rootClientOfLocation(c.complexId)) === clientId); }
-function fleetReady(r){ return r.status === 'Preparing' && !r.busy; }
+function fleetReady(r){ return r.ready === true && !r.busy; }   // plugged in (raw OCPP status Preparing), connected, nothing running
 async function renderFleetStart(reload){
   if(!fleetAllowed()) return;
   fleetStartAuto();
@@ -9665,7 +9665,7 @@ async function renderFleetStart(reload){
     const opts = fleetCardsFor(r.client_id), id = r.charger_id;
     const sel = `<select ${fleetStartBusy ? 'disabled' : ''} onchange="fleetSetCard('${id}', this.value)"><option value="">Choose a vehicle</option>`
       + opts.map(c => `<option value="${c.id}" ${c.id === r.card_id ? 'selected' : ''}>${escHtml(fleetCardLabel(c))}</option>`).join('') + '</select>';
-    const label = r.busy ? 'Charging' : r.status === 'Preparing' ? 'Plugged in' : escHtml(r.status || '-');
+    const label = r.busy ? 'Charging' : r.ready ? 'Plugged in' : r.status === 'Offline' ? 'Offline' : 'Not plugged in';
     const can = fleetReady(r) && r.card_id && !fleetStartBusy;
     return `<tr style="${fleetReady(r) ? '' : 'opacity:.6;'}"><td>${escHtml(r.site_name || '')}</td><td>${escHtml(r.charger_name || '')}</td><td>${label}</td><td>${sel}</td>`
       + `<td><button class="btn btn-sm btn-primary" ${can ? '' : 'disabled'} onclick="fleetStartOne('${id}')">Start</button> <span id="fleet-row-${id}" style="font-size:12px;"></span></td></tr>`;
