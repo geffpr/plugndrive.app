@@ -9278,7 +9278,7 @@ async function resendActivation(cardId){
 }
 
 // Set to true once the charging server has the priority rule installed (until then the switches are saved but do nothing).
-const LM_PRIORITY_LIVE = false;
+const LM_PRIORITY_LIVE = true;
 function renderLoad(){
   const roots = locations.filter(l=>!l.parentId);
   document.getElementById('load-list').innerHTML = roots.map(r=>{
