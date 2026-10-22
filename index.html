@@ -8088,10 +8088,21 @@ function crPerfHtml(){
 }
 function crDailyHtml(box){
   const d = crRep.daily || []; if(!d.length) return '';
-  const W = 720, H = 120, mx = Math.max(1, ...d.map(x => x.sent)), bw = Math.max(2, Math.floor(W / d.length) - 2);
-  const bars = d.map((x, i) => { const h = Math.round(H * x.sent / mx), h2 = Math.round(H * x.opened / mx), xx = Math.round(i * (W / d.length));
-    return `<rect x="${xx}" y="${H - h}" width="${bw}" height="${h}" fill="#9db8d6"><title>${bEsc(String(x.day))}: ${x.sent} sent, ${x.opened} opened, ${x.redeemed} redeemed</title></rect><rect x="${xx}" y="${H - h2}" width="${bw}" height="${h2}" fill="#2f75b8"></rect>`; }).join('');
-  return `<div style="${box}"><div style="font-weight:600;margin-bottom:6px;">Messages per day <span style="font-weight:400;font-size:12px;color:var(--text-muted);">light: sent, dark: opened</span></div><svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="none" style="display:block;height:140px;">${bars}</svg></div>`;
+  const W = 720, H = 120, mx = Math.max(1, ...d.map(x => x.sent)), step = W / d.length, bw = Math.max(2, Math.floor(step) - 2);
+  const sum = k => d.reduce((s, x) => s + (Number(x[k]) || 0), 0), tot = { sent: sum('sent'), opened: sum('opened'), redeemed: sum('redeemed') };
+  const lbl = v => { const s = String(v), m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s); if(!m) return s; return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }); };
+  const bars = d.map((x, i) => { const h = Math.round(H * x.sent / mx), h2 = Math.round(H * x.opened / mx), h3 = Math.round(H * x.redeemed / mx), xx = Math.round(i * step), rw = Math.max(1, Math.round(bw / 2));
+    const tip = `${bEsc(lbl(x.day))}: ${x.sent} sent, ${x.opened} opened, ${x.redeemed} redeemed`;
+    return `<rect x="${xx}" y="${H - h}" width="${bw}" height="${h}" fill="#9db8d6"></rect><rect x="${xx}" y="${H - h2}" width="${bw}" height="${h2}" fill="#2f75b8"></rect><rect x="${xx + Math.round((bw - rw) / 2)}" y="${H - h3}" width="${rw}" height="${h3}" fill="#2e9e6b"></rect><rect x="${xx}" y="0" width="${Math.max(2, Math.round(step))}" height="${H}" fill="transparent"><title>${tip}</title></rect>`; }).join('');
+  const grid = `<line x1="0" x2="${W}" y1="0.5" y2="0.5" stroke="rgba(127,140,160,.35)" stroke-width="1" vector-effect="non-scaling-stroke"></line><line x1="0" x2="${W}" y1="${H / 2}" y2="${H / 2}" stroke="rgba(127,140,160,.25)" stroke-width="1" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"></line><line x1="0" x2="${W}" y1="${H - 0.5}" y2="${H - 0.5}" stroke="rgba(127,140,160,.45)" stroke-width="1" vector-effect="non-scaling-stroke"></line>`;
+  const sw = (c, t, n) => `<span style="display:inline-flex;align-items:center;gap:6px;margin-right:16px;"><span style="width:10px;height:10px;border-radius:2px;background:${c};display:inline-block;"></span>${t} <b style="color:var(--text);">${crNum(n)}</b></span>`;
+  const mid = d[Math.floor((d.length - 1) / 2)];
+  return `<div style="${box}"><div style="font-weight:600;margin-bottom:6px;">Messages per day</div>
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;display:flex;flex-wrap:wrap;">${sw('#9db8d6', 'Sent', tot.sent)}${sw('#2f75b8', 'Opened', tot.opened)}${sw('#2e9e6b', 'Redeemed', tot.redeemed)}</div>
+    <div style="display:flex;gap:8px;"><div style="display:flex;flex-direction:column;justify-content:space-between;height:140px;font-size:11px;color:var(--text-muted);text-align:right;min-width:28px;"><span>${crNum(mx)}</span><span>${crNum(Math.round(mx / 2))}</span><span>0</span></div>
+      <div style="flex:1;min-width:0;"><svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="none" style="display:block;height:140px;">${grid}${bars}</svg>
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-top:4px;"><span>${bEsc(lbl(d[0].day))}</span><span>${bEsc(lbl(mid.day))}</span><span>${bEsc(lbl(d[d.length - 1].day))}</span></div></div></div>
+    <div style="font-size:11px;color:var(--text-muted);margin-top:6px;">Hover a day to see its figures.</div></div>`;
 }
 function crRfmHtml(){
   const n = crRfm.total_drivers || 0;
