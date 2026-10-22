@@ -1930,6 +1930,9 @@ body.member-mode #sup-root,body.member-mode #trial-bar,body.member-mode #req-ban
                     <button type="button" class="sc-pb" style="background:#5aa6f2" onclick="scAddNode('action','send_offer')">Send an offer</button>
                     <button type="button" class="sc-pb" style="background:#5aa6f2" onclick="scAddNode('action','reward')">Give a reward</button>
                     <button type="button" class="sc-pb" style="background:#5aa6f2" onclick="scAddNode('action','notify_system')">Notify your system</button>
+                    <button type="button" class="sc-pb" style="background:#3fb27f" onclick="scAddNode('action','send_sms')">Send an SMS</button>
+                    <button type="button" class="sc-pb" style="background:#3fb27f" onclick="scAddNode('action','send_whatsapp')">Send a WhatsApp</button>
+                    <button type="button" class="sc-pb" style="background:#3fb27f" onclick="scAddNode('action','push')">Push notification</button>
                     <button type="button" class="sc-pb" style="background:#f26b6b" onclick="scAddNode('end')">End</button>
                   </div>
                   <div class="sc-side-h">Settings</div>
@@ -7614,6 +7617,7 @@ function csChRender(){
   const d = csChData; if(!d) return;
   const e = d.email || {}, w = d.webhook || {}, box = 'border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px;';
   const tests = (d.test_recipients || []).map(t => `<div style="display:flex;gap:8px;align-items:center;padding:2px 0;"><span style="flex:1;word-break:break-all;">${bEsc(t.email)}</span><button class="btn btn-sm" data-rid="${bEsc(t.id)}" onclick="csChRemoveTest(this.dataset.rid)">Remove</button></div>`).join('') || '<div style="color:var(--text-muted);font-size:12px;">No test address yet.</div>';
+  const phones = (d.test_phones || []).map(t => `<div style="display:flex;gap:8px;align-items:center;padding:2px 0;"><span style="flex:1;">${bEsc(t.phone)}</span><button class="btn btn-sm" data-rid="${bEsc(t.id)}" onclick="csChRemovePhone(this.dataset.rid)">Remove</button></div>`).join('') || '<div style="color:var(--text-muted);font-size:12px;">No test number yet.</div>';
   document.getElementById('cs-ch-body').innerHTML =
     `<div style="${box}"><div style="font-weight:600;">E-mail sent by Plug n Drive</div>
       <div style="font-size:12px;color:var(--text-muted);margin:4px 0 8px;">Messages leave from our server, on behalf of this brand. We handle delivery and unsubscribes. The sender address is fixed: <b>${bEsc(d.sender_address)}</b>.</div>
@@ -7628,6 +7632,15 @@ function csChRender(){
       <label style="font-weight:400;font-size:12px;display:flex;flex-direction:column;gap:2px;max-width:200px;">Codes stay valid for (days)<input type="number" id="cs-ch-vd" min="1" max="365" step="1" value="${bEsc(String(d.offer_valid_days || 30))}"></label>
       <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Applies to e-mails sent from now on.</div>
       <div style="margin-top:8px;"><button class="btn btn-primary btn-sm" onclick="csChSaveValidity()">Save</button></div></div>
+    <div style="${box}"><div style="font-weight:600;">SMS sent by Plug n Drive</div>
+      <div style="font-size:12px;color:var(--text-muted);margin:4px 0 8px;">Short messages with the offer code, sent only to drivers who agreed to receive SMS offers. Each SMS carries an opt-out link. In test mode, SMS can only go to the test numbers below.</div>
+      <label style="display:flex;gap:8px;align-items:center;font-weight:400;font-size:13px;"><input type="checkbox" id="cs-ch-s-on" style="width:auto;"${(d.sms || {}).enabled ? ' checked' : ''}> Use SMS for this brand</label>
+      <div style="margin-top:8px;"><button class="btn btn-primary btn-sm" onclick="csChSaveSms()">Save SMS settings</button></div>
+      <div style="font-weight:600;margin-top:14px;font-size:13px;">Test numbers</div>
+      <div id="cs-ch-phones" style="font-size:13px;margin:6px 0;">${phones}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;"><input type="text" id="cs-ch-phone-in" maxlength="20" placeholder="+27821234567" style="flex:1;min-width:180px;"><button class="btn btn-sm" onclick="csChAddPhone()">Add</button></div>
+      <div style="font-weight:600;margin-top:14px;font-size:13px;">Send a test SMS</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;"><select id="cs-ch-sms-to" style="min-width:180px;">${(d.test_phones || []).map(t => `<option value="${bEsc(t.phone)}">${bEsc(t.phone)}</option>`).join('')}</select><input type="text" id="cs-ch-sms-txt" maxlength="200" value="R 150 off your purchase today. Show this code at the till." style="flex:1;min-width:220px;"><button class="btn btn-sm" id="cs-ch-sms-btn" onclick="csChTestSms()">Send test SMS</button></div></div>
     <div style="${box}"><div style="font-weight:600;">Events sent to your own system (webhook)</div>
       <div style="font-size:12px;color:var(--text-muted);margin:4px 0 8px;">Your system receives each event with a signature, and sends the message itself. Plug n Drive never shares driver names, e-mails or phone numbers this way.</div>
       <label style="font-weight:400;font-size:12px;display:flex;flex-direction:column;gap:2px;">Address that receives the events (https)<input type="text" id="cs-ch-url" maxlength="300" value="${bEsc(w.url)}" placeholder="https://hooks.yourbrand.co.za/plugndrive"></label>
@@ -7690,6 +7703,35 @@ function csChHideSecret(){
   const v = document.getElementById('cs-ch-secret'), box = document.getElementById('cs-ch-reveal');
   if(v) v.textContent = '';   // the secret leaves the page for good
   if(box) box.style.display = 'none';
+}
+async function csChSaveSms(){
+  const d = await csChCall('set_campaign_channel', { p_sub: csChSub, p_channel: 'sms', p_config: {}, p_enabled: document.getElementById('cs-ch-s-on').checked }, 'SMS settings saved.');
+  if(d){ csChData = d; csChRender(); }
+}
+async function csChAddPhone(){
+  const inp = document.getElementById('cs-ch-phone-in'); const v = inp.value.trim(); if(!v) return;
+  const d = await csChCall('add_test_phone', { p_sub: csChSub, p_phone: v }, null);
+  if(d){ csChData = d; csChRender(); }
+}
+async function csChRemovePhone(id){
+  const d = await csChCall('remove_test_phone', { p_sub: csChSub, p_id: id }, null);
+  if(d){ csChData = d; csChRender(); }
+}
+async function csChTestSms(){
+  const err = document.getElementById('cs-ch-error'), btn = document.getElementById('cs-ch-sms-btn');
+  const to = document.getElementById('cs-ch-sms-to').value, text = document.getElementById('cs-ch-sms-txt').value.trim();
+  err.style.color = 'var(--red, #c0392b)';
+  if(!to){ err.textContent = 'Add a test number first.'; return; }
+  if(!text){ err.textContent = 'Write the message to test.'; return; }
+  err.textContent = 'Sending...'; btn.disabled = true;
+  try {
+    const { data: s } = await sb.auth.getSession();
+    const token = s && s.session ? s.session.access_token : '';
+    const resp = await fetch(`${SUPABASE_URL}/functions/v1/campaign-mail/test-sms`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token, 'apikey': SUPABASE_KEY }, body: JSON.stringify({ sub_id: csChSub, to, text }) });
+    const j = await resp.json().catch(() => ({}));
+    if(j && j.ok){ err.style.color = 'var(--green, #1a7f37)'; err.textContent = 'Test SMS sent to ' + to + '.'; } else err.textContent = (j && j.error) || 'The test SMS could not be sent.';
+  } catch(e){ err.textContent = 'Network problem. Please try again.'; }
+  btn.disabled = false;
 }
 async function csChAddTest(){
   const inp = document.getElementById('cs-ch-test-in'); const em = inp.value.trim(); if(!em) return;
@@ -8139,7 +8181,7 @@ function scTplField(a){
 let ccOpts = null, scG = null, scSel = null, scSim = null, scTrace = null, scConn = null, scDrag = null, scTouched = false, scReady = false, scSeq = 1;
 const SC_NW = 190;
 const SC_COL = { start: '#20c3a0', condition: '#f5a54c', action: '#5aa6f2', end: '#f26b6b' };
-const SC_ATITLE = { send_offer: 'Send an offer', reward: 'Give a reward', notify_system: 'Notify your system' };
+const SC_ATITLE = { send_offer: 'Send an offer', reward: 'Give a reward', notify_system: 'Notify your system', send_sms: 'Send an SMS', send_whatsapp: 'Send a WhatsApp', push: 'Push notification' };
 function ccTab(t){
   const s = t === 'settings';
   document.getElementById('cc-tab-settings').style.display = s ? '' : 'none';
@@ -8366,9 +8408,9 @@ function scInspector(){
     }).join('');
     el.innerHTML = `<div class="sc-ins-t">Condition</div><div class="sc-hint">Charges that meet the condition leave by Yes, the others by No.</div><label for="sc-i-match">Match</label><select id="sc-i-match" onchange="scCondMatch()" style="width:100%"><option value="all"${n.conditions.match === 'any' ? '' : ' selected'}>all conditions</option><option value="any"${n.conditions.match === 'any' ? ' selected' : ''}>at least one condition</option></select><div style="margin-top:10px;">${rows}</div>${items.length >= 10 ? '' : '<button class="btn btn-sm" type="button" onclick="scAddCond()">+ Add a condition</button>'}`;
   } else if(n.type === 'action'){
-    const a = n.action || {}, extra = a.type === 'send_offer' || a.type === 'reward';
+    const a = n.action || {}, extra = ['send_offer','reward','send_sms','send_whatsapp','push'].includes(a.type), lab = {send_sms:'Offer name',send_whatsapp:'Offer name',push:'Notification title'}[a.type] || 'Offer name', ph = a.type === 'push' ? 'e.g. 10% off at Cuyana' : 'e.g. Free coffee';
     el.innerHTML = `<div class="sc-ins-t">Action</div><label for="sc-i-act">Then</label><select id="sc-i-act" onchange="scActType()" style="width:100%">${scOpt(ccOpts.actions, a.type, 'type', 'label')}</select>
-      ${extra ? `<label for="sc-i-lab">Offer name</label><input type="text" id="sc-i-lab" maxlength="60" value="${bEsc(a.label || '')}" placeholder="e.g. Free coffee" style="width:100%" oninput="scActSet()"><label for="sc-i-msg">Message</label><textarea id="sc-i-msg" rows="3" maxlength="300" style="width:100%" placeholder="Short text the driver would see" oninput="scActSet()">${bEsc(a.message || '')}</textarea>${a.type === 'send_offer' ? scTplField(a) : ''}` : ''}
+      ${extra ? `<label for="sc-i-lab">${lab}</label><input type="text" id="sc-i-lab" maxlength="60" value="${bEsc(a.label || '')}" placeholder="${ph}" style="width:100%" oninput="scActSet()"><label for="sc-i-msg">Message</label><textarea id="sc-i-msg" rows="3" maxlength="300" style="width:100%" placeholder="Short text the driver would see" oninput="scActSet()">${bEsc(a.message || '')}</textarea>${a.type === 'send_offer' ? scTplField(a) : ''}` : ''}
       <div class="sc-hint">Nothing is sent at this stage.</div>`;
   } else { el.innerHTML = '<div class="sc-ins-t">End</div><div class="sc-hint">The scenario stops here for this charge.</div>'; }
   el.innerHTML += del;
@@ -8427,7 +8469,7 @@ function scBuild(){
     }
     if(n.type === 'action' && n.action && n.action.type){
       o.action = { type: n.action.type };
-      if(n.action.type === 'send_offer' || n.action.type === 'reward'){ o.action.label = (n.action.label || '').trim(); o.action.message = (n.action.message || '').trim(); }
+      if(['send_offer','reward','send_sms','send_whatsapp','push'].includes(n.action.type)){ o.action.label = (n.action.label || '').trim(); o.action.message = (n.action.message || '').trim(); }
       if(n.action.type === 'send_offer' && n.action.template_id) o.action.template_id = n.action.template_id;
     }
     nodes.push(o);
