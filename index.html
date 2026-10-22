@@ -1526,6 +1526,22 @@ body.member-mode #sup-root,body.member-mode #trial-bar,body.member-mode #req-ban
               <button class="btn btn-primary" id="cl-ss-activate-btn" onclick="activateSelfServe()">Activate</button>
             </div>
             <div class="hint" id="cl-ss-hint" style="margin-top:8px;">Activating unlocks the account, restores blocked cards and starts the 5% commission.</div>
+            <div id="cl-acc-box" style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px;">
+              <div style="font-weight:600;margin-bottom:4px;">Offer a plan or move offline</div>
+              <div class="hint" style="margin-bottom:10px;">No payment needed from the client. Nothing is deleted, and the last change can be undone.</div>
+              <div class="form-row"><label>What to do</label>
+                <select id="cl-acc-mode" onchange="accModeChanged()"><option value="plan">Give a plan for free</option><option value="offline">Move to an offline (contract) account</option></select></div>
+              <div class="form-row" id="cl-acc-plan-row"><label>Plan</label><select id="cl-acc-plan"></select></div>
+              <div class="form-row" id="cl-acc-until-row"><label>Free until (optional)</label><input type="date" id="cl-acc-until">
+                <div class="hint" style="margin-top:4px;">Empty = no end date. On the end date the account is switched off like a cancelled plan, and the client is told by e-mail.</div></div>
+              <div class="form-row"><label>Note (only you see it)</label><input type="text" id="cl-acc-note" maxlength="200" placeholder="Example: contract signed 22 October"></div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <button class="btn btn-primary" id="cl-acc-apply" onclick="accApply()">Apply</button>
+                <button class="btn" id="cl-acc-undo" onclick="accUndo()" style="display:none;">Undo last change</button>
+              </div>
+              <div id="cl-acc-msg" class="hint" style="margin-top:8px;"></div>
+              <div id="cl-acc-log" class="hint" style="margin-top:8px;"></div>
+            </div>
           </div>
           <div id="cl-cards-panel" class="card card-pad" style="max-width:420px;margin-bottom:20px;display:none;">
             <div class="section-title" style="margin-top:0;">RFID cards in stock</div>
@@ -4298,11 +4314,12 @@ async function renderBilling(){
     if(c.subscriptionStatus === 'cancelling') sub = `<div style="margin-top:6px;color:var(--red);">Subscription cancelled. Your plan stays active until ${when || 'the end of the paid period'}, then the account is switched off.</div>`;
     else if(c.subscriptionStatus === 'past_due') sub = `<div style="margin-top:6px;color:var(--red);">Your last payment did not go through. Please contact us to update your card.</div>`;
     else if(c.subscriptionStatus === 'active' && when) sub = `<div style="margin-top:6px;color:var(--text-secondary);">Next payment on ${when}.</div>`;
+    else if(c.subscriptionStatus === 'comped') sub = `<div style="margin-top:6px;color:var(--text-secondary);">This plan is offered by Plug n Drive${when ? ' until ' + when : ''}.${when ? ' After that date the account is switched off unless you choose a plan.' : ''}</div>`;
     head = c.plan === 'neighbour'
       ? `<div style="font-weight:700;font-size:16px;">Neighbour Host</div>
       <div style="margin-top:4px;">No monthly fee. Plug n Drive keeps 15% of each charging payment, payment fees included. Need RFID cards, tariffs by time of day or a business account? Move to Starter below.</div>`
       : `<div style="font-weight:700;font-size:16px;">${bEsc(cur ? cur.label : 'Active')} plan</div>
-      <div style="margin-top:4px;">${cur && cur.monthly_price_zar ? 'R ' + Number(cur.monthly_price_zar).toLocaleString('en-ZA') + ' per month, plus a 5% transaction fee.' : 'Active.'}</div>${sub}`;
+      <div style="margin-top:4px;">${c.subscriptionStatus === 'comped' ? 'Offered by Plug n Drive. A 5% transaction fee applies to charging payments.' : (cur && cur.monthly_price_zar ? 'R ' + Number(cur.monthly_price_zar).toLocaleString('en-ZA') + ' per month, plus a 5% transaction fee.' : 'Active.')}</div>${sub}`;
   }
   const usage = lim ? `<div class="card card-pad" style="margin-top:12px;"><div style="font-weight:600;margin-bottom:6px;">Usage</div>
       <div style="font-size:13px;">Chargers: <b>${chargers.length}</b> of ${lim.max_chargers == null ? 'unlimited' : lim.max_chargers}</div>
@@ -5665,18 +5682,78 @@ async function renderSelfServePanel(cl){
   if(!cl || cl.accountType !== 'self_serve'){ box.style.display = 'none'; return; }
   box.style.display = 'block';
   const lims = await ensurePlanLimits();
-  const lab = {trial:'Trial', locked:'Locked (trial ended)', active:'Active'};
+  const lab = {trial:'Trial', locked:'Locked (trial ended)', active:cl.subscriptionStatus==='comped' ? 'Active (offered)' : 'Active'};
   document.getElementById('cl-ss-status').textContent = lab[cl.accountStatus] || cl.accountStatus || '-';
   const cur = lims.find(p=>p.plan===cl.plan);
   document.getElementById('cl-ss-plan').textContent = cur ? cur.label : (cl.plan || '-');
   document.getElementById('cl-ss-trialend').textContent = cl.trialEndsAt ? fmtLongDate(cl.trialEndsAt) : '-';
-  document.getElementById('cl-ss-sub').textContent = cl.closedAt ? 'Closed by the client' : (cl.subscriptionStatus ? ({active:'Active',past_due:'Payment missing',cancelling:'Cancelled, ends',cancelled:'Ended'}[cl.subscriptionStatus] || cl.subscriptionStatus) + (cl.paidUntil ? ' (' + fmtLongDate(cl.paidUntil) + ')' : '') : 'None (manual)');
+  document.getElementById('cl-ss-sub').textContent = cl.closedAt ? 'Closed by the client' : (cl.subscriptionStatus ? ({active:'Active',past_due:'Payment missing',cancelling:'Cancelled, ends',cancelled:'Ended',comped:'Offered by Plug n Drive'}[cl.subscriptionStatus] || cl.subscriptionStatus) + (cl.paidUntil ? ' (' + fmtLongDate(cl.paidUntil) + ')' : '') : 'None (manual)');
   document.getElementById('cl-ss-declared').textContent = [cl.declaredChargers!=null ? cl.declaredChargers+' charger(s)' : null, cl.declaredModel, cl.ocpp16jAnswer ? 'OCPP 1.6J: '+cl.ocpp16jAnswer : null, cl.signupCountry].filter(Boolean).join(', ') || '-';
   const sel = document.getElementById('cl-ss-plan-select');
   const opts = lims.filter(p=>p.plan!=='trial');
   sel.innerHTML = opts.map(p=>`<option value="${bBadge(p.plan)}">${bEsc(p.label)}${p.monthly_price_zar? ' (R'+Number(p.monthly_price_zar).toLocaleString('en-ZA')+'/mo)':''}</option>`).join('');
   if(cl.accountStatus==='active' && cl.plan && opts.some(p=>p.plan===cl.plan)) sel.value = cl.plan;
   document.getElementById('cl-ss-activate-btn').textContent = cl.accountStatus==='active' ? 'Change plan' : 'Activate';
+  const asel = document.getElementById('cl-acc-plan');
+  if(asel){ asel.innerHTML = opts.map(p=>`<option value="${bBadge(p.plan)}">${bEsc(p.label)}</option>`).join(''); if(cl.plan && opts.some(p=>p.plan===cl.plan)) asel.value = cl.plan; }
+  document.getElementById('cl-acc-until').value = ''; document.getElementById('cl-acc-note').value = ''; document.getElementById('cl-acc-msg').textContent = '';
+  accModeChanged(); accLoadLog(cl.id);
+}
+// ---- Manual activation by the Plug n Drive admin: offer a plan, or move to an offline account; undo ----
+function accModeChanged(){
+  const m = document.getElementById('cl-acc-mode').value;
+  document.getElementById('cl-acc-plan-row').style.display = m === 'plan' ? '' : 'none';
+  document.getElementById('cl-acc-until-row').style.display = m === 'plan' ? '' : 'none';
+  document.getElementById('cl-acc-apply').textContent = m === 'plan' ? 'Give this plan' : 'Move offline';
+}
+async function accLoadLog(clientId){
+  const logEl = document.getElementById('cl-acc-log'), undo = document.getElementById('cl-acc-undo');
+  if(!logEl) return;
+  logEl.textContent = ''; undo.style.display = 'none';
+  const { data, error } = await sb.rpc('admin_client_access_log', { p_client: clientId });
+  if(clientId !== currentClientId || error || !Array.isArray(data)) return;
+  const what = r => r.action === 'give_plan' ? 'Plan offered: ' + ((r.detail && r.detail.plan) || '') + (r.detail && r.detail.until ? ' until ' + fmtLongDate(r.detail.until) : ' (no end date)') : 'Moved to an offline account';
+  logEl.innerHTML = data.length ? '<b>Recent changes</b><br>' + data.map(r => `${bEsc(fmtLongDate(r.at))}: ${bEsc(what(r))}${r.note ? ' (' + bEsc(r.note) + ')' : ''}${r.undone_at ? ' <i>undone</i>' : ''}`).join('<br>') : '';
+  undo.style.display = data.some(r => !r.undone_at) ? '' : 'none';
+}
+const ACC_ERR = {
+  running_subscription:'This client has a running Paystack subscription, which would keep charging them. Ask them to cancel it from Billing (or cancel it in Paystack), then try again.',
+  until_in_past:'The end date must be in the future.', invalid_plan:'Invalid plan.', not_self_serve:'This account is already an offline (contract) account.',
+  too_many_chargers:'This client has more chargers than this plan allows. Pick a bigger plan.', changed_since:'The account changed after that action (a payment, for example), so it cannot be undone automatically.',
+  nothing_to_undo:'Nothing to undo.', forbidden:'Only Plug n Drive admins can do this.'
+};
+async function accRun(fn){
+  const msg = document.getElementById('cl-acc-msg'), cl = clients.find(x=>x.id===currentClientId);
+  if(!cl) return;
+  const btns = [document.getElementById('cl-acc-apply'), document.getElementById('cl-acc-undo')];
+  btns.forEach(b => b.disabled = true); msg.style.color = ''; msg.textContent = 'Working…';
+  const { data, error } = await fn(cl);
+  btns.forEach(b => b.disabled = false);
+  if(error || !data || data.ok !== true){
+    msg.style.color = 'var(--red)';
+    msg.textContent = (data && ACC_ERR[data.error]) || (error && (ACC_ERR[(error.message||'').split(':')[0]] || error.message)) || 'Could not do this.';
+    return;
+  }
+  await loadAll();
+  openClient(cl.id, {skipNav:true});
+}
+function accApply(){
+  const mode = document.getElementById('cl-acc-mode').value, cl = clients.find(x=>x.id===currentClientId);
+  if(!cl) return;
+  const plan = document.getElementById('cl-acc-plan').value, day = document.getElementById('cl-acc-until').value;
+  const until = mode === 'plan' && day ? new Date(day + 'T23:59:59+02:00').toISOString() : null;
+  const note = document.getElementById('cl-acc-note').value.trim() || null;
+  const go = () => { closeModal(); accRun(() => sb.rpc('admin_set_client_access', { p_client: cl.id, p_mode: mode, p_plan: mode === 'plan' ? plan : null, p_until: until, p_note: note })); };
+  if(mode === 'offline'){
+    showModal('Move to an offline account', `${cl.name} will no longer follow a plan or pay by card. It keeps every feature it has today (you can change them in Features), has no charger limit, and is unlocked. You can undo this right after.`, go, 'Move offline');
+  } else {
+    showModal('Give this plan for free', `${cl.name} gets the ${(document.getElementById('cl-acc-plan').selectedOptions[0]||{}).textContent||plan} plan without paying${day ? ' until ' + fmtLongDate(until) : ', with no end date'}. The platform commission of the plan still applies to charging payments.`, go, 'Give plan');
+  }
+}
+function accUndo(){
+  const cl = clients.find(x=>x.id===currentClientId);
+  if(!cl) return;
+  showModal('Undo the last change', 'The account goes back exactly to how it was before the last manual change.', () => { closeModal(); accRun(() => sb.rpc('admin_undo_client_access', { p_client: cl.id })); }, 'Undo');
 }
 function bBadge(v){ return bEsc(v); }
 async function activateSelfServe(){
