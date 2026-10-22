@@ -7745,7 +7745,7 @@ async function csChTestSms(){
     const token = s && s.session ? s.session.access_token : '';
     const resp = await fetch(`${SUPABASE_URL}/functions/v1/campaign-mail/test-sms`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token, 'apikey': SUPABASE_KEY }, body: JSON.stringify({ sub_id: csChSub, to, text }) });
     const j = await resp.json().catch(() => ({}));
-    if(j && j.ok){ err.style.color = 'var(--green, #1a7f37)'; err.textContent = 'Test SMS sent to ' + to + '.'; } else err.textContent = (j && j.error) || 'The test SMS could not be sent.';
+    if(j && j.ok){ err.style.color = 'var(--green, #1a7f37)'; err.textContent = 'Test SMS sent to ' + to + (j.id ? ' (Event ID ' + j.id + ')' : '') + '.'; } else err.textContent = (j && j.error) || 'The test SMS could not be sent.';
   } catch(e){ err.textContent = 'Network problem. Please try again.'; }
   btn.disabled = false;
 }
