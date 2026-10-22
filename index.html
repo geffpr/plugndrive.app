@@ -8101,7 +8101,7 @@ async function ctTestLoad(){
   const { data } = await sb.rpc('list_campaign_channels', { p_sub: sub });
   if(ctSub !== sub || !ctEditing || ctEditing.id !== tid) return;
   const list = (data && Array.isArray(data.test_recipients)) ? data.test_recipients : [];
-  sel.innerHTML = list.map(t => `<option value="${bEsc(t.email)}">${bEsc(t.email)}</option>`).join('');
+  sel.innerHTML = (list.length > 1 ? `<option value="__all__">All test addresses (${list.length})</option>` : '') + list.map(t => `<option value="${bEsc(t.email)}">${bEsc(t.email)}</option>`).join('');
   wrap.style.display = list.length ? 'block' : 'none'; none.style.display = list.length ? 'none' : 'block';
 }
 function ctTestMsg(m){
@@ -8115,24 +8115,30 @@ function ctTestMsg(m){
 }
 async function ctTestSend(){
   if(ctTestBusy || !ctEditing || !ctEditing.id) return;
-  const out = document.getElementById('ct-test-out'), btn = document.getElementById('ct-test-btn'), to = document.getElementById('ct-test-to').value;
-  out.style.color = 'var(--text-muted)'; if(!to){ out.textContent = 'Choose a test address.'; return; }
+  const out = document.getElementById('ct-test-out'), btn = document.getElementById('ct-test-btn'), sel = document.getElementById('ct-test-to'), pick = sel.value;
+  out.style.color = 'var(--text-muted)'; if(!pick){ out.textContent = 'Choose a test address.'; return; }
+  const targets = pick === '__all__' ? [...sel.options].filter(o => o.value !== '__all__').map(o => o.value) : [pick];
   ctTestBusy = true; btn.disabled = true; out.textContent = 'Sending...';
-  let msg = '', ok = false;
+  let okN = 0, msg = '';
   try {
     const { data: s } = await sb.auth.getSession();
     const token = s && s.session ? s.session.access_token : '';
-    const resp = await fetch(`${SUPABASE_URL}/functions/v1/campaign-mail/test`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token, 'apikey': SUPABASE_KEY },
-      body: JSON.stringify({ template_id: ctEditing.id, to })
-    });
-    const j = await resp.json().catch(() => ({}));
-    ok = !!(j && j.ok); if(!ok) msg = ctTestMsg(j && j.error);
+    for(let i = 0; i < targets.length; i++){
+      if(targets.length > 1) out.textContent = 'Sending ' + (i + 1) + ' of ' + targets.length + '...';
+      const resp = await fetch(`${SUPABASE_URL}/functions/v1/campaign-mail/test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token, 'apikey': SUPABASE_KEY },
+        body: JSON.stringify({ template_id: ctEditing.id, to: targets[i] })
+      });
+      const j = await resp.json().catch(() => ({}));
+      if(j && j.ok) okN++; else { msg = ctTestMsg(j && j.error); break; }
+      if(i < targets.length - 1) await new Promise(r => setTimeout(r, 700));
+    }
   } catch(e){ msg = 'Network problem. Please try again.'; }
   ctTestBusy = false; btn.disabled = false;
-  out.style.color = ok ? 'var(--green, #1a7f37)' : 'var(--red, #c0392b)';
-  out.textContent = ok ? 'Test sent to ' + to + '. Check the inbox in a minute.' : msg;
+  const all = okN === targets.length && !msg;
+  out.style.color = all ? 'var(--green, #1a7f37)' : 'var(--red, #c0392b)';
+  out.textContent = all ? (targets.length > 1 ? 'Test sent to ' + okN + ' addresses. Check the inboxes in a minute.' : 'Test sent to ' + targets[0] + '. Check the inbox in a minute.') : (okN ? okN + ' sent, then: ' : '') + msg;
 }
 async function ctVersions(){
   const wrap = document.getElementById('ct-ver-wrap'), sel = document.getElementById('ct-ver');
