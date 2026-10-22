@@ -355,6 +355,7 @@ tr.rowlink:hover td{background:#f0f6fc;}
 /* Invited people (read-only access to some sub-accounts): only the Campaigns page, none of the account's other sections */
 body:not(.member-mode) .cs-member-only{display:none !important;}
 body.member-mode .cs-admin-only{display:none !important;}
+body.member-mode:not(.can-reports) .cs-reports-only{display:none !important;}
 body.member-mode .sidebar .navitem:not(#campaigns-nav),body.member-mode .sidebar .nav-section-label{display:none !important;}
 body.member-mode #bottom-nav .bn-item:not(.cs-member-only):not(#bn-more){display:none !important;}
 body.member-mode #sup-root,body.member-mode #trial-bar,body.member-mode #req-banner{display:none !important;}
@@ -1719,6 +1720,7 @@ body.member-mode #sup-root,body.member-mode #trial-bar,body.member-mode #req-ban
           <div class="section-title" style="margin:0;">Campaigns</div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
             <select id="cs-env" onchange="selectCampaignEnv(this.value)" style="min-width:200px;"></select>
+            <button class="btn cs-reports-only" id="cs-reports-btn" onclick="openCampaignReports()">Reports</button>
             <button class="btn cs-admin-only" id="cs-access-btn" onclick="csAccToggle()">Access</button>
             <button class="btn cs-admin-only" id="cs-limits-btn" onclick="csLimitsToggle()">Sending limits</button>
             <button class="btn btn-primary cs-admin-only" id="cs-new-btn" onclick="openCampaignSub()">+ New sub-account</button>
@@ -1796,6 +1798,18 @@ body.member-mode #sup-root,body.member-mode #trial-bar,body.member-mode #req-ban
         </div>
         </div>
 
+        <div id="cr-panel" class="card card-pad cs-reports-only" style="display:none;margin:12px 0;">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+            <div style="font-weight:600;font-size:16px;">Reports: <span id="cr-scope"></span></div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <span id="cr-days-wrap"><select id="cr-days" onchange="crSetDays(this.value)" style="width:auto;"><option value="7">Last 7 days</option><option value="30" selected>Last 30 days</option><option value="90">Last 90 days</option></select></span>
+              <button class="btn btn-sm" onclick="closeCampaignReports()">Close</button>
+            </div>
+          </div>
+          <div id="cr-tabs" class="cc-tabs" style="margin:10px 0;"></div>
+          <div id="cr-error" style="color:var(--red, #c0392b);font-size:12px;"></div>
+          <div id="cr-body"></div>
+        </div>
         <div id="cs-env-view" style="display:none;">
           <div class="card card-pad" style="margin:12px 0;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
             <div>Working in <b id="cs-env-name"></b> <span id="cs-env-status" style="color:var(--text-muted);font-size:12px;"></span></div>
@@ -1805,6 +1819,7 @@ body.member-mode #sup-root,body.member-mode #trial-bar,body.member-mode #req-ban
             <div style="font-weight:600;">Campaigns</div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
               <a class="btn cs-admin-only" id="cc-redeem-link" href="/redeem.html" target="_blank" rel="noopener" style="text-decoration:none;">Redeem a coupon</a>
+              <button class="btn cs-reports-only" onclick="openCampaignReports()">Reports</button>
               <button class="btn cs-admin-only" id="ct-open-btn" onclick="openCampaignTemplates()">E-mail templates</button>
               <button class="btn btn-primary cs-admin-only" id="cc-new-btn" onclick="openCampaignDraft()">+ New campaign</button>
             </div>
@@ -3201,7 +3216,7 @@ async function handleSignOut(reason){
   resetAppData();   // the next person to sign in on this page must never see this account's sites, chargers or sessions
   ['click','keydown'].forEach(evt => document.removeEventListener(evt, resetOperatorInactivityTimer));
   currentStaff = null;
-  currentMember = null; document.body.classList.remove('member-mode');   // an invited person's restricted view ends with the session
+  currentMember = null; document.body.classList.remove('member-mode'); document.body.classList.remove('can-reports');   // an invited person's restricted view ends with the session
   csList = []; csEnv = ''; ccList = [];
   document.getElementById('app-root').style.display = 'none';
   document.getElementById('operator-placeholder-screen').style.display = 'none';
@@ -3265,7 +3280,7 @@ async function enterAppInner(){
 // Invited person: the Campaigns page only, with the sub-accounts the client ticked. Nothing else of the account is loaded.
 function enterMemberApp(acc){
   currentMember = acc;
-  document.body.classList.add('member-mode');
+  document.body.classList.add('member-mode'); document.body.classList.toggle('can-reports', !!acc.can_reports);
   const cn = document.getElementById('campaigns-nav'); if(cn) cn.style.display = '';
   const idEl = document.getElementById('sidebar-identity');
   if(idEl) idEl.textContent = (acc.name || 'Guest') + (acc.client_name ? ' · ' + acc.client_name : '');
@@ -8004,6 +8019,137 @@ let csTplCache = { sub: null, list: [], loading: null };
 const CT_STARTER = '<!DOCTYPE html>\n<html>\n<body style="margin:0;padding:0;background:#f4f4f4;">\n  <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:24px 12px;">\n    <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:8px;">\n      <tr><td style="padding:24px;font-family:Arial,sans-serif;font-size:16px;color:#222222;">\n        <p>Hi {{first_name}},</p>\n        <p>Thanks for charging at {{site}}. Here is a little something from {{brand}}: <b>{{offer_name}}</b>.</p>\n        <p style="text-align:center;"><a href="https://example.com" style="background:#0a7d5a;color:#ffffff;padding:12px 20px;border-radius:6px;text-decoration:none;display:inline-block;">Claim your offer</a></p>\n        <p style="font-size:12px;color:#777777;"><a href="{{unsubscribe_url}}">Unsubscribe</a></p>\n      </td></tr>\n    </table>\n  </td></tr></table>\n</body>\n</html>';
 function ctVals(){ const s = csList.find(x => x.id === ctSub) || {}; return { first_name: 'Alex', site: 'Your site', brand: s.name || 'Your brand', offer_name: 'Free coffee', offer_code: 'THANKS10', unsubscribe_url: '#', coupon_url: '#' }; }
 function ctFill(str, esc){ const v = ctVals(); return String(str || '').replace(/\{\{\s*([a-z_]+)\s*\}\}/g, (m, k) => Object.prototype.hasOwnProperty.call(v, k) ? (esc ? bEsc(v[k]) : v[k]) : m); }
+// ---- Reports: performance and RFM matrix (aggregated figures only, drivers are never identified) ----
+const CR_SEG = {
+  champions: { label: 'Champions', color: '#2e9e6b', hint: 'Charged very recently and very often.' },
+  loyal: { label: 'Loyal', color: '#3a8fd4', hint: 'Charge regularly and came back recently.' },
+  potential: { label: 'Potential loyalists', color: '#5fb7e8', hint: 'Recent drivers with a few charges: the best ones to turn into regulars.' },
+  new: { label: 'New', color: '#8e6fd1', hint: 'First charge, very recent.' },
+  at_risk: { label: 'At risk', color: '#e0584f', hint: 'Used to charge often but have not been back for a while.' },
+  cant_lose: { label: "Can't lose", color: '#b83a5b', hint: 'Your heaviest users, silent for more than 90 days.' },
+  about_to_sleep: { label: 'About to sleep', color: '#e9a23b', hint: 'Few charges, fading: a nudge now can bring them back.' },
+  hibernating: { label: 'Hibernating', color: '#8b97ad', hint: 'A couple of charges, long ago.' },
+  lost: { label: 'Lost', color: '#5d6b82', hint: 'One charge, more than 90 days ago.' }
+};
+const CR_CH = { email: 'E-mail', sms: 'SMS', webhook: 'Push (webhook)' };
+let crScope = null, crDays = 30, crTab = 'perf', crRep = null, crRfm = null, crSeg = null, crBusy = 0;
+const crNum = n => Number(n || 0).toLocaleString('en-US');
+const crPct = (a, b) => b > 0 ? (100 * a / b).toFixed(1).replace(/\.0$/, '') + '%' : '0%';
+const crRand = n => 'R ' + Math.round(Number(n || 0)).toLocaleString('en-US');
+async function openCampaignReports(){
+  const s = csEnv ? csList.find(x => x.id === csEnv) : (currentMember && csList.length ? csList[0] : null);
+  crScope = s ? s.id : null; crSeg = null; crTab = 'perf';
+  document.getElementById('cr-scope').textContent = s ? s.name : 'all brands';
+  document.getElementById('cr-panel').style.display = 'block';
+  document.getElementById('cr-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  await crLoad();
+}
+function closeCampaignReports(){ const p = document.getElementById('cr-panel'); if(p) p.style.display = 'none'; crSeg = null; }
+function crSetDays(v){ crDays = parseInt(v, 10) || 30; crLoad(); }
+function crSetTab(t){ crTab = t; crSeg = null; crRender(); }
+async function crLoad(){
+  const tk = ++crBusy, body = document.getElementById('cr-body'), err = document.getElementById('cr-error');
+  err.textContent = ''; body.innerHTML = '<div style="padding:16px;color:var(--text-muted);font-size:13px;">Loading…</div>';
+  const [a, b] = await Promise.all([sb.rpc('campaign_report', { p_sub: crScope, p_days: crDays }), sb.rpc('campaign_rfm', { p_sub: crScope, p_days: 180 })]);
+  if(tk !== crBusy) return;
+  if(a.error || !a.data){ body.innerHTML = ''; err.textContent = csCleanMessage(a.error && a.error.message); return; }
+  crRep = a.data; crRfm = b.data || { total_drivers: 0, segments: [] };
+  crRender();
+}
+function crRender(){
+  const body = document.getElementById('cr-body'); if(!crRep) return;
+  const tab = (k, l) => `<button class="cc-tab${crTab === k ? ' on' : ''}" onclick="crSetTab('${k}')">${l}</button>`;
+  document.getElementById('cr-tabs').innerHTML = tab('perf', 'Performance') + tab('rfm', 'RFM matrix');
+  document.getElementById('cr-days-wrap').style.display = crTab === 'perf' ? '' : 'none';
+  body.innerHTML = crTab === 'perf' ? crPerfHtml() : crRfmHtml();
+  if(crTab === 'rfm') crTreemap();
+}
+function crPerfHtml(){
+  const t = crRep.totals, box = 'border:1px solid var(--border);border-radius:12px;padding:12px 14px;';
+  const kpi = (l, v, sub) => `<div style="${box}"><div style="font-size:12px;color:var(--text-muted);">${l}</div><div style="font-size:26px;font-weight:700;line-height:1.2;">${crNum(v)}</div><div style="font-size:12px;color:var(--text-muted);">${sub}</div></div>`;
+  const em = (crRep.channels.find(c => c.channel === 'email') || { sent: 0, opened: 0, clicked: 0 });
+  const kp = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:12px 0;">` +
+    kpi('Sent', t.sent, 'all channels') + kpi('Delivered', t.delivered, crPct(t.delivered, t.sent) + ' of sent') +
+    kpi('Opened', t.opened, crPct(t.opened, em.sent) + ' of e-mails') + kpi('Clicked', t.clicked, crPct(t.clicked, em.sent) + ' of e-mails') +
+    kpi('Redeemed', t.redeemed, crPct(t.redeemed, t.sent) + ' of sent') + `</div>`;
+  const steps = [['Sent', t.sent], ['Delivered', t.delivered], ['Opened', t.opened], ['Clicked', t.clicked], ['Redeemed', t.redeemed]];
+  const funnel = `<div style="${box}margin-bottom:12px;"><div style="font-weight:600;margin-bottom:8px;">From send to redeemed offer <span style="font-weight:400;font-size:12px;color:var(--text-muted);">opens and clicks are tracked on e-mails only</span></div>` + steps.map(([l, v], i) => {
+    const w = t.sent > 0 ? Math.max(2, 100 * v / t.sent) : 0; const sh = ['#9db8d6', '#7aa6d3', '#4f8fcb', '#2f75b8', '#1f9d6b'][i];
+    return `<div style="display:flex;align-items:center;gap:10px;margin:5px 0;font-size:13px;"><div style="width:84px;">${l}</div><div style="flex:1;background:rgba(127,140,160,.15);border-radius:6px;height:20px;"><div style="width:${w}%;background:${sh};height:20px;border-radius:6px;"></div></div><div style="width:130px;text-align:right;">${crNum(v)} <span style="color:var(--text-muted);">(${crPct(v, t.sent)})</span></div></div>`;
+  }).join('') + `</div>`;
+  const chRows = crRep.channels.map(c => {
+    const e = c.channel === 'email', na = '<span style="color:var(--text-muted);">n/a</span>';
+    return `<tr><td>${bEsc(CR_CH[c.channel] || c.channel)}</td><td>${crNum(c.sent)}</td><td>${crNum(c.delivered)}</td><td>${e ? crNum(c.opened) + ' <span style="color:var(--text-muted);">(' + crPct(c.opened, c.sent) + ')</span>' : na}</td><td>${e ? crNum(c.clicked) : na}</td><td>${crNum(c.redeemed)} <span style="color:var(--text-muted);">(${crPct(c.redeemed, c.sent)})</span></td></tr>`;
+  }).join('') || '<tr><td colspan="6" class="empty">Nothing sent in this period.</td></tr>';
+  const chT = `<div class="card" style="overflow:auto;margin-bottom:12px;"><table><thead><tr><th>Channel</th><th>Sent</th><th>Delivered</th><th>Opened</th><th>Clicked</th><th>Redeemed</th></tr></thead><tbody>${chRows}</tbody></table></div>`;
+  const cpRows = crRep.campaigns.map(c => `<tr><td>${bEsc(c.name)}</td>${crScope ? '' : `<td>${bEsc(c.brand)}</td>`}<td>${bEsc(c.status)}</td><td>${crNum(c.sent)}</td><td>${crNum(c.opened)}</td><td>${crNum(c.clicked)}</td><td>${crNum(c.redeemed)} <span style="color:var(--text-muted);">(${crPct(c.redeemed, c.sent)})</span></td></tr>`).join('') || '<tr><td colspan="7" class="empty">No campaign yet.</td></tr>';
+  const cpT = `<div class="card" style="overflow:auto;margin-bottom:12px;"><table><thead><tr><th>Campaign</th>${crScope ? '' : '<th>Brand</th>'}<th>Status</th><th>Sent</th><th>Opened</th><th>Clicked</th><th>Redeemed</th></tr></thead><tbody>${cpRows}</tbody></table></div>`;
+  return kp + funnel + chT + cpT + crDailyHtml(box);
+}
+function crDailyHtml(box){
+  const d = crRep.daily || []; if(!d.length) return '';
+  const W = 720, H = 120, mx = Math.max(1, ...d.map(x => x.sent)), bw = Math.max(2, Math.floor(W / d.length) - 2);
+  const bars = d.map((x, i) => { const h = Math.round(H * x.sent / mx), h2 = Math.round(H * x.opened / mx), xx = Math.round(i * (W / d.length));
+    return `<rect x="${xx}" y="${H - h}" width="${bw}" height="${h}" fill="#9db8d6"><title>${bEsc(String(x.day))}: ${x.sent} sent, ${x.opened} opened, ${x.redeemed} redeemed</title></rect><rect x="${xx}" y="${H - h2}" width="${bw}" height="${h2}" fill="#2f75b8"></rect>`; }).join('');
+  return `<div style="${box}"><div style="font-weight:600;margin-bottom:6px;">Messages per day <span style="font-weight:400;font-size:12px;color:var(--text-muted);">light: sent, dark: opened</span></div><svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="none" style="display:block;height:140px;">${bars}</svg></div>`;
+}
+function crRfmHtml(){
+  const n = crRfm.total_drivers || 0;
+  if(!n) return '<div style="padding:16px;color:var(--text-muted);font-size:13px;">No charge in the last 180 days on the sites of this zone.</div>';
+  return `<div style="font-size:12px;color:var(--text-muted);margin:8px 0;max-width:760px;">Drivers grouped by how recently (R) and how often (F) they charged in the last 180 days. Bigger box, more drivers. ${crNum(n)} drivers in total. Click a box for details. Nobody is identified: only totals are shown.</div>
+    <div id="cr-tm" style="position:relative;width:100%;height:360px;border-radius:12px;overflow:hidden;background:rgba(127,140,160,.12);"></div>
+    <div id="cr-seg" style="margin-top:12px;"></div>`;
+}
+// squarified treemap
+function crSquarify(items, x, y, w, h){
+  const out = []; let rest = items.slice(), total = rest.reduce((s, i) => s + i.v, 0);
+  while(rest.length){
+    const short = Math.min(w, h), area = w * h; let row = [], rs = 0, best = Infinity;
+    const worst = (r, sum) => { const A = sum / total * area, side2 = short * short; let mxv = 0, mnv = Infinity; r.forEach(i => { const q = i.v / total * area; mxv = Math.max(mxv, q); mnv = Math.min(mnv, q); }); return Math.max(side2 * mxv / (A * A), (A * A) / (side2 * mnv)); };
+    for(let k = 0; k < rest.length; k++){ const cand = row.concat(rest[k]), sum = rs + rest[k].v, wv = worst(cand, sum); if(row.length && wv > best) break; row = cand; rs = sum; best = wv; }
+    rest = rest.slice(row.length);
+    const frac = rs / total, horiz = w >= h;
+    const thick = horiz ? w * frac : h * frac; let off = 0;
+    row.forEach(i => { const part = i.v / rs, len = (horiz ? h : w) * part;
+      out.push(horiz ? { k: i.k, x: x, y: y + off, w: thick, h: len } : { k: i.k, x: x + off, y: y, w: len, h: thick }); off += len; });
+    if(horiz){ x += thick; w -= thick; } else { y += thick; h -= thick; }
+    total -= rs;
+  }
+  return out;
+}
+function crTreemap(){
+  const el = document.getElementById('cr-tm'); if(!el) return;
+  const W = el.clientWidth, H = el.clientHeight, items = crRfm.segments.filter(s => s.drivers > 0).map(s => ({ k: s.key, v: s.drivers }));
+  const rects = crSquarify(items, 0, 0, W, H), n = crRfm.total_drivers;
+  el.innerHTML = rects.map(r => {
+    const sg = CR_SEG[r.k] || { label: r.k, color: '#888' }, s = crRfm.segments.find(x => x.key === r.k), big = r.w > 110 && r.h > 56;
+    return `<div data-k="${bEsc(r.k)}" onclick="crPick(this.dataset.k)" style="position:absolute;left:${r.x}px;top:${r.y}px;width:${r.w}px;height:${r.h}px;box-sizing:border-box;border:2px solid var(--surface,#fff);background:${sg.color};color:#fff;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;overflow:hidden;padding:4px;${crSeg === r.k ? 'outline:3px solid #0d1b3d;outline-offset:-3px;' : ''}"><div style="font-weight:600;font-size:${big ? 15 : 12}px;line-height:1.2;">${bEsc(sg.label)}</div>${r.h > 40 && r.w > 60 ? `<div style="font-size:12px;opacity:.9;">${crNum(s.drivers)} · ${(100 * s.drivers / n).toFixed(0)}%</div>` : ''}</div>`;
+  }).join('');
+  crSegPanel();
+}
+function crPick(k){ crSeg = k; crTreemap(); document.getElementById('cr-seg').scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+function crSegPanel(){
+  const el = document.getElementById('cr-seg'); if(!el) return;
+  if(!crSeg){ el.innerHTML = '<div style="font-size:12px;color:var(--text-muted);">Click a box to see the details and start a campaign for that group.</div>'; return; }
+  const s = crRfm.segments.find(x => x.key === crSeg), sg = CR_SEG[crSeg]; if(!s){ el.innerHTML = ''; return; }
+  const st = (l, v) => `<div style="min-width:120px;"><div style="font-size:12px;color:var(--text-muted);">${l}</div><div style="font-size:18px;font-weight:700;">${v}</div></div>`;
+  const brands = !crScope ? `<select id="cr-brand" style="min-width:160px;">${csList.filter(x => x.status === 'active').map(x => `<option value="${bEsc(x.id)}">${bEsc(x.name)}</option>`).join('')}</select>` : '';
+  el.innerHTML = `<div style="border:1px solid var(--border);border-left:6px solid ${sg.color};border-radius:12px;padding:12px 14px;">
+    <div style="font-weight:700;font-size:16px;">${bEsc(sg.label)}</div><div style="font-size:13px;color:var(--text-muted);margin:2px 0 10px;">${bEsc(sg.hint)}</div>
+    <div style="display:flex;gap:18px;flex-wrap:wrap;">${st('Drivers', crNum(s.drivers) + ' (' + s.share + '%)')}${st('Average spend', crRand(s.avg_spend))}${st('Charges each', s.avg_charges)}${st('Last charge', crNum(s.avg_days_since) + ' days ago')}${st('Total spend', crRand(s.total_spend))}</div>
+    <div style="margin-top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;" class="cs-admin-only">${brands}<button class="btn btn-primary btn-sm" id="cr-camp-btn" onclick="crCreateCampaign()">Create a campaign for this segment</button><span id="cr-camp-out" style="font-size:12px;"></span></div></div>`;
+}
+async function crCreateCampaign(){
+  const out = document.getElementById('cr-camp-out'), btn = document.getElementById('cr-camp-btn'), br = document.getElementById('cr-brand');
+  const sub = crScope || (br && br.value); out.style.color = 'var(--red, #c0392b)';
+  if(!sub || !crSeg){ out.textContent = 'Choose a brand first.'; return; }
+  btn.disabled = true; out.style.color = 'var(--text-muted)'; out.textContent = 'Creating...';
+  const { data, error } = await sb.rpc('create_campaign_for_segment', { p_sub: sub, p_segment: crSeg });
+  btn.disabled = false;
+  if(error || !data){ out.style.color = 'var(--red, #c0392b)'; out.textContent = csCleanMessage(error && error.message); return; }
+  closeCampaignReports(); selectCampaignEnv(data.sub_id);
+  await loadCampaignDrafts(); openCampaignDraft(data.id);
+}
 async function openCampaignTemplates(){
   const s = csList.find(x => x.id === csEnv); if(!s) return;
   ctSub = s.id; ctEditing = null;
@@ -8630,13 +8776,14 @@ function csAccRender(){
   const rows = (d.members || []).map(m => {
     const id = bEsc(m.id), paused = m.status === 'suspended';
     const edit = csAccEdit === m.id
-      ? `<tr><td colspan="5"><div style="padding:6px 0 10px;"><div style="font-size:12px;margin-bottom:4px;">Sub-accounts ${bEsc(m.name)} can see:</div>${csAccSubChecks('cs-acc-edit', m.sub_ids)}
+      ? `<tr><td colspan="6"><div style="padding:6px 0 10px;"><div style="font-size:12px;margin-bottom:4px;">Sub-accounts ${bEsc(m.name)} can see:</div>${csAccSubChecks('cs-acc-edit', m.sub_ids)}
           <div style="display:flex;gap:8px;margin-top:8px;"><button class="btn btn-primary btn-sm" data-mid="${id}" onclick="csAccSaveSubs(this)">Save</button><button class="btn btn-sm" onclick="csAccEditClose()">Cancel</button></div></div></td></tr>` : '';
-    return `<tr><td>${bEsc(m.name)}</td><td>${bEsc(m.email)}</td><td>${(m.sub_ids || []).map(x => bEsc(subName(x))).join(', ') || '-'}</td><td>${paused ? 'Paused' : 'Active'}</td>
+    return `<tr><td>${bEsc(m.name)}</td><td>${bEsc(m.email)}</td><td>${(m.sub_ids || []).map(x => bEsc(subName(x))).join(', ') || '-'}</td><td>${paused ? 'Paused' : 'Active'}</td><td>${m.can_reports ? 'Yes' : 'No'}</td>
       <td style="white-space:nowrap;"><button class="btn btn-sm" data-mid="${id}" onclick="csAccEditOpen(this.dataset.mid)">Sub-accounts</button>
+      <button class="btn btn-sm" data-mid="${id}" data-rp="${m.can_reports ? '0' : '1'}" onclick="csAccReports(this)">${m.can_reports ? 'Hide reports' : 'Allow reports'}</button>
       <button class="btn btn-sm" data-mid="${id}" data-st="${paused ? 'active' : 'suspended'}" onclick="csAccStatus(this)">${paused ? 'Resume' : 'Pause'}</button>
       <button class="btn btn-sm btn-danger" data-mid="${id}" onclick="csAccRemove(this)">Remove</button></td></tr>${edit}`;
-  }).join('') || '<tr><td colspan="5" class="empty">Nobody has access yet.</td></tr>';
+  }).join('') || '<tr><td colspan="6" class="empty">Nobody has access yet.</td></tr>';
   const invite = free
     ? `<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);"><div style="font-weight:600;margin-bottom:6px;">Invite someone</div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;">
@@ -8647,7 +8794,14 @@ function csAccRender(){
         <button class="btn btn-primary" id="cs-acc-invite" onclick="csAccInvite()" style="margin-top:10px;">Send invitation</button></div>`
     : `<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);font-size:13px;">All your access seats are used. To add more, contact Plug n Drive at <a href="mailto:hello@plugndrive.co.za">hello@plugndrive.co.za</a>.</div>`;
   body.innerHTML = `<div style="font-size:13px;margin-bottom:8px;">Seats used: <b>${bEsc(String(d.used))}</b> of <b>${bEsc(String(d.seats))}</b></div>
-    <div class="card" style="overflow:auto;"><table><thead><tr><th>Name</th><th>E-mail</th><th>Sub-accounts</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>${invite}`;
+    <div class="card" style="overflow:auto;"><table><thead><tr><th>Name</th><th>E-mail</th><th>Sub-accounts</th><th>Status</th><th>Reports</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>${invite}`;
+}
+async function csAccReports(btn){
+  btn.disabled = true;
+  const { data, error } = await sb.rpc('set_campaign_member', { p_id: btn.dataset.mid, p_reports: btn.dataset.rp === '1' });
+  btn.disabled = false;
+  if(error || !data){ csAccMsg(csAccClean(error && error.message)); return; }
+  csAcc = data; csAccRender(); csAccMsg(btn.dataset.rp === '1' ? 'Reports allowed.' : 'Reports hidden.', true);
 }
 function csAccEditOpen(id){ csAccEdit = id; csAccRender(); }
 function csAccEditClose(){ csAccEdit = null; csAccRender(); }
