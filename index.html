@@ -1969,6 +1969,7 @@ body.member-mode #sup-root,body.member-mode #trial-bar,body.member-mode #req-ban
               <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center;">
                 <button class="btn btn-primary btn-sm" id="ct-save" onclick="ctSave()">Save template</button>
                 <button class="btn btn-sm" onclick="ctCheck()">Check</button>
+                <button class="btn btn-sm" onclick="ctPreviewNow()">Preview</button>
                 <button class="btn btn-sm" onclick="ctEdit(null)">Cancel</button>
                 <span id="ct-ver-wrap" style="display:none;margin-left:auto;font-size:12px;">Versions <select id="ct-ver" style="width:auto;"></select> <button class="btn btn-sm" onclick="ctRestore()">Restore this version</button></span>
               </div>
@@ -8030,10 +8031,44 @@ function ctRender(){
     const id = bEsc(t.id);
     const act = t.archived
       ? `<button class="btn btn-sm" data-tid="${id}" data-arch="0" onclick="ctArchive(this)">Restore</button>`
-      : `<button class="btn btn-sm" data-tid="${id}" onclick="ctEdit(this.dataset.tid)">Edit</button> <button class="btn btn-sm btn-danger" data-tid="${id}" data-arch="1" onclick="ctArchive(this)">Archive</button>`;
+      : `<button class="btn btn-sm" data-tid="${id}" onclick="ctPreviewSaved(this.dataset.tid)">Preview</button> <button class="btn btn-sm" data-tid="${id}" onclick="ctEdit(this.dataset.tid)">Edit</button> <button class="btn btn-sm btn-danger" data-tid="${id}" data-arch="1" onclick="ctArchive(this)">Archive</button>`;
     return `<tr${t.archived ? ' style="opacity:.55;"' : ''}><td>${bEsc(t.name)}${t.archived ? ' <span style="font-size:11px;color:var(--text-muted);">(archived)</span>' : ''}</td><td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${bEsc(t.subject)}</td><td>v${bEsc(String(t.version))}</td><td>${t.used_by ? bEsc(String(t.used_by)) + ' campaign' + (t.used_by === 1 ? '' : 's') : '<span style="color:var(--text-muted);">Not used</span>'}</td><td style="white-space:nowrap;">${act}</td></tr>`;
   }).join('');
   box.innerHTML = `<table><thead><tr><th>Name</th><th>Subject</th><th>Version</th><th>Used by</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="5" class="empty">No template yet. Create one with + New template.</td></tr>'}</tbody></table>`;
+}
+// ---- full-size preview on demand (button), always shows something ----
+let ctPvDev = 'd';
+function ctPvClose(){ const m = document.getElementById('ct-pv'); if(m) m.remove(); document.removeEventListener('keydown', ctPvKey); }
+function ctPvKey(e){ if(e.key === 'Escape') ctPvClose(); }
+function ctPvDevice(d){ ctPvDev = d; const f = document.getElementById('ct-pv-frame'); if(f) f.style.width = d === 'm' ? '375px' : '100%'; }
+function ctPvOpen(title, subject, html){
+  ctPvClose();
+  const footer = /\{\{\s*unsubscribe_url\s*\}\}/.test(html) ? '' : '<div style="font:12px Arial,sans-serif;color:#777;padding:14px;text-align:center;border-top:1px solid #ddd;margin-top:16px;">Added automatically: you receive this e-mail because you charged at ' + bEsc(ctVals().site) + '. <a href="#">Unsubscribe</a></div>';
+  const m = document.createElement('div'); m.id = 'ct-pv';
+  m.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(10,20,40,.72);display:flex;align-items:center;justify-content:center;padding:16px;';
+  m.innerHTML = `<div style="background:var(--surface, #fff);color:var(--text, #1a3260);border-radius:12px;width:min(760px,100%);max-height:100%;display:flex;flex-direction:column;overflow:hidden;">
+    <div style="display:flex;gap:8px;align-items:center;padding:12px 14px;border-bottom:1px solid var(--border);flex-wrap:wrap;">
+      <div style="font-weight:600;flex:1;min-width:160px;">${bEsc(title)}</div>
+      <button class="btn btn-sm" onclick="ctPvDevice('d')">Computer</button><button class="btn btn-sm" onclick="ctPvDevice('m')">Phone</button><button class="btn btn-primary btn-sm" onclick="ctPvClose()">Close</button>
+    </div>
+    <div style="padding:8px 14px;font-size:13px;border-bottom:1px solid var(--border);">Subject: <b>${bEsc(ctFill(subject, false))}</b> <span style="color:var(--text-muted);font-size:11px;">(sample values)</span></div>
+    <div style="overflow:auto;padding:12px;background:#eef1f6;flex:1;"><iframe id="ct-pv-frame" sandbox="" title="E-mail preview" style="display:block;margin:0 auto;width:${ctPvDev === 'm' ? '375px' : '100%'};height:70vh;border:0;background:#fff;"></iframe></div></div>`;
+  m.addEventListener('click', e => { if(e.target === m) ctPvClose(); });
+  document.body.appendChild(m);
+  document.getElementById('ct-pv-frame').srcdoc = '<base target="_blank">' + ctFill(html, true) + footer;
+  document.addEventListener('keydown', ctPvKey);
+}
+function ctPreviewNow(){
+  ctPreview();
+  ctPvOpen(document.getElementById('ct-name').value || 'Preview', document.getElementById('ct-subject').value, document.getElementById('ct-html').value);
+}
+async function ctPreviewSaved(id){
+  const err = document.getElementById('ct-error'); err.style.color = 'var(--red, #c0392b)'; err.textContent = '';
+  const sub = ctSub;
+  const { data, error } = await sb.rpc('get_campaign_template', { p_id: id });
+  if(ctSub !== sub) return;
+  if(error || !data || !data.template){ err.textContent = csCleanMessage(error && error.message); return; }
+  ctPvOpen(data.template.name + ' (saved v' + data.template.version + ')', data.template.subject, data.template.html);
 }
 async function ctEdit(id){
   const ed = document.getElementById('ct-editor'), err = document.getElementById('ct-error'); err.textContent = '';
