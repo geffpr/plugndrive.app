@@ -4355,7 +4355,7 @@ async function renderBilling(){
     return `<div class="plan-card${isCur?' current':''}"><div class="pc-name">${bEsc(p.label)}</div><div class="pc-price">${price}</div>
       <div style="font-size:12.5px;">${bEsc(range)}</div><div style="font-size:12.5px;">${bEsc(cards)}</div>
       <ul>${feats.slice(0,8).map(f => `<li>${bEsc(f)}</li>`).join('')}</ul>
-      ${isCur ? '<span class="badge avail">Current plan</span>' : (canBuy ? `<button class="btn btn-primary" onclick="startPlanCheckout('${bEsc(p.plan)}', this)">${subscribed ? 'Switch to ' : 'Choose '}${bEsc(p.label)}</button>` : `<a class="btn btn-primary" style="text-align:center;text-decoration:none;" href="${mail}">Talk to us</a>`)}</div>`;
+      ${isCur ? '<span class="badge avail">Current plan</span>' : (canBuy ? `<button class="btn btn-primary" onclick="startPlanCheckout('${bEsc(p.plan)}', this)">${st === 'locked' && c.plan === p.plan ? 'Reactivate ' : (subscribed ? 'Switch to ' : 'Choose ')}${bEsc(p.label)}</button>` : `<a class="btn btn-primary" style="text-align:center;text-decoration:none;" href="${mail}">Talk to us</a>`)}</div>`;
   }).join('');
   const toggle = c.closedAt ? '' : `<div style="display:inline-flex;border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:2px 0 12px;">
       <button class="btn" style="border:0;border-radius:0;${annualView ? '' : 'background:var(--blue);color:#fff;'}" onclick="setBillingInterval('monthly')">Monthly</button>
