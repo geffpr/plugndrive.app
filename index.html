@@ -7929,6 +7929,8 @@ function selectCampaignEnv(id){
   closeCampaignDraft(); closeCampaignKeys(); closeCampaignSub(); closeCampaignTemplates();
   const sel = document.getElementById('cs-env'); if(sel) sel.value = csEnv;
   applyCampaignView();
+  const rp = document.getElementById('cr-panel');
+  if(rp && rp.style.display !== 'none') openCampaignReports(true);   // reports follow the brand selected in the menu
 }
 function applyCampaignView(){
   const s = csEnv ? csList.find(x => x.id === csEnv) : null;
@@ -8036,12 +8038,13 @@ let crScope = null, crDays = 30, crTab = 'perf', crRep = null, crRfm = null, crS
 const crNum = n => Number(n || 0).toLocaleString('en-US');
 const crPct = (a, b) => b > 0 ? (100 * a / b).toFixed(1).replace(/\.0$/, '') + '%' : '0%';
 const crRand = n => 'R ' + Math.round(Number(n || 0)).toLocaleString('en-US');
-async function openCampaignReports(){
+async function openCampaignReports(keep){
+  keep = keep === true;   // keep: the brand was switched while the reports were open, so only the figures change
   const s = csEnv ? csList.find(x => x.id === csEnv) : (currentMember && csList.length ? csList[0] : null);
-  crScope = s ? s.id : null; crSeg = null; crTab = 'perf';
+  crScope = s ? s.id : null; crSeg = null; if(!keep) crTab = 'perf';
   document.getElementById('cr-scope').textContent = s ? s.name : 'all brands';
   document.getElementById('cr-panel').style.display = 'block';
-  document.getElementById('cr-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if(!keep) document.getElementById('cr-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
   await crLoad();
 }
 function closeCampaignReports(){ const p = document.getElementById('cr-panel'); if(p) p.style.display = 'none'; crSeg = null; }
