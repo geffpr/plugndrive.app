@@ -4285,6 +4285,18 @@ const PLAN_FEATURE_LABELS = [
   ['multi_site','Multi-site'],['branded_app','Branded app'],['multi_currency','Multi-currency'],['operator_roles','Operator roles'],
   ['multi_client','Multi-client'],['white_label_app','White-label app'],['priority_support','Priority support'],['dedicated_onboarding','Dedicated onboarding'],
 ];
+function campaignsBanner(c){
+  const mail = `mailto:hello@plugndrive.co.za?subject=${encodeURIComponent('Campaigns')}&body=${encodeURIComponent('Hello, I would like to talk about Campaigns' + (c && c.name ? ' for ' + c.name : '') + '.')}`;
+  const pts = ['Automate personalised email campaigns','Reach customers based on their activity and behaviour','Build automated customer journeys and follow-ups','Re-engage inactive customers and encourage repeat visits','Connect your existing CRM and marketing tools','Manage campaigns under your own brand'];
+  return `<div class="card card-pad" style="margin-top:14px;display:flex;gap:24px;flex-wrap:wrap;align-items:center;">
+    <div style="flex:1 1 260px;"><div style="font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-secondary);">Also available standalone</div>
+      <div style="font-weight:700;font-size:17px;margin-top:2px;">Campaigns</div>
+      <div style="font-size:13px;margin-top:4px;">Turn customer data into marketing opportunities. Automate personalised email campaigns using your existing customer data and activity.</div>
+      <div style="font-weight:700;margin-top:8px;">Custom pricing</div>
+      <div style="font-size:12px;color:var(--text-secondary);">No chargers required. Pricing based on your contact volume and email usage.</div></div>
+    <div style="flex:1.4 1 320px;"><ul style="margin:0;padding-left:18px;font-size:12.5px;color:var(--text-secondary);columns:2;column-gap:24px;">${pts.map(t => `<li>${bEsc(t)}</li>`).join('')}</ul>
+      <a class="btn btn-primary" style="display:block;text-align:center;text-decoration:none;margin-top:12px;" href="${mail}">Talk to us about Campaigns</a></div></div>`;
+}
 async function renderBilling(){
   const root = document.getElementById('billing-root');
   if(!root) return;
@@ -4324,7 +4336,7 @@ async function renderBilling(){
     else if(c.subscriptionStatus === 'comped') sub = `<div style="margin-top:6px;color:var(--text-secondary);">This plan is offered by Plug n Drive${when ? ' until ' + when : ''}.${when ? ' After that date the account is switched off unless you choose a plan.' : ''}</div>`;
     head = c.plan === 'neighbour'
       ? `<div style="font-weight:700;font-size:16px;">Neighbour Host</div>
-      <div style="margin-top:4px;">No monthly fee. Plug n Drive keeps 15% of each charging payment, payment fees included. Need RFID cards, tariffs by time of day or a business account? Move to Starter below.</div>`
+      <div style="margin-top:4px;">No monthly fee. You keep 85% of each charging payment, payment fees included. Need RFID cards, tariffs by time of day or a business account? Move to Starter below.</div>`
       : `<div style="font-weight:700;font-size:16px;">${bEsc(cur ? cur.label : 'Active')} plan</div>
       <div style="margin-top:4px;">${c.subscriptionStatus === 'comped' ? 'Offered by Plug n Drive. A 5% transaction fee applies to charging payments.' : (cur && cur.monthly_price_zar ? 'R ' + Number(cur.monthly_price_zar).toLocaleString('en-ZA') + ' per month, plus a 5% transaction fee.' : 'Active.')}</div>${sub}`;
   }
@@ -4338,7 +4350,7 @@ async function renderBilling(){
   const annualView = billingView.interval === 'annual';
   const money = v => 'R ' + Number(v).toLocaleString('en-ZA');
   const grid = c.closedAt ? '' : plans.filter(p => p.plan !== 'trial' && (p.plan !== 'neighbour' || c.plan === 'neighbour')).map(p => {
-    const feats = PLAN_FEATURE_LABELS.filter(([k]) => p.features && p.features[k]).map(([,l]) => l);
+    const feats = Array.isArray(p.marketing_features) && p.marketing_features.length ? p.marketing_features : PLAN_FEATURE_LABELS.filter(([k]) => p.features && p.features[k]).map(([,l]) => l);
     const range = p.max_chargers == null ? `${p.min_chargers}+ chargers` : (p.min_chargers === p.max_chargers ? `${p.max_chargers} charger` : `${p.min_chargers} to ${p.max_chargers} chargers`);
     const cards = 'RFID cards sold separately';
     // "Current plan" = same plan AND same rhythm when we know it (accounts activated by hand have no rhythm).
@@ -4346,7 +4358,7 @@ async function renderBilling(){
     const isCur = st === 'active' && c.plan === p.plan && (!subscribed || !subInfo.has_subscription || curInterval === billingView.interval);
     const hasAnnual = p.annual_price_zar != null;
     let price;
-    if(p.plan === 'neighbour') price = '15%<small> per charge, no monthly fee</small>';
+    if(p.plan === 'neighbour') price = '85%<small> of every charge is yours, no monthly fee</small>';
     else if(!p.monthly_price_zar) price = 'On quote';
     else if(annualView && hasAnnual) price = `${money(p.annual_price_zar)}<small> / year</small><div style="font-size:11.5px;font-weight:500;color:var(--text-secondary);">${money(Math.round(p.annual_price_zar / 12))} / month, 10% off</div>`;
     else price = `${money(p.monthly_price_zar)}<small> / month</small>`;
@@ -4354,7 +4366,7 @@ async function renderBilling(){
     const canBuy = p.monthly_price_zar && (!annualView || hasAnnual);
     return `<div class="plan-card${isCur?' current':''}"><div class="pc-name">${bEsc(p.label)}</div><div class="pc-price">${price}</div>
       <div style="font-size:12.5px;">${bEsc(range)}</div><div style="font-size:12.5px;">${bEsc(cards)}</div>
-      <ul>${feats.slice(0,8).map(f => `<li>${bEsc(f)}</li>`).join('')}</ul>
+      <ul>${feats.map(f => `<li>${bEsc(f)}</li>`).join('')}</ul>
       ${isCur ? '<span class="badge avail">Current plan</span>' : (canBuy ? `<button class="btn btn-primary" onclick="startPlanCheckout('${bEsc(p.plan)}', this)">${st === 'locked' && c.plan === p.plan ? 'Reactivate ' : (subscribed ? 'Switch to ' : 'Choose ')}${bEsc(p.label)}</button>` : `<a class="btn btn-primary" style="text-align:center;text-decoration:none;" href="${mail}">Talk to us</a>`)}</div>`;
   }).join('');
   const toggle = c.closedAt ? '' : `<div style="display:inline-flex;border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:2px 0 12px;">
@@ -4366,7 +4378,7 @@ async function renderBilling(){
       <button class="btn btn-danger" onclick="closeMyAccount()">Close my account</button>
       <div id="bill-msg" style="font-size:12.5px;color:var(--text-secondary);flex-basis:100%;"></div></div>`;
   root.innerHTML = `<div id="bill-flash"></div><div class="card card-pad">${head}</div>${usage}
-    ${c.closedAt ? '' : '<div class="section-title">Plans</div>' + toggle + '<div class="plan-grid">' + grid + '</div>'}
+    ${c.closedAt ? '' : '<div class="section-title">Plans</div>' + toggle + '<div class="plan-grid">' + grid + '</div>' + campaignsBanner(c)}
     ${c.closedAt ? '' : '<div id="bill-plan-msg" style="font-size:13px;margin-top:10px;"></div>'}
     ${manage}
     <div style="font-size:12px;color:var(--text-secondary);margin-top:12px;">All prices in South African rand, plus a 5% fee on charging payments (15% on Neighbour Host, which has no monthly fee). Yearly plans are paid once a year and cost 10% less than 12 months. Secure card payment by Paystack. Cancel any time: your plan stays active until the end of the paid period.</div>`;
@@ -4379,7 +4391,7 @@ async function renderBillingDemo(root, c){
   const annualView = billingView.interval === 'annual';
   const money = v => 'R ' + Number(v).toLocaleString('en-ZA');
   const grid = (plans || []).filter(p => p.plan !== 'trial' && p.plan !== 'neighbour').map(p => {
-    const feats = PLAN_FEATURE_LABELS.filter(([k]) => p.features && p.features[k]).map(([,l]) => l);
+    const feats = Array.isArray(p.marketing_features) && p.marketing_features.length ? p.marketing_features : PLAN_FEATURE_LABELS.filter(([k]) => p.features && p.features[k]).map(([,l]) => l);
     const range = p.max_chargers == null ? `${p.min_chargers}+ chargers` : (p.min_chargers === p.max_chargers ? `${p.max_chargers} charger` : `${p.min_chargers} to ${p.max_chargers} chargers`);
     const hasAnnual = p.annual_price_zar != null;
     let price;
@@ -4388,7 +4400,7 @@ async function renderBillingDemo(root, c){
     else price = `${money(p.monthly_price_zar)}<small> / month</small>`;
     return `<div class="plan-card"><div class="pc-name">${bEsc(p.label)}</div><div class="pc-price">${price}</div>
       <div style="font-size:12.5px;">${bEsc(range)}</div><div style="font-size:12.5px;">RFID cards sold separately</div>
-      <ul>${feats.slice(0,8).map(f => `<li>${bEsc(f)}</li>`).join('')}</ul>
+      <ul>${feats.map(f => `<li>${bEsc(f)}</li>`).join('')}</ul>
       <span class="badge">Demo: read only</span></div>`;
   }).join('');
   const toggle = `<div style="display:inline-flex;border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:2px 0 12px;">
@@ -4396,7 +4408,7 @@ async function renderBillingDemo(root, c){
       <button class="btn" style="border:0;border-radius:0;${annualView ? 'background:var(--blue);color:#fff;' : ''}" onclick="setBillingInterval('annual')">Yearly: save 10%</button></div>`;
   root.innerHTML = `<div class="card card-pad"><div style="font-weight:700;font-size:16px;">Billing: demo view</div>
       <div style="margin-top:4px;font-size:13px;">This is how plans and prices are shown to clients on a standard subscription. Your account is managed under a Plug n Drive agreement, so nothing can be bought or changed here. For any change, contact <a href="mailto:hello@plugndrive.co.za">hello@plugndrive.co.za</a>.</div></div>
-    <div class="section-title">Plans</div>${toggle}<div class="plan-grid">${grid || '<div class="card card-pad">Plans are not available right now.</div>'}</div>
+    <div class="section-title">Plans</div>${toggle}<div class="plan-grid">${grid || '<div class="card card-pad">Plans are not available right now.</div>'}</div>${campaignsBanner(c)}
     <div style="font-size:12px;color:var(--text-secondary);margin-top:12px;">All prices in South African rand, plus a 5% fee on charging payments. Yearly plans are paid once a year and cost 10% less than 12 months. Secure card payment by Paystack. Cancel any time: your plan stays active until the end of the paid period.</div>`;
 }
 async function billingCall(action, extra){
