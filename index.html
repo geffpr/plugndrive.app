@@ -1286,6 +1286,10 @@ body.member-mode #sup-root,body.member-mode #trial-bar,body.member-mode #req-ban
       <!-- PAYMENTS TO CHECK (plugndrive_admin only) -->
       <div class="page" id="page-payments">
         <div style="font-size:13px;color:var(--text-secondary);margin-bottom:14px;max-width:760px;line-height:1.5;">Card payments that need a human look. Refund in the payment provider (Paystack / PaySuite) using the reference, then press <b>Handled</b>. Nothing is refunded from this page.</div>
+        <div class="card card-pad" id="payout-admin" style="max-width:860px;margin-bottom:18px;">
+          <div class="section-title" style="margin-top:0;">Automatic payouts to clients</div>
+          <div id="payout-admin-body" style="font-size:13px;">Loading…</div>
+        </div>
         <div class="filters">
           <select id="pay-filter" onchange="renderPayments()">
             <option value="all">All cases</option>
@@ -1566,6 +1570,7 @@ body.member-mode #sup-root,body.member-mode #trial-bar,body.member-mode #req-ban
               <div id="cl-settle-error" style="color:var(--red, #c0392b);font-size:12px;margin-top:8px;"></div>
             </div>
             <div id="cl-settle-history" style="margin-top:14px;"></div>
+            <div id="cl-payout-box" style="margin-top:14px;"></div>
           </div>
           <div class="section-title">Admin login</div>
           <div id="client-admin-login-panel" class="card card-pad" style="max-width:420px;margin-bottom:20px;"></div>
@@ -3955,7 +3960,7 @@ function describeCommission(cl){
   // is negotiated — payouts are never paused while that happens.
   return `0% <span style="color:var(--red, #c0392b);">(previous ${cl.commissionRate}% deal ended ${end} — not renegotiated)</span>`;
 }
-function mapClient(c){ return {id:c.id, name:c.name, businessType:c.business_type, contactName:c.contact_name, contactPhone:c.contact_phone, contactEmail:c.contact_email, address:c.address, commissionRate:c.commission_rate, commissionStartDate:c.commission_start_date, commissionDurationMonths:c.commission_duration_months, contractStart:c.contract_start_date, payoutBankCode:c.payout_bank_code, payoutBankName:c.payout_bank_name, payoutAccountNumber:c.payout_account_number, payoutAccountName:c.payout_account_name, paystackRecipientCode:c.paystack_recipient_code, paystackConnectedAt:c.paystack_connected_at, cashRecharges:c.cash_recharges_enabled, guestAccess:c.guest_access_enabled,billingDemo:!!c.billing_demo, accountType:c.account_type, accountStatus:c.account_status, plan:c.plan, trialStartedAt:c.trial_started_at, trialEndsAt:c.trial_ends_at, declaredChargers:c.declared_chargers, declaredModel:c.declared_charger_model, ocpp16jAnswer:c.ocpp16j_answer, signupCountry:c.signup_country, subscriptionStatus:c.subscription_status, paidUntil:c.paid_until, closedAt:c.closed_at}; }
+function mapClient(c){ return {id:c.id, name:c.name, businessType:c.business_type, contactName:c.contact_name, contactPhone:c.contact_phone, contactEmail:c.contact_email, address:c.address, commissionRate:c.commission_rate, commissionStartDate:c.commission_start_date, commissionDurationMonths:c.commission_duration_months, contractStart:c.contract_start_date, payoutBankCode:c.payout_bank_code, payoutBankName:c.payout_bank_name, payoutAccountNumber:c.payout_account_number, payoutAccountName:c.payout_account_name, paystackRecipientCode:c.paystack_recipient_code, paystackConnectedAt:c.paystack_connected_at, cashRecharges:c.cash_recharges_enabled, guestAccess:c.guest_access_enabled,billingDemo:!!c.billing_demo, accountType:c.account_type, accountStatus:c.account_status, plan:c.plan, trialStartedAt:c.trial_started_at, trialEndsAt:c.trial_ends_at, declaredChargers:c.declared_chargers, declaredModel:c.declared_charger_model, ocpp16jAnswer:c.ocpp16j_answer, signupCountry:c.signup_country, subscriptionStatus:c.subscription_status, paidUntil:c.paid_until, closedAt:c.closed_at, payoutPaused:!!c.payout_paused}; }
 
 async function loadAll(){
   const [locRes, chgRes, sesRes, rfidRes, userRes, tarRes, clientRes] = await Promise.all([
@@ -4546,6 +4551,7 @@ function showPage(id, opts){
   if(id==='addcharger') renderAddCharger();
   if(id==='addsite') renderAddSite();
   if(id==='dashboard'){ renderDashboard(); renderOnboarding(); }
+  if(id==='payments') loadPayoutAdmin();
   if(id==='billing') renderBilling();
   if(id==='clients') renderClients();
   if(id==='addclient') renderAddClient();
@@ -5507,6 +5513,7 @@ async function renderClientLedgerBalance(clientId){
   currentLedgerStatus = data;
   el.innerHTML = ledgerBalancesHtml(data);
   document.getElementById('cl-settle-history').innerHTML = ledgerHistoryHtml(data);
+  renderClientPayoutBox(clientId);
 }
 function openSettlePanel(){
   const s = currentLedgerStatus || {};
@@ -5542,11 +5549,95 @@ async function confirmSettlement(){
   document.getElementById('cl-settle-panel').style.display = 'none';
   await renderClientLedgerBalance(currentClientId);
 }
+const PAYOUT_STATUS = {simulated:'Simulation', queued:'Preparing', sending:'Sending', sent:'Sent', success:'Paid', failed:'Failed'};
+function payoutRowsHtml(list, isAdmin){
+  if(!list.length) return '<span style="color:var(--text-muted);">No automatic payout yet.</span>';
+  return list.map(p => `<div style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">${String(p.at).slice(0,10)}: <b style="color:var(--text);">${fmtMoney(Number(p.amount),'ZAR')}</b> ${bEsc(PAYOUT_STATUS[p.status] || p.status)}${Number(p.fee) > 0 ? ' (after ' + fmtMoney(Number(p.fee),'ZAR') + ' transfer fee)' : ''}${isAdmin && p.reason ? ' <span style="color:var(--red, #c0392b);">' + bEsc(p.reason) + '</span>' : ''}</div>`).join('');
+}
+async function renderSettingsPayouts(clientId){
+  const el = document.getElementById('stg-payouts');
+  if(!el) return;
+  const cl = clients.find(c => c.id === clientId);
+  const { data, error } = await sb.rpc('client_payouts_list', { p_client: clientId });
+  if(error){ el.innerHTML = ''; return; }
+  const intro = cl && cl.paystackRecipientCode
+    ? '<div style="font-size:12px;margin-bottom:6px;">Your earnings are paid automatically to your connected bank account, and you get an e-mail each time.</div>'
+    : '<div style="font-size:12px;margin-bottom:6px;">Connect your bank account below to be paid automatically.</div>';
+  el.innerHTML = intro + '<div style="font-size:12px;font-weight:600;margin-bottom:6px;">Payouts sent to you</div>' + payoutRowsHtml(data || [], false);
+}
+async function renderClientPayoutBox(clientId){
+  const el = document.getElementById('cl-payout-box');
+  if(!el) return;
+  const cl = clients.find(c => c.id === clientId);
+  if(!cl){ el.innerHTML = ''; return; }
+  const { data, error } = await sb.rpc('client_payouts_list', { p_client: clientId });
+  if(error){ el.innerHTML = ''; return; }
+  el.innerHTML = '<div style="font-size:12px;font-weight:600;margin-bottom:6px;">Automatic payouts</div>' +
+    `<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">${cl.paystackRecipientCode ? 'Bank account connected: paid automatically.' : 'No bank account connected: you pay this client yourself, then use Settle a period.'}</div>` +
+    `<label style="font-size:12px;display:flex;align-items:center;gap:6px;margin-bottom:8px;"><input type="checkbox" id="cl-payout-paused" ${cl.payoutPaused ? 'checked' : ''} onchange="togglePayoutPaused()"> Pause automatic payouts for this client</label>` +
+    payoutRowsHtml(data || [], true);
+}
+async function togglePayoutPaused(){
+  const box = document.getElementById('cl-payout-paused');
+  const { error } = await sb.rpc('payout_set_client_paused', { p_client: currentClientId, p_paused: box.checked });
+  if(error){ box.checked = !box.checked; alert(error.message); return; }
+  await loadAll();
+  renderClientPayoutBox(currentClientId);
+}
+async function loadPayoutAdmin(){
+  const el = document.getElementById('payout-admin-body');
+  if(!el) return;
+  const [st, ov] = await Promise.all([sb.rpc('payout_get_settings'), sb.rpc('payout_overview')]);
+  if(st.error || ov.error){ el.textContent = (st.error || ov.error).message; return; }
+  const s = st.data, rows = ov.data || [];
+  const mode = !s.enabled ? 'Off' : (s.dry_run ? 'Simulation (nothing is sent)' : 'On (real transfers)');
+  const feeNote = `Transfer fee ${fmtMoney(s.transfer_fee,'ZAR')} is paid by Plug n Drive for Neighbour accounts and deducted from the payout for other plans.`;
+  el.innerHTML = `
+    <div style="margin-bottom:10px;">Status: <b>${bEsc(mode)}</b>. Every ${s.interval_days} days, minimum ${fmtMoney(s.min_amount,'ZAR')}, small balances from ${fmtMoney(s.sweep_min,'ZAR')} every ${s.sweep_days} days.${s.last_run_on ? ' Last run: ' + bEsc(s.last_run_on) + '.' : ''}</div>
+    <div style="color:var(--text-muted);font-size:12px;margin-bottom:10px;">${bEsc(feeNote)} Only clients with a connected bank account are paid automatically. Paystack must keep the money on its balance (manual payouts) and allow API transfers without an OTP.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
+      <select id="po-mode"><option value="off" ${!s.enabled?'selected':''}>Off</option><option value="sim" ${s.enabled&&s.dry_run?'selected':''}>Simulation</option><option value="on" ${s.enabled&&!s.dry_run?'selected':''}>On (real transfers)</option></select>
+      <select id="po-interval"><option value="3" ${s.interval_days==3?'selected':''}>Every 3 days</option><option value="7" ${s.interval_days==7?'selected':''}>Every 7 days</option></select>
+      <label>Minimum R <input id="po-min" type="number" min="1" style="width:80px;" value="${s.min_amount}"></label>
+      <button class="btn btn-sm" onclick="savePayoutSettings()">Save</button>
+      <button class="btn btn-sm" onclick="payoutAction('simulate')">Preview next run</button>
+      <button class="btn btn-sm" onclick="payoutAction('run_now')">Run now</button>
+    </div>
+    <div id="po-result" style="font-size:12px;margin-bottom:10px;"></div>
+    <div style="font-weight:600;margin-bottom:6px;">Amounts owed to clients (ZAR)</div>
+    ${rows.length ? '<table style="width:100%;font-size:12px;border-collapse:collapse;"><tr style="text-align:left;color:var(--text-muted);"><th>Client</th><th>Plan</th><th style="text-align:right;">Balance</th><th>How it is paid</th></tr>' + rows.map(r => `<tr style="border-top:1px solid var(--border);"><td>${bEsc(r.name)}</td><td>${bEsc(r.plan || 'contract')}</td><td style="text-align:right;color:${Number(r.net) < 0 ? 'var(--red, #c0392b)' : 'inherit'};">${fmtMoney(Number(r.net),'ZAR')}</td><td>${r.paused ? 'Paused' : (r.bank ? 'Automatic' : 'Manual: pay then Settle a period')}${Number(r.failed) > 0 ? ' <span style="color:var(--red, #c0392b);">(' + r.failed + ' failed)</span>' : ''}</td></tr>`).join('') + '</table>' : '<span style="color:var(--text-muted);">Nothing owed.</span>'}`;
+}
+async function savePayoutSettings(){
+  const mode = document.getElementById('po-mode').value;
+  const { error } = await sb.rpc('payout_set_settings', { p: { enabled: mode !== 'off', dry_run: mode !== 'on', interval_days: Number(document.getElementById('po-interval').value), min_amount: Number(document.getElementById('po-min').value) } });
+  if(error){ document.getElementById('po-result').textContent = error.message; return; }
+  loadPayoutAdmin();
+}
+async function payoutAction(action){
+  const out = document.getElementById('po-result');
+  const go = async () => {
+    out.textContent = 'Working…';
+    const { data, error } = await sb.functions.invoke('payout-run', { body: { action } });
+    let msg = data && data.error;
+    if(error && error.context){ try { msg = (await error.context.json()).error; } catch(e) { /* not JSON */ } }
+    if(error || msg){ out.textContent = msg || error.message; return; }
+    if(action === 'simulate'){
+      const l = data.payouts || [];
+      out.innerHTML = l.length ? 'Would pay now:<br>' + l.map(x => `${bEsc(x.client)}: <b>${fmtMoney(Number(x.amount),'ZAR')}</b> (${fmtMoney(Number(x.net),'ZAR')} owed${Number(x.fee) > 0 ? ', ' + fmtMoney(Number(x.fee),'ZAR') + ' fee' : ''})`).join('<br>') : 'Nobody would be paid right now.';
+    } else {
+      await loadPayoutAdmin();
+      document.getElementById('po-result').textContent = `Done: ${data.sent || 0} sent, ${data.failed || 0} failed.`;
+    }
+  };
+  if(action === 'run_now') showModal('Pay clients now', 'This sends real bank transfers from your Paystack balance to every client who is due. Continue?', () => { closeModal(); go(); }, 'Send transfers');
+  else go();
+}
 async function renderSettingsLedger(clientId){
   const el = document.getElementById('stg-ledger');
   const { data, error } = await sb.rpc('client_ledger_status', { p_client_id: clientId });
   if(error){ el.textContent = error.message; return; }
-  el.innerHTML = ledgerBalancesHtml(data) + ledgerHistoryHtml(data);
+  el.innerHTML = ledgerBalancesHtml(data) + ledgerHistoryHtml(data) + '<div id="stg-payouts" style="margin-top:14px;"></div>';
+  renderSettingsPayouts(clientId);
 }
 function renderCardStockPanel(cl){
   const box = document.getElementById('cl-cards-panel');
