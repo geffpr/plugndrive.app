@@ -7656,7 +7656,7 @@ function csChRender(){
       <div id="cs-ch-phones" style="font-size:13px;margin:6px 0;">${phones}</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;"><input type="text" id="cs-ch-phone-in" maxlength="20" placeholder="+27821234567" style="flex:1;min-width:180px;"><button class="btn btn-sm" onclick="csChAddPhone()">Add</button></div>
       <div style="font-weight:600;margin-top:14px;font-size:13px;">Send a test SMS</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;"><select id="cs-ch-sms-to" style="min-width:180px;">${(d.test_phones || []).map(t => `<option value="${bEsc(t.phone)}">${bEsc(t.phone)}</option>`).join('')}</select><input type="text" id="cs-ch-sms-txt" maxlength="200" value="R 150 off your purchase today. Show this code at the till." style="flex:1;min-width:220px;"><button class="btn btn-sm" id="cs-ch-sms-btn" onclick="csChTestSms()">Send test SMS</button></div></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;"><select id="cs-ch-sms-to" style="min-width:180px;">${(d.test_phones || []).map(t => `<option value="${bEsc(t.phone)}">${bEsc(t.phone)}</option>`).join('')}</select><input type="text" id="cs-ch-sms-txt" maxlength="200" value="R 150 off your purchase today. Show this code at the till." style="flex:1;min-width:220px;"><button class="btn btn-sm" id="cs-ch-sms-btn" onclick="csChTestSms()">Send test SMS</button></div><div id="cs-ch-sms-st" style="font-size:12px;margin-top:6px;min-height:16px;"></div></div>
     <div style="${box}"><div style="font-weight:600;">Events sent to your own system (webhook)</div>
       <div style="font-size:12px;color:var(--text-muted);margin:4px 0 8px;">Your system receives each event with a signature, and sends the message itself. Plug n Drive never shares driver names, e-mails or phone numbers this way.</div>
       <label style="font-weight:400;font-size:12px;display:flex;flex-direction:column;gap:2px;">Address that receives the events (https)<input type="text" id="cs-ch-url" maxlength="300" value="${bEsc(w.url)}" placeholder="https://hooks.yourbrand.co.za/plugndrive"></label>
@@ -7734,7 +7734,7 @@ async function csChRemovePhone(id){
   if(d){ csChData = d; csChRender(); }
 }
 async function csChTestSms(){
-  const err = document.getElementById('cs-ch-error'), btn = document.getElementById('cs-ch-sms-btn');
+  const err = document.getElementById('cs-ch-sms-st') || document.getElementById('cs-ch-error'), btn = document.getElementById('cs-ch-sms-btn');
   const to = document.getElementById('cs-ch-sms-to').value, text = document.getElementById('cs-ch-sms-txt').value.trim();
   err.style.color = 'var(--red, #c0392b)';
   if(!to){ err.textContent = 'Add a test number first.'; return; }
