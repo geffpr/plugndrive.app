@@ -2723,6 +2723,7 @@ const LOGIN_I18N = {
     codeResent: 'A new code has been sent. Earlier codes no longer work.',
     inactiveNotice: 'You were signed out after 15 minutes of inactivity.',
     trialLink: 'Own an OCPP 1.6J charger? Start a free 14-day trial',
+    suTitleHost: 'Create your account', suSubHost: 'Free to join. Share your home charger and earn extra income. Works with any charger that supports OCPP 1.6J.',
     suTitle: 'Start your free trial', suSub: '14 days, one charger, no card needed. Works with any charger that supports OCPP 1.6J.',
     suGoogle: 'Continue with Google', suOr: 'or with your email', suPassword: 'Choose a password (8 characters minimum)',
     suBtn: 'Create my account', suCheckEmail: 'Account created. Check your email to confirm it, then sign in here.',
@@ -2770,6 +2771,7 @@ const LOGIN_I18N = {
     codeResent: 'Novo código enviado. Os códigos anteriores deixam de funcionar.',
     inactiveNotice: 'A sessão foi terminada após 15 minutos de inatividade.',
     trialLink: 'Tem um carregador OCPP 1.6J? Comece um teste gratuito de 14 dias',
+    suTitleHost: 'Crie a sua conta', suSubHost: 'Adesão gratuita. Partilhe o seu carregador e ganhe um rendimento extra. Funciona com qualquer carregador compatível com OCPP 1.6J.',
     suTitle: 'Comece o seu teste gratuito', suSub: '14 dias, um carregador, sem cartão. Funciona com qualquer carregador compatível com OCPP 1.6J.',
     suGoogle: 'Continuar com Google', suOr: 'ou com o seu email', suPassword: 'Escolha uma palavra-passe (mínimo 8 caracteres)',
     suBtn: 'Criar a minha conta', suCheckEmail: 'Conta criada. Confirme o email que enviámos e inicie sessão aqui.',
@@ -3053,6 +3055,17 @@ async function handleResetSubmit() {
 
 // --- free 14-day trial: sign up (Google or email), then a few questions ---
 try { const inv = new URLSearchParams(location.search).get('invite'); if (inv) localStorage.setItem('pnd_invite', inv.trim().slice(0, 40)); } catch { /* storage unavailable */ }
+// Entry from the website: ?start=trial or ?start=host. Kept for this tab only, so it survives the e-mail code and the Google round trip.
+try { const st = new URLSearchParams(location.search).get('start'); if (st === 'trial' || st === 'host') sessionStorage.setItem('pnd_start', st); } catch { /* storage unavailable: the form simply keeps its defaults */ }
+function savedStart() { try { return sessionStorage.getItem('pnd_start') || ''; } catch { return ''; } }
+function clearStart() { try { sessionStorage.removeItem('pnd_start'); } catch { /* ignore */ } }
+function applyStartCopy() {
+  const host = savedStart() === 'host';
+  document.querySelector('#login-signup h1').setAttribute('data-lt', host ? 'suTitleHost' : 'suTitle');
+  document.querySelector('#login-signup .login-sub').setAttribute('data-lt', host ? 'suSubHost' : 'suSub');
+  applyLoginLang();
+}
+let trKindPreset = false;
 function savedInvite() { try { return localStorage.getItem('pnd_invite') || ''; } catch { return ''; } }
 async function handleGoogleSignUp() {
   if (lgBusy) return;
@@ -3148,6 +3161,7 @@ async function showTrialQuestions(user) {
   if (!nameEl.value) nameEl.value = meta.full_name || meta.name || '';
   initTrialPhoneUi();
   document.getElementById('lg-trial-nocompat').style.display = 'none';
+  if (savedStart() === 'host' && !trKindPreset) { trKindPreset = true; document.getElementById('tr-kind').value = 'individual'; applyTrialKind(); }
   showLoginScreen('trial');
 }
 async function handleTrialSubmit() {
@@ -3167,7 +3181,7 @@ async function handleTrialSubmit() {
       company: v('tr-company'), name: v('tr-name'), phone: phoneE164, country: countryName,
       declaredChargers: count, ocpp16j: v('tr-ocpp'), chargerModel: v('tr-model'), invite: savedInvite(), accountKind: ind ? 'individual' : 'business' } });
     if (error || !data) { errEl.textContent = lt('errTrialGeneric'); return; }
-    if (data.ok) { try { localStorage.removeItem('pnd_invite'); } catch { /* ignore */ } await enterApp(); return; }
+    if (data.ok) { try { localStorage.removeItem('pnd_invite'); } catch { /* ignore */ } clearStart(); await enterApp(); return; }
     if (data.error === 'ocpp_incompatible') {
       box.innerHTML = '';
       box.appendChild(document.createTextNode(lt('noCompat') + ' '));
@@ -10453,7 +10467,7 @@ async function submitActivation(){
   }
   const { data: { session } } = await sb.auth.getSession();
   if(session){ await enterApp(); }
-  else if(/[?&](signup|invite)=/.test(location.search)){ showLoginScreen('signup'); }
+  else if(/[?&](signup|invite)=/.test(location.search) || savedStart()){ applyStartCopy(); showLoginScreen('signup'); }
   else { tsMount('signin'); }
 })();
 </script>
