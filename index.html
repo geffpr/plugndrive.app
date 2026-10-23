@@ -2235,6 +2235,7 @@ body.member-mode #sup-root,body.member-mode #trial-bar,body.member-mode #req-ban
                 <button class="btn btn-sm" onclick="clearChargerPassword()">Clear password (for browser testing)</button>
                 <button class="btn btn-sm" onclick="regenerateChargerPassword()">Regenerate password</button>
               </div>
+              <div id="cd-live-session"></div>
               <div class="section-title">Recent sessions</div>
               <div class="card">
                 <table>
@@ -3944,7 +3945,7 @@ let clients = [];
 
 function mapLocation(l){ return {id:l.id, name:l.name, type:l.type, parentId:l.parent_id, city:l.city, address:l.address, capacityKVA:l.capacity_kva, currency:l.currency, clientId:l.client_id, timezone:l.timezone, contactName:l.contact_name, contactPhone:l.contact_phone, contactEmail:l.contact_email, status:l.status, loadManagementEnabled:l.load_management_enabled, latitude:l.latitude, longitude:l.longitude, siteDescription:l.site_description, accessMode:l.access_mode, hostPhone:l.host_phone, openingHours:l.opening_hours||null}; }
 function mapCharger(c){ return {id:c.id, locationId:c.location_id, name:c.name, ocppId:c.ocpp_id, vendor:c.vendor, connector:c.connector, powerKW:c.power_kw, ocpp:c.ocpp_version, status:c.status, currentKW:c.current_kw, ocppPassword:c.ocpp_password, lastSeenAt:c.last_seen_at, ocppStatus:c.ocpp_status, listedPublicly:c.listed_publicly, loadPriority:!!c.load_priority}; }
-function mapSession(s){ return {id:s.id, chargerId:s.charger_id, userId:s.user_id, rfidCardId:s.rfid_card_id, kwh:s.kwh, cost:s.cost, currency:s.currency, startedAt:s.started_at, endedAt:s.ended_at, paymentStatus:s.payment_status, payment:s.payment_method, groupId:s.access_group_id, groupMode:s.group_pricing_mode, groupPercent:s.group_discount_percent, offered:s.offered_value}; }
+function mapSession(s){ return {id:s.id, chargerId:s.charger_id, userId:s.user_id, rfidCardId:s.rfid_card_id, kwh:s.kwh, cost:s.cost, currency:s.currency, startedAt:s.started_at, endedAt:s.ended_at, paymentStatus:s.payment_status, payment:s.payment_method, groupId:s.access_group_id, groupMode:s.group_pricing_mode, groupPercent:s.group_discount_percent, offered:s.offered_value, liveKwh:s.live_kwh, liveCost:s.live_cost}; }
 function mapRfid(r){ return {id:r.id, uid:r.uid, userId:r.user_id, complexId:r.location_id, status:r.status, number:r.card_number||null, ownerClientId:r.owner_client_id||null, vehicleName:r.vehicle_name||'', vehicleModel:r.vehicle_model||'', vehiclePlate:r.vehicle_plate||'', vehicleNote:r.vehicle_note||''}; }
 function mapUser(u){ return {id:u.id, name:u.name, unit:u.unit, locationId:u.location_id, role:u.role, phone:u.phone, email:u.email, balance:u.balance, balanceCurrency:u.balance_currency}; }
 function mapTariff(t){ return {id:t.id, locationId:t.location_id, chargerId:t.charger_id, priceDay:t.price_day, priceNight:t.price_night, nightStart:t.night_start, nightEnd:t.night_end, idleFeePerMin:t.idle_fee_per_min, idleGraceMinutes:t.idle_grace_minutes, monthlyFee:t.monthly_ocpp_fee, monthlyKwhIncluded:t.monthly_kwh_included, overagePrice:t.overage_price, currency:t.currency}; }
@@ -4914,7 +4915,19 @@ function renderChargerDetail(){
     return `<tr><td>${(s.startedAt||'').slice(0,10)}</td><td>${u?u.name:'-'}</td><td>${s.kwh??'-'} kWh</td><td>${fmtMoney(s.cost, s.currency)}</td></tr>`;
   }).join('')
     : '<tr><td colspan="4" class="empty">No sessions yet.</td></tr>';
+  renderChargerLiveSession(c);
   startChargerLivePolling();
+}
+// Who is charging on this charger right now (the recent sessions table below only lists finished ones).
+function renderChargerLiveSession(c){
+  const el = document.getElementById('cd-live-session'); if(!el || !c) return;
+  const s = c.status === 'Charging' ? activeSessionFor(c.id) : null;
+  if(!s){ el.innerHTML = ''; return; }
+  const u = users.find(x=>x.id===s.userId);
+  const who = u ? u.name + (u.unit && u.unit !== '-' ? ' · ' + u.unit : '') : 'Started remotely, no driver linked';
+  const t = s.startedAt ? new Date(s.startedAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '';
+  const bits = [t ? 'Started at ' + t : '', s.payment || '', s.liveKwh != null ? Number(s.liveKwh).toFixed(2) + ' kWh so far' : ''].filter(Boolean).map(bEsc).join(' · ');
+  el.innerHTML = `<div class="section-title">Charging now</div><div class="card card-pad" style="margin-bottom:14px;"><div style="font-weight:600;font-size:15px;">${bEsc(who)}</div><div style="font-size:12px;color:var(--text-muted);margin-top:4px;">${bits}</div></div>`;
 }
 
 let chargerDetailPollInterval = null;
@@ -4923,6 +4936,7 @@ function startChargerLivePolling(){
   chargerDetailPollInterval = setInterval(async () => {
     const c = chargers.find(x=>x.id===currentChargerId);
     if(!c) return;
+    renderChargerLiveSession(c);
     const { data, error } = await sb.functions.invoke('remote-control', { body: { chargerId: c.id, action: 'status' } });
     if(!error && data && !data.error){
       document.getElementById('cd-live').innerHTML = data.connected
