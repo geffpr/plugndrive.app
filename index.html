@@ -1505,7 +1505,7 @@ body.member-mode #sup-root,body.member-mode #trial-bar,body.member-mode #req-ban
             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
               <select id="ft-preset">
                 <option value="">Start from a template…</option>
-                <option value="starter">Starter</option><option value="host">Host</option><option value="operator">Operator</option><option value="cpo">CPO</option><option value="enterprise">Enterprise</option>
+                <option value="starter">Starter</option><option value="host">Network</option><option value="operator">Operator</option><option value="cpo">CPO</option><option value="enterprise">Enterprise</option>
               </select>
               <button class="btn btn-sm" onclick="applyFeaturePreset()">Apply</button>
               <button class="btn btn-sm" onclick="resetClientFeatures()">Reset to default</button>
@@ -3835,7 +3835,7 @@ function applyRoleBasedNav(){
 let myFeat = null;   // result of my_features(); null until loaded or for non client accounts
 const FEAT_PAGE = { access:'access_groups', myoperators:'operator_accounts', apikeys:'api_keys', load:'load_management', reporting:'reporting' };
 const FEAT_LABEL = { fleet_control:'Fleet Control', reporting:'Reporting', load_management:'Load management', tariff_advanced:'Day and night tariffs and idle fee', sms_activation:'Automatic SMS activation', resident_billing:'Resident billing', white_label:'White label', max_chargers:'Chargers', api_keys:'API keys', access_groups:'Access groups', operator_accounts:'Operator accounts' };
-const PLAN_NAME = { trial:'Trial', neighbour:'Neighbour', starter:'Starter', host:'Host', operator:'Operator', cpo:'CPO', enterprise:'Enterprise' };
+const PLAN_NAME = { trial:'Trial', neighbour:'Neighbour', starter:'Starter', host:'Network', operator:'Operator', cpo:'CPO', enterprise:'Enterprise' };
 async function loadMyFeatures(){
   if(!(currentStaff && currentStaff.role === 'client_admin')){ myFeat = null; return; }
   try { const { data, error } = await sb.rpc('my_features'); myFeat = (!error && data && data.features) ? data : null; } catch(e){ myFeat = null; }
@@ -9932,7 +9932,7 @@ function openAssignCard(){
   document.getElementById('assign-card-result').style.display = 'none';
   const auto = canAutoSms();
   document.getElementById('ac-sms-btn').style.display = auto ? '' : 'none';
-  document.getElementById('ac-sms-hint').textContent = auto ? '' : 'Copy the code and send it to the resident yourself (WhatsApp link provided). Automatic SMS starts at the Host plan.';
+  document.getElementById('ac-sms-hint').textContent = auto ? '' : 'Copy the code and send it to the resident yourself (WhatsApp link provided). Automatic SMS starts at the Network plan.';
   document.getElementById('ac-code-btn').disabled = !stock.length;
   document.getElementById('ac-sms-btn').disabled = !stock.length;
   document.getElementById('assign-card-panel').style.display = 'block';
@@ -10364,7 +10364,7 @@ function applyTariffGating(){
   const f = myFeat || {};
   const p = (f.min_plan || {}).tariff_advanced;
   const txt = f.mode === 'plan'
-    ? `Night price and idle fee are available from the ${bEsc(PLAN_NAME[p] || 'Host')} plan.`
+    ? `Night price and idle fee are available from the ${bEsc(PLAN_NAME[p] || 'Network')} plan.`
     : 'Night price and idle fee are not included in your current setup. Contact hello@plugndrive.co.za.';
   note.style.display = '';
   note.innerHTML = `<span class="prem-badge" style="margin:0 8px 0 0;">Premium</span><span style="font-size:13px;">${txt}</span>` + (f.mode === 'plan' ? ` <a href="#" onclick="event.preventDefault();showPage('billing')">See plans</a>` : '');
