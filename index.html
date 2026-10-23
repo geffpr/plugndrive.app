@@ -4249,7 +4249,8 @@ function residentFor(chargerId){
   const s = activeSessionFor(chargerId);
   if(!s) return null;
   const u = users.find(x=>x.id===s.userId);
-  return u ? {name:u.name, unit:u.unit} : {name:'Remote start', unit:'-'};
+  if(u) return {name:u.name, unit:u.unit};
+  return s.userId ? {name:'Roaming driver', unit:'other network'} : {name:'Remote start', unit:'-'};   // a driver we may not read: he belongs to another client
 }
 
 // ---------- Self-serve trial: billing page, banner, onboarding checklist ----------
@@ -4691,7 +4692,7 @@ function renderDashboard(){
       <td>${statusBadge(c.status)}</td>
       <td>${livenessDot(c.lastSeenAt)}${fmtLastSeen(c.lastSeenAt)}</td>
       <td>${c.status==='Charging' && c.currentKW != null ? c.currentKW+' kW' : '-'}</td>
-      <td>${cardholder ? cardholder.name : '-'}</td>
+      <td>${cardholder ? cardholder.name : (activeSession && activeSession.userId ? '<span style="color:var(--text-muted);">Roaming driver</span>' : '-')}</td>
       <td>${activeSession ? 'In progress' : '-'}</td>
     </tr>`;
   }).join('') : '<tr><td colspan="8" class="empty">No chargers yet.</td></tr>';
@@ -4924,7 +4925,7 @@ function renderChargerLiveSession(c){
   const s = c.status === 'Charging' ? activeSessionFor(c.id) : null;
   if(!s){ el.innerHTML = ''; return; }
   const u = users.find(x=>x.id===s.userId);
-  const who = u ? u.name + (u.unit && u.unit !== '-' ? ' · ' + u.unit : '') : 'Started remotely, no driver linked';
+  const who = u ? u.name + (u.unit && u.unit !== '-' ? ' · ' + u.unit : '') : (s.userId ? 'Roaming driver (from another network member)' : 'Started remotely, no driver linked');
   const t = s.startedAt ? new Date(s.startedAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '';
   const bits = [t ? 'Started at ' + t : '', s.payment || '', s.liveKwh != null ? Number(s.liveKwh).toFixed(2) + ' kWh so far' : ''].filter(Boolean).map(bEsc).join(' · ');
   el.innerHTML = `<div class="section-title">Charging now</div><div class="card card-pad" style="margin-bottom:14px;"><div style="font-weight:600;font-size:15px;">${bEsc(who)}</div><div style="font-size:12px;color:var(--text-muted);margin-top:4px;">${bits}</div></div>`;
