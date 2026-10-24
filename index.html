@@ -551,7 +551,7 @@ body.member-mode #sup-root,body.member-mode #trial-bar,body.member-mode #req-ban
 
   /* Filters: search first, the rest behind one button */
   .filters.rc-f{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;}
-  #chargers-list-view .filters.rc-f>div:first-child{display:contents !important;}
+  .filters.rc-f>div:first-child{display:contents !important;}
   .filters.rc-f .search{grid-column:1;grid-row:1;min-width:0;width:100%;}
   .filters.rc-f .rc-ftoggle{display:inline-flex;align-items:center;justify-content:center;grid-column:2;grid-row:1;white-space:nowrap;}
   .filters.rc-f select,.filters.rc-f input[type=date]{grid-column:1/-1;width:100%;min-width:0;max-width:none;font-size:16px;}
@@ -559,11 +559,53 @@ body.member-mode #sup-root,body.member-mode #trial-bar,body.member-mode #req-ban
   .filters.rc-f [id$="-dates"]{grid-column:1/-1;display:grid !important;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;}
   .filters.rc-f [id$="-dates"][style*="display:none"]{display:none !important;}
   .filters.rc-f button[onclick*="resetFilters"]{grid-column:1/-1;}
-  #chargers-list-view .filters.rc-f>.btn-primary{grid-column:1/-1;grid-row:3;}
+  .filters.rc-f>.btn-primary{grid-column:1/-1;grid-row:3;}
   .filters.rc-f:not(.fopen) select,
   .filters.rc-f:not(.fopen) [id$="-dates"],
   .filters.rc-f:not(.fopen) button[onclick*="resetFilters"]{display:none !important;}
   .filters.rc-f select[style*="display:none"]{display:none !important;}
+}
+/* ---- Phones and tablets: layout fixes (lot B) ---- */
+@media(max-width:900px){
+  .modal-bg{z-index:80;}   /* confirmation windows sit above the bottom bar */
+  #page-settings table{min-width:0 !important;}
+  #page-settings .card-pad{max-width:none !important;overflow-x:auto;}
+  #page-settings td{overflow-wrap:anywhere;}
+}
+@media(max-width:700px){
+  .form-row input,.form-row select,.form-row textarea{font-size:16px;}
+  .modal-bg{padding:16px;}
+  .modal{max-height:calc(100vh - 32px);overflow-y:auto;}
+
+  /* Sites list */
+  .rc-sit td:nth-child(1){grid-column:1/3;grid-row:1;font-weight:700;font-size:14px;}
+  .rc-sit td:nth-child(2){grid-column:3;grid-row:1;text-align:right;}
+  .rc-sit td:nth-child(3){grid-column:1;grid-row:2;color:var(--text-muted);font-size:12px;}
+  .rc-sit td:nth-child(4){grid-column:2;grid-row:2;color:var(--text-muted);font-size:12px;}
+  .rc-sit td:nth-child(4)::before{content:attr(data-label) ": ";}
+  .rc-sit td:nth-child(5){grid-column:3;grid-row:2;text-align:right;color:var(--text-muted);font-size:12px;}
+
+  /* Tariffs: sites */
+  .rc-tsi tr{grid-template-columns:1fr 1fr;}
+  .rc-tsi td:nth-child(1){grid-column:1;grid-row:1;font-weight:700;font-size:14px;}
+  .rc-tsi td:nth-child(2){grid-column:2;grid-row:1;text-align:right;color:var(--text-muted);font-size:12px;}
+  .rc-tsi td:nth-child(3){grid-column:1;grid-row:2;}
+  .rc-tsi td:nth-child(4){grid-column:2;grid-row:2;text-align:right;}
+  .rc-tsi td:nth-child(5){grid-column:1;grid-row:3;}
+  .rc-tsi td:nth-child(6){grid-column:2;grid-row:3;text-align:right;}
+  .rc-tsi td:nth-child(7){grid-column:1/-1;grid-row:4;}
+  .rc-tsi td:nth-child(n+3){font-size:12px;color:var(--text-secondary);}
+  .rc-tsi td:nth-child(n+3)::before{content:attr(data-label);display:block;color:var(--text-muted);font-size:11px;font-weight:500;}
+
+  /* Tariffs: charger overrides */
+  .rc-tco td{grid-column:1/-1;}
+  .rc-tco td:nth-child(1){grid-row:1;font-weight:700;font-size:14px;}
+  .rc-tco td:nth-child(2){grid-row:2;}
+  .rc-tco td:nth-child(3){grid-row:3;font-size:12px;color:var(--text-secondary);}
+
+  /* Load: header stacks so the long switch label never squeezes the site name */
+  #load-list .card-pad>div:first-child{flex-direction:column;align-items:flex-start !important;gap:10px;}
+  #load-list .card-pad label{align-items:flex-start;}
 }
 </style>
 
@@ -872,9 +914,9 @@ body.member-mode #sup-root,body.member-mode #trial-bar,body.member-mode #req-ban
     <button type="button" id="sup-fab" aria-expanded="false" aria-controls="sup-panel" aria-label="Help"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.5-4.6A8 8 0 1 1 21 12z"/><path d="M9.5 10h5M9.5 13.5h3"/></svg><span>Help</span></button>
   </div>
   <nav class="bottom-nav" id="bottom-nav" aria-label="Main navigation">
-    <button type="button" class="bn-item active" data-page="dashboard" onclick="showPage('dashboard')"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>Dashboard</button>
     <button type="button" class="bn-item" data-page="sites" onclick="showPage('sites')"><svg viewBox="0 0 24 24"><path d="M3 21V8l7-4 7 4v13"/><path d="M17 21V11l4 2v8"/><path d="M8 21v-5h4v5"/></svg>Sites</button>
     <button type="button" class="bn-item" data-page="chargers" onclick="showPage('chargers')"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg>Chargers</button>
+    <button type="button" class="bn-item active" data-page="dashboard" onclick="showPage('dashboard')"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>Dashboard</button>
     <button type="button" class="bn-item" data-page="sessions" onclick="showPage('sessions')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Sessions</button>
     <button type="button" class="bn-item cs-member-only" data-page="campaigns" onclick="showPage('campaigns')"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>Campaigns</button>
     <button type="button" class="bn-item" id="bn-more" onclick="toggleMobileSidebar()"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>More</button>
@@ -1128,7 +1170,7 @@ body.member-mode #sup-root,body.member-mode #trial-bar,body.member-mode #req-ban
             <button class="btn btn-primary" onclick="showPage('addsite')">+ Add site</button>
           </div>
           <div class="card">
-            <table>
+            <table class="rc rc-sit">
               <thead><tr><th>Name</th><th>Type</th><th>City</th><th>Chargers</th><th>Capacity</th></tr></thead>
               <tbody id="sites-body"></tbody>
             </table>
@@ -2652,14 +2694,14 @@ body.member-mode #sup-root,body.member-mode #trial-bar,body.member-mode #req-ban
         <div id="tariffs-list-view">
           <div class="section-title">Site tariffs</div>
           <div class="card">
-            <table>
+            <table class="rc rc-tsi">
               <thead><tr><th>Site</th><th>Currency</th><th>Day price</th><th>Night price</th><th>Night hours</th><th>Monthly fee</th><th>Included kWh/mo</th></tr></thead>
               <tbody id="site-tariffs-body"></tbody>
             </table>
           </div>
           <div class="section-title" style="margin-top:24px;">Charger overrides</div>
           <div class="card">
-            <table>
+            <table class="rc rc-tco">
               <thead><tr><th>Charger</th><th>Site</th><th>Override</th></tr></thead>
               <tbody id="charger-tariffs-body"></tbody>
             </table>
@@ -10667,7 +10709,7 @@ async function submitActivation(){
     var n=count(bar);
     btn.textContent=(bar.classList.contains('fopen')?'Hide filters':'Filters')+(n?' ('+n+')':'');
   }
-  ['#page-sessions .filters','#chargers-list-view .filters'].forEach(function(sel){
+  ['#page-sessions .filters','#chargers-list-view .filters','#sites-list-view .filters'].forEach(function(sel){
     var bar=document.querySelector(sel); if(!bar) return;
     bar.classList.add('rc-f');
     var btn=document.createElement('button');
