@@ -607,6 +607,19 @@ body.member-mode #sup-root,body.member-mode #trial-bar,body.member-mode #req-ban
   #load-list .card-pad>div:first-child{flex-direction:column;align-items:flex-start !important;gap:10px;}
   #load-list .card-pad label{align-items:flex-start;}
 }
+/* ---- Phones: a wide figure (e.g. "R 128 450.50", the spaces do not wrap) must never widen the whole page ---- */
+@media(max-width:900px){
+  .app{grid-template-columns:minmax(0,1fr);}
+  .main,.content{min-width:0;}
+  .bottom-nav .bn-item{touch-action:manipulation;}
+  .card:not(.card-pad){overflow-x:auto;}   /* wide tables on pages not yet adapted scroll inside their card instead of being cut */
+}
+@media(max-width:700px){
+  .kpi{min-width:0;}
+  .kpi-value{overflow-wrap:anywhere;}
+  #page-sessions .kpi-grid{grid-template-columns:1fr 1fr !important;}
+  #page-sessions .kpi-grid .kpi:last-child{grid-column:1/-1;}
+}
 </style>
 
 <link rel="icon" href="/favicon.ico" sizes="48x48">
