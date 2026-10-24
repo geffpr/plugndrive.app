@@ -434,6 +434,19 @@ body.member-mode #sup-root,body.member-mode #trial-bar,body.member-mode #req-ban
 .login-google{background:#fff;color:#1a3260;border:1.5px solid #dde5f0;box-shadow:none;}
 .login-or{display:flex;align-items:center;gap:10px;margin:16px 0;font-size:12px;color:#6b7a9a;}
 .login-or:before,.login-or:after{content:"";flex:1;height:1px;background:#dde5f0;}
+.tr-progress{height:4px;border-radius:2px;background:#e6edf6;margin:0 0 14px;overflow:hidden;}
+.tr-bar{height:100%;width:25%;border-radius:2px;background:linear-gradient(90deg,#1a3260,#3a8fd4);transition:width .25s ease;}
+.tr-stepno{font-size:12px;font-weight:700;color:#6b7a9a;margin:0 0 8px;}
+.tr-kinds{display:grid;gap:10px;}
+.tr-kind{display:block;width:100%;text-align:left;padding:16px 16px;border:1.5px solid #dde5f0;border-radius:13px;background:#fff;color:#1a3260;cursor:pointer;font-family:inherit;transition:border-color .15s,background .15s,box-shadow .15s;}
+.tr-kind:hover{border-color:#3a8fd4;}
+.tr-kind[aria-checked="true"]{border-color:#3a8fd4;background:#eaf5fc;box-shadow:0 0 0 3px rgba(58,143,212,.16);}
+.tr-kind-t{display:block;font-size:15px;font-weight:800;}
+.tr-kind-d{display:block;font-size:12.5px;line-height:1.45;color:#6b7a9a;margin-top:3px;}
+.tr-nav{display:flex;gap:10px;margin-top:18px;}
+#login-signin h1{margin-bottom:18px;}
+.tr-nav .login-btn{flex:1 1 auto;width:auto;}
+.tr-nav .tr-back{flex:0 0 34%;background:#fff;color:#1a3260;border:1.5px solid #dde5f0;box-shadow:none;}
 .login-box{margin-top:14px;padding:14px;border-radius:11px;background:#f5f8fc;border:1.5px solid #dde5f0;font-size:13px;line-height:1.5;color:#1a3260;}
 .login-box a{color:#3a8fd4;font-weight:700;}
 .login-note{text-align:center;font-size:12.5px;color:#6b7a9a;margin-top:14px;}
@@ -742,7 +755,8 @@ body.member-mode #bell-btn{display:none !important;}
       <!-- Sign in -->
       <form id="login-signin" class="login-screen active" novalidate>
         <h1 data-lt="signInTitle">Sign in</h1>
-        <p class="login-sub" data-lt="signInSub">Use the email your administrator gave you.</p>
+        <button type="button" class="login-btn login-google" id="lg-google-btn-si" data-lt="siGoogle">Continue with Google</button>
+        <div class="login-or"><span data-lt="suOr">or with your email</span></div>
         <div class="login-field"><label for="auth-email" data-lt="email">Email</label>
           <input type="email" id="auth-email" autocomplete="username" autocapitalize="none" spellcheck="false"></div>
         <div class="login-field"><label for="auth-password" data-lt="password">Password</label>
@@ -755,7 +769,6 @@ body.member-mode #bell-btn{display:none !important;}
         <div class="ts-box" id="ts-signin"></div>
         <button type="submit" class="login-btn" id="lg-signin-btn" data-lt="signInBtn">Sign in</button>
         <div class="login-error" id="auth-error" role="alert"></div>
-        <div class="login-note" data-lt="noAccount">No account yet? Ask your administrator.</div>
         <a href="#" class="login-link" onclick="showLoginScreen('signup');return false;" data-lt="trialLink">Own an OCPP 1.6J charger? Start a free 14-day trial</a>
       </form>
 
@@ -820,16 +833,24 @@ body.member-mode #bell-btn{display:none !important;}
         <a href="#" class="login-link" onclick="showLoginScreen('signin');return false;" data-lt="backToSignIn">Back to sign in</a>
       </form>
 
-      <!-- Free trial: a few questions once signed in -->
+      <!-- Free trial: a short wizard once signed in -->
       <form id="login-trial" class="login-screen" novalidate>
-        <h1 data-lt="trTitle">Tell us about your chargers</h1>
-        <p class="login-sub" id="tr-sub" data-lt="trSub">Last step. Your trial starts as soon as you continue.</p>
-        <div class="login-field"><label for="tr-kind" data-lt="trKind">I am</label>
-          <select id="tr-kind">
-            <option value="business" data-lt="trKindBiz">A business (free 14-day trial)</option>
-            <option value="individual" data-lt="trKindInd">An individual sharing my home charger (Neighbour Host)</option>
-          </select></div>
-        <div class="login-box" id="tr-ind-note" style="display:none" data-lt="trIndNote">Neighbour Host: no monthly fee, Plug n Drive keeps 15% of each charge, payment fees included. One charger, for personal use only, paid by QR code. Your spot appears on the Plug n Drive network with an approximate position.</div>
+        <div class="tr-progress" aria-hidden="true"><div class="tr-bar" id="tr-bar"></div></div>
+        <div class="tr-stepno" id="tr-stepno"></div>
+        <h1 id="tr-h" data-lt="trT1">Welcome. What brings you here?</h1>
+        <p class="login-sub" id="tr-sub" data-lt="trS1">Pick the one that fits you.</p>
+        <div class="tr-step" data-step="1">
+          <select id="tr-kind" hidden aria-hidden="true" tabindex="-1">
+            <option value="business">business</option>
+            <option value="individual">individual</option>
+          </select>
+          <div class="tr-kinds" role="radiogroup" aria-label="I am">
+            <button type="button" class="tr-kind" data-kind="business" role="radio" aria-checked="true"><span class="tr-kind-t" data-lt="trKBizT">A business</span><span class="tr-kind-d" data-lt="trKBizD">Free 14-day trial.</span></button>
+            <button type="button" class="tr-kind" data-kind="individual" role="radio" aria-checked="false"><span class="tr-kind-t" data-lt="trKIndT">An individual</span><span class="tr-kind-d" data-lt="trKIndD">Sharing my home charger (Neighbour Host).</span></button>
+          </div>
+          <div class="login-box" id="tr-ind-note" style="display:none" data-lt="trIndNote"></div>
+        </div>
+        <div class="tr-step" data-step="2" style="display:none">
         <div class="login-field"><label for="tr-company" id="tr-company-lbl" data-lt="trCompany">Company or site name</label>
           <input type="text" id="tr-company" maxlength="120" autocomplete="organization"></div>
         <div class="login-field"><label for="tr-name" data-lt="trName">Your name</label>
@@ -838,6 +859,8 @@ body.member-mode #bell-btn{display:none !important;}
           <select id="tr-country"></select></div>
         <div class="login-field" id="tr-other-wrap" style="display:none"><label for="tr-other" data-lt="trOther">Your country</label>
           <input type="text" id="tr-other" maxlength="60" autocomplete="country-name"></div>
+        </div>
+        <div class="tr-step" data-step="3" style="display:none">
         <div class="login-field"><label for="tr-phone" data-lt="trPhone">Phone number (we will call you)</label>
           <div class="tr-phone-row">
             <div class="dial-wrap">
@@ -847,6 +870,8 @@ body.member-mode #bell-btn{display:none !important;}
             </div>
             <input type="tel" id="tr-phone" maxlength="20" inputmode="tel" autocomplete="tel-national" placeholder="82 123 4567">
           </div></div>
+        </div>
+        <div class="tr-step" data-step="4" style="display:none">
         <div class="login-field" id="tr-count-wrap"><label for="tr-count" data-lt="trCount">How many chargers do you have (or plan to have)?</label>
           <input type="number" id="tr-count" min="0" max="1000" inputmode="numeric"></div>
         <div class="login-field"><label for="tr-ocpp" data-lt="trOcpp">Does your charger support OCPP 1.6J?</label>
@@ -858,7 +883,12 @@ body.member-mode #bell-btn{display:none !important;}
           </select></div>
         <div class="login-field"><label for="tr-model" data-lt="trModel">Charger brand and model (optional)</label>
           <input type="text" id="tr-model" maxlength="120"></div>
-        <button type="submit" class="login-btn" id="lg-trial-btn" data-lt="trBtn">Start my free trial</button>
+                </div>
+        <div class="tr-nav">
+          <button type="button" class="login-btn tr-back" id="tr-back" data-lt="trBack">Back</button>
+          <button type="button" class="login-btn" id="tr-next" data-lt="trNext">Continue</button>
+          <button type="submit" class="login-btn" id="lg-trial-btn" data-lt="trBtn" style="display:none">Start my free trial</button>
+        </div>
         <div class="login-error" id="lg-trial-error" role="alert"></div>
         <div class="login-box" id="lg-trial-nocompat" style="display:none"></div>
         <a href="#" class="login-link" onclick="cancelTrialSignup();return false;" data-lt="trCancel">Sign out</a>
@@ -2907,7 +2937,7 @@ const LOGIN_I18N = {
   en: {
     brandTitle: 'Your charging network, at a glance.',
     brandSub: 'Chargers, sessions, tariffs and payments in one console.',
-    signInTitle: 'Sign in', signInSub: 'Use the email your administrator gave you.',
+    signInTitle: 'Sign in', siGoogle: 'Continue with Google',
     email: 'Email', password: 'Password', forgot: 'Forgot password?',
     signInBtn: 'Sign in', signingIn: 'Signing in…', working: 'Please wait…',
     noAccount: 'No account yet? Ask your administrator.',
@@ -2935,6 +2965,11 @@ const LOGIN_I18N = {
     suGoogle: 'Continue with Google', suOr: 'or with your email', suPassword: 'Choose a password (8 characters minimum)',
     suBtn: 'Create my account', suCheckEmail: 'Account created. Check your email to confirm it, then sign in here.',
     errShortPw: 'Your password needs at least 8 characters.', errEmailTaken: 'This email already has an account. Sign in instead.',
+    trT1: 'Welcome. What brings you here?', trS1: 'Pick the one that fits you. You can change it before you finish.',
+    trT2: 'About you', trS2: 'Just the basics.', trT3: 'How can we reach you?', trS3: 'We may call you to help you get started.',
+    trT4: 'Your charger', trKBizT: 'A business', trKBizD: 'Free 14-day trial. One or more chargers.', trKIndT: 'An individual', trKIndD: 'Sharing my home charger (Neighbour Host).',
+    trNext: 'Continue', trBack: 'Back', trStepOf: 'Step {n} of 4',
+    errTrialS2: 'Please enter the name of your company or site, and your country.', errTrialS4: 'Please tell us how many chargers you have and whether they support OCPP 1.6J.',
     trTitle: 'Tell us about your chargers', trSub: 'Last step. Your trial starts as soon as you continue.',
     trCompany: 'Company or site name', trName: 'Your name', trPhone: 'Phone number (we will call you)', trCountry: 'Country', trOther: 'Your country', trOtherOpt: 'Other',
     trCount: 'How many chargers do you have (or plan to have)?', trOcpp: 'Does your charger support OCPP 1.6J?',
@@ -2955,7 +2990,7 @@ const LOGIN_I18N = {
   pt: {
     brandTitle: 'A sua rede de carregamento, num só olhar.',
     brandSub: 'Carregadores, sessões, tarifas e pagamentos numa só consola.',
-    signInTitle: 'Iniciar sessão', signInSub: 'Use o email que o seu administrador lhe deu.',
+    signInTitle: 'Iniciar sessão', siGoogle: 'Continuar com Google',
     email: 'Email', password: 'Palavra-passe', forgot: 'Esqueceu a palavra-passe?',
     signInBtn: 'Iniciar sessão', signingIn: 'A iniciar sessão…', working: 'Aguarde…',
     noAccount: 'Ainda não tem conta? Peça ao seu administrador.',
@@ -2983,6 +3018,11 @@ const LOGIN_I18N = {
     suGoogle: 'Continuar com Google', suOr: 'ou com o seu email', suPassword: 'Escolha uma palavra-passe (mínimo 8 caracteres)',
     suBtn: 'Criar a minha conta', suCheckEmail: 'Conta criada. Confirme o email que enviámos e inicie sessão aqui.',
     errShortPw: 'A palavra-passe precisa de pelo menos 8 caracteres.', errEmailTaken: 'Este email já tem uma conta. Inicie sessão.',
+    trT1: 'Bem-vindo. O que o traz cá?', trS1: 'Escolha a opção que lhe corresponde. Pode mudar antes de terminar.',
+    trT2: 'Sobre si', trS2: 'Apenas o essencial.', trT3: 'Como podemos contactá-lo?', trS3: 'Podemos ligar-lhe para o ajudar a começar.',
+    trT4: 'O seu carregador', trKBizT: 'Uma empresa', trKBizD: 'Teste gratuito de 14 dias. Um ou mais carregadores.', trKIndT: 'Um particular', trKIndD: 'Partilho o meu carregador de casa (Neighbour Host).',
+    trNext: 'Continuar', trBack: 'Voltar', trStepOf: 'Passo {n} de 4',
+    errTrialS2: 'Indique o nome da empresa ou do local e o seu país.', errTrialS4: 'Diga-nos quantos carregadores tem e se suportam OCPP 1.6J.',
     trTitle: 'Fale-nos dos seus carregadores', trSub: 'Último passo. O teste começa assim que continuar.',
     trCompany: 'Empresa ou nome do local', trName: 'O seu nome', trPhone: 'Número de telefone (vamos ligar-lhe)', trCountry: 'País', trOther: 'O seu país', trOtherOpt: 'Outro',
     trCount: 'Quantos carregadores tem (ou planeia ter)?', trOcpp: 'O seu carregador suporta OCPP 1.6J?',
@@ -3025,6 +3065,7 @@ function applyLoginLang() {
   root.querySelectorAll('.login-eye').forEach(updateEyeLabel);
   renderLoginNotice();
   renderLoginResend();
+  if (typeof renderTrialStepNo === 'function') renderTrialStepNo();
 }
 function setLoginLang(lang) {
   loginLang = lang;
@@ -3108,7 +3149,7 @@ function resetLoginUi() {
   document.querySelectorAll('.login-eye[aria-pressed="true"]').forEach(toggleEye);   // never leave a password revealed
   clearTimeout(lgResendTimer); clearTimeout(lgCodeTimer);
   lgVerifying = false; lgBusy = false;
-  document.getElementById('tr-kind').value = 'business'; applyTrialKind();
+  document.getElementById('tr-kind').value = 'business'; trKindPreset = false; applyTrialKind(); showTrialStep(1);
   [['lg-signin-btn', 'signInBtn'], ['lg-forgot-btn', 'sendCode'], ['lg-verify-btn', 'verifyBtn'], ['lg-reset-btn', 'savePassword'], ['lg-signup-btn', 'suBtn'], ['lg-trial-btn', 'trBtn']].forEach(([id, key]) => {
     const b = document.getElementById(id); b.disabled = false; b.textContent = lt(key);
   });
@@ -3274,9 +3315,9 @@ function applyStartCopy() {
 }
 let trKindPreset = false;
 function savedInvite() { try { return localStorage.getItem('pnd_invite') || ''; } catch { return ''; } }
-async function handleGoogleSignUp() {
+async function handleGoogleSignUp(errId) {
   if (lgBusy) return;
-  const errEl = document.getElementById('lg-signup-error'); errEl.textContent = '';
+  const errEl = document.getElementById(typeof errId === 'string' ? errId : 'lg-signup-error'); errEl.textContent = '';
   try {
     const { error } = await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: location.origin + '/' } });
     if (error) errEl.textContent = friendlyAuthError(error);
@@ -3342,11 +3383,69 @@ function initTrialPhoneUi() {
   cs.value = 'South Africa'; setTrialDial('+27', 'za');
 }
 function trialIsIndividual() { return document.getElementById('tr-kind').value === 'individual'; }
+// ---- wizard: 4 steps over the same fields; answers are kept on this device until the account is created ----
+let trStep = 1, trUid = null;
+const TR_STEPS = 4, TR_DRAFT_KEY = 'pnd_trial_draft';
+const TR_FIELDS = ['tr-company','tr-name','tr-country','tr-other','tr-phone','tr-count','tr-ocpp','tr-model'];
+function trSaveDraft() {
+  if (!trUid) return;
+  const d = { uid: trUid, step: trStep, kind: document.getElementById('tr-kind').value, dial: document.getElementById('tr-dial').value };
+  TR_FIELDS.forEach(id => { d[id] = document.getElementById(id).value; });
+  try { localStorage.setItem(TR_DRAFT_KEY, JSON.stringify(d)); } catch { /* storage unavailable: the wizard still works */ }
+}
+function trLoadDraft(uid) { try { const d = JSON.parse(localStorage.getItem(TR_DRAFT_KEY) || 'null'); return d && d.uid === uid ? d : null; } catch { return null; } }
+function trClearDraft() { try { localStorage.removeItem(TR_DRAFT_KEY); } catch { /* ignore */ } }
+function trRestoreDraft(d) {
+  document.getElementById('tr-kind').value = d.kind === 'individual' ? 'individual' : 'business';
+  TR_FIELDS.forEach(id => { if (typeof d[id] === 'string') document.getElementById(id).value = d[id]; });
+  const hit = TRIAL_COUNTRIES.concat(TRIAL_DIALS_EXTRA).find(c => c[1] === d.dial);
+  if (hit) setTrialDial(hit[1], hit[2]);
+  document.getElementById('tr-other-wrap').style.display = document.getElementById('tr-country').value === '__other' ? '' : 'none';
+  trKindPreset = true;
+  applyTrialKind();
+  showTrialStep(Math.min(TR_STEPS, Math.max(1, parseInt(d.step, 10) || 1)));
+}
+function renderTrialStepNo() { const el = document.getElementById('tr-stepno'); if (el) el.textContent = lt('trStepOf').replace('{n}', trStep); }
+function showTrialStep(n) {
+  trStep = n;
+  document.querySelectorAll('#login-trial .tr-step').forEach(el => { el.style.display = Number(el.dataset.step) === n ? '' : 'none'; });
+  document.getElementById('tr-bar').style.width = (n / TR_STEPS * 100) + '%';
+  document.getElementById('tr-h').setAttribute('data-lt', 'trT' + n);
+  document.getElementById('tr-sub').setAttribute('data-lt', n === 4 ? (trialIsIndividual() ? 'trSubInd' : 'trSub') : 'trS' + n);
+  document.getElementById('tr-back').style.display = n > 1 ? '' : 'none';
+  document.getElementById('tr-next').style.display = n < TR_STEPS ? '' : 'none';
+  document.getElementById('lg-trial-btn').style.display = n === TR_STEPS ? '' : 'none';
+  document.getElementById('lg-trial-error').textContent = '';
+  document.getElementById('lg-trial-nocompat').style.display = 'none';
+  applyLoginLang();
+  trSaveDraft();
+  if (window.matchMedia && window.matchMedia('(pointer:fine)').matches) {
+    const first = { 2: 'tr-company', 3: 'tr-phone', 4: trialIsIndividual() ? 'tr-ocpp' : 'tr-count' }[n];
+    if (first) document.getElementById(first).focus();
+  }
+}
+function trValidateStep(n) {
+  const v = id => document.getElementById(id).value.trim();
+  const errEl = document.getElementById('lg-trial-error'); errEl.textContent = '';
+  if (n === 2) {
+    const countryName = v('tr-country') === '__other' ? v('tr-other') : v('tr-country');
+    if (v('tr-company').length < 2 || !countryName) { errEl.textContent = lt('errTrialS2'); return false; }
+  } else if (n === 3) {
+    if (!v('tr-phone') || !trialPhoneE164()) { errEl.textContent = lt('errPhone'); return false; }
+  } else if (n === 4) {
+    const count = trialIsIndividual() ? 1 : parseInt(v('tr-count'), 10);
+    if (!Number.isInteger(count) || count < 0 || !v('tr-ocpp')) { errEl.textContent = lt('errTrialS4'); return false; }
+  }
+  return true;
+}
+function trNext() { if (lgBusy) return; if (!trValidateStep(trStep)) return; if (trStep < TR_STEPS) showTrialStep(trStep + 1); }
+function trBack() { if (lgBusy || trStep <= 1) return; showTrialStep(trStep - 1); }
 function trBtnKey() { return trialIsIndividual() ? 'trBtnInd' : 'trBtn'; }
 function applyTrialKind() {
   const ind = trialIsIndividual();
   document.getElementById('tr-company-lbl').setAttribute('data-lt', ind ? 'trSite' : 'trCompany');
-  document.getElementById('tr-sub').setAttribute('data-lt', ind ? 'trSubInd' : 'trSub');
+  document.querySelectorAll('#login-trial .tr-kind').forEach(b => b.setAttribute('aria-checked', String((b.dataset.kind === 'individual') === ind)));
+  if (trStep === TR_STEPS) document.getElementById('tr-sub').setAttribute('data-lt', ind ? 'trSubInd' : 'trSub');
   document.getElementById('lg-trial-btn').setAttribute('data-lt', trBtnKey());
   document.getElementById('tr-ind-note').style.display = ind ? '' : 'none';
   document.getElementById('tr-count-wrap').style.display = ind ? 'none' : '';
@@ -3368,7 +3467,18 @@ async function showTrialQuestions(user) {
   if (!nameEl.value) nameEl.value = meta.full_name || meta.name || '';
   initTrialPhoneUi();
   document.getElementById('lg-trial-nocompat').style.display = 'none';
-  if (savedStart() === 'host' && !trKindPreset) { trKindPreset = true; document.getElementById('tr-kind').value = 'individual'; applyTrialKind(); }
+  trUid = user && user.id ? user.id : null;
+  const draft = trUid ? trLoadDraft(trUid) : null;
+  if (draft) trRestoreDraft(draft);
+  else {
+    // a different person on this page: never show the previous person's answers
+    TR_FIELDS.forEach(id => { if (id !== 'tr-name') document.getElementById(id).value = ''; });
+    document.getElementById('tr-country').value = 'South Africa'; setTrialDial('+27', 'za');
+    document.getElementById('tr-other-wrap').style.display = 'none';
+    document.getElementById('tr-kind').value = 'business'; applyTrialKind();
+    if (savedStart() === 'host' && !trKindPreset) { trKindPreset = true; document.getElementById('tr-kind').value = 'individual'; applyTrialKind(); }
+    showTrialStep(1);
+  }
   showLoginScreen('trial');
 }
 async function handleTrialSubmit() {
@@ -3388,7 +3498,7 @@ async function handleTrialSubmit() {
       company: v('tr-company'), name: v('tr-name'), phone: phoneE164, country: countryName,
       declaredChargers: count, ocpp16j: v('tr-ocpp'), chargerModel: v('tr-model'), invite: savedInvite(), accountKind: ind ? 'individual' : 'business' } });
     if (error || !data) { errEl.textContent = lt('errTrialGeneric'); return; }
-    if (data.ok) { try { localStorage.removeItem('pnd_invite'); } catch { /* ignore */ } clearStart(); await enterApp(); return; }
+    if (data.ok) { try { localStorage.removeItem('pnd_invite'); } catch { /* ignore */ } trClearDraft(); trUid = null; clearStart(); await enterApp(); return; }
     if (data.error === 'ocpp_incompatible') {
       box.innerHTML = '';
       box.appendChild(document.createTextNode(lt('noCompat') + ' '));
@@ -3406,7 +3516,7 @@ async function handleTrialSubmit() {
     setLoginBusy('lg-trial-btn', false, trBtnKey(), 'working');
   }
 }
-async function cancelTrialSignup() { await handleSignOut(); }
+async function cancelTrialSignup() { trClearDraft(); trUid = null; await handleSignOut(); }
 
 function initLoginUi() {
   const bindSubmit = (id, fn) => document.getElementById(id).addEventListener('submit', e => { e.preventDefault(); fn(); });   // Enter and the phone's "Go" key both submit
@@ -3415,9 +3525,14 @@ function initLoginUi() {
   bindSubmit('login-verify', handleVerifySubmit);
   bindSubmit('login-reset', handleResetSubmit);
   bindSubmit('login-signup', handleSignUp);
-  bindSubmit('login-trial', handleTrialSubmit);
+  bindSubmit('login-trial', () => { if (trStep < TR_STEPS) trNext(); else handleTrialSubmit(); });   // Enter moves to the next step until the last one
+  document.getElementById('tr-next').addEventListener('click', trNext);
+  document.getElementById('tr-back').addEventListener('click', trBack);
+  document.querySelectorAll('#login-trial .tr-kind').forEach(b => b.addEventListener('click', () => { document.getElementById('tr-kind').value = b.dataset.kind; applyTrialKind(); trSaveDraft(); }));
+  ['input', 'change'].forEach(evt => document.getElementById('login-trial').addEventListener(evt, trSaveDraft));
   document.getElementById('tr-kind').addEventListener('change', applyTrialKind);
-  document.getElementById('lg-google-btn').addEventListener('click', handleGoogleSignUp);
+  document.getElementById('lg-google-btn').addEventListener('click', () => handleGoogleSignUp('lg-signup-error'));
+  document.getElementById('lg-google-btn-si').addEventListener('click', () => handleGoogleSignUp('auth-error'));
   document.querySelectorAll('.login-eye').forEach(b => b.addEventListener('click', () => toggleEye(b)));
   document.getElementById('ll-en').addEventListener('click', () => setLoginLang('en'));
   document.getElementById('ll-pt').addEventListener('click', () => setLoginLang('pt'));
