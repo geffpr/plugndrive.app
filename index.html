@@ -646,6 +646,27 @@ body.member-mode #sup-root,body.member-mode #trial-bar,body.member-mode #req-ban
   #site-detail-view>div[style*="space-between"]>div:last-child .btn{flex:1;}
   #site-detail-view h2{overflow-wrap:anywhere;}
 }
+/* ---- Phones and tablets: "More" opens a sheet that rises from the bottom ---- */
+.more-bg,.more-sheet{display:none;}
+@media(max-width:900px){
+  .more-bg{position:fixed;inset:0;z-index:74;background:rgba(13,27,61,.45);opacity:0;pointer-events:none;transition:opacity .22s;}
+  .more-bg.open{display:block;opacity:1;pointer-events:auto;}
+  .more-sheet{position:fixed;left:0;right:0;bottom:0;z-index:75;display:block;visibility:hidden;max-height:82vh;overflow-y:auto;overscroll-behavior:contain;background:#fff;border-radius:20px 20px 0 0;box-shadow:0 -12px 40px -12px rgba(13,27,61,.35);transform:translateY(100%);transition:transform .25s ease,visibility 0s linear .25s;padding:6px 16px calc(20px + env(safe-area-inset-bottom,0px));max-width:560px;margin:0 auto;}
+  .more-sheet.open{visibility:visible;transform:none;transition:transform .25s ease;}
+  .more-head{position:sticky;top:0;background:#fff;display:flex;align-items:center;justify-content:space-between;padding:8px 0 6px;z-index:1;touch-action:none;}
+  .more-grip{width:42px;height:5px;border-radius:3px;background:#cfd8e6;position:absolute;left:50%;top:6px;transform:translateX(-50%);}
+  .more-title{font-weight:800;font-size:16px;color:var(--navy);padding-top:14px;}
+  .more-x{border:none;background:var(--bg);width:34px;height:34px;border-radius:50%;font-size:18px;line-height:1;color:var(--navy);margin-top:10px;cursor:pointer;}
+  .more-label{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);padding:14px 4px 4px;font-weight:700;}
+  .more-item{display:flex;align-items:center;gap:12px;width:100%;padding:10px 4px;background:none;border:none;border-radius:12px;text-align:left;font-size:15px;font-weight:600;color:var(--navy);cursor:pointer;font-family:inherit;}
+  .more-item .ic{width:38px;height:38px;border-radius:11px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--navy);flex-shrink:0;}
+  .more-item.active{color:var(--blue-dark,#1f6fb0);}
+  .more-item.active .ic{background:var(--blue-light);color:var(--blue-dark,#1f6fb0);}
+  .more-item .ic svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+  .more-item .nav-badge{display:inline-flex;margin-left:auto;}
+  .more-foot{margin-top:14px;padding-top:12px;border-top:1px solid var(--border);}
+  .more-id{font-size:12px;color:var(--text-muted);padding:0 4px 4px;overflow-wrap:anywhere;}
+}
 </style>
 
 <link rel="icon" href="/favicon.ico" sizes="48x48">
@@ -958,7 +979,7 @@ body.member-mode #sup-root,body.member-mode #trial-bar,body.member-mode #req-ban
     <button type="button" class="bn-item active" data-page="dashboard" onclick="showPage('dashboard')"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>Dashboard</button>
     <button type="button" class="bn-item" data-page="sessions" onclick="showPage('sessions')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Sessions</button>
     <button type="button" class="bn-item cs-member-only" data-page="campaigns" onclick="showPage('campaigns')"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>Campaigns</button>
-    <button type="button" class="bn-item" id="bn-more" onclick="toggleMobileSidebar()"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>More</button>
+    <button type="button" class="bn-item" id="bn-more" onclick="openMoreSheet()" aria-haspopup="dialog"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.7" fill="currentColor" stroke="none"/></svg>More</button>
   </nav>
 
   <button id="mobile-menu-toggle" onclick="toggleMobileSidebar()" aria-label="Menu">☰</button>
@@ -10759,6 +10780,86 @@ async function submitActivation(){
     bar.addEventListener('change',function(){label(bar,btn);});
     bar.addEventListener('click',function(e){if(e.target.closest('button[onclick*="resetFilters"]')) setTimeout(function(){label(bar,btn);},0);});
   });
+})();
+</script>
+<div class="more-bg" id="more-bg"></div>
+<div class="more-sheet" id="more-sheet" role="dialog" aria-modal="true" aria-label="Menu" aria-hidden="true">
+  <div class="more-head" id="more-head"><span class="more-grip"></span><span class="more-title">Menu</span><button type="button" class="more-x" id="more-x" aria-label="Close menu">&times;</button></div>
+  <div id="more-body"></div>
+</div>
+<script>
+/* "More" sheet (phones and tablets): the same pages as the side menu, shown as a sheet that rises from the bottom. Display only. */
+(function(){
+  var sheet=document.getElementById('more-sheet'), bg=document.getElementById('more-bg'), body=document.getElementById('more-body');
+  if(!sheet||!bg||!body) return;
+  var side=document.getElementById('sidebar');
+  var ICONS={
+    photos:'<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M21 16l-5-5-8 8"/>',
+    tariffs:'<path d="M12 3v18M16.5 7.5c0-1.7-2-2.8-4.5-2.8S7.5 5.8 7.5 7.7c0 4.3 9 2.3 9 6.6 0 1.9-2 3-4.5 3s-4.5-1.1-4.5-2.8"/>',
+    rfid:'<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18M7 15h4"/>',
+    access:'<path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/>',
+    load:'<path d="M4 16a8 8 0 1 1 16 0"/><path d="M12 16l4-5"/>',
+    walletactivity:'<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M16 14.5h2"/>',
+    reporting:'<path d="M5 20V10M12 20V4M19 20v-7"/>',
+    fleet:'<path d="M5 16v-4l2-5h10l2 5v4M3 16h18M7 16v2M17 16v2"/>',
+    myoperators:'<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M16 11a3 3 0 0 0 0-6M18 14c2 .6 3 2.5 3 6"/>',
+    apikeys:'<circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 6l3 3M14 8l2 2"/>',
+    campaigns:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
+    settings:'<path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/>',
+    billing:'<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/>',
+    proshop:'<path d="M5 8h14l-1 12H6z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/>',
+    shop:'<path d="M5 8h14l-1 12H6z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/>',
+    clients:'<path d="M4 21V5l8-2v18M12 9h8v12M7 9h2M7 13h2M7 17h2M15 13h2M15 17h2"/>',
+    payments:'<circle cx="12" cy="12" r="9"/><path d="M12 7v10M14.5 9.5c0-1-1-1.6-2.5-1.6S9.5 8.6 9.5 9.6c0 2.4 5 1.2 5 3.8 0 1-1 1.7-2.5 1.7s-2.5-.6-2.5-1.6"/>',
+    exchangerates:'<path d="M4 8h14l-3-3M20 16H6l3 3"/>',
+    quotes:'<path d="M7 3h8l4 4v14H7z"/><path d="M15 3v4h4M10 12h6M10 16h6"/>',
+    signout:'<path d="M9 4H5v16h4M16 8l4 4-4 4M20 12H9"/>'
+  };
+  function svg(key){ return ICONS[key]?'<svg viewBox="0 0 24 24" aria-hidden="true">'+ICONS[key]+'</svg>':null; }
+  function shown(el){ return el && getComputedStyle(el).display!=='none'; }
+  function build(){
+    var out=[], pending=null, any=false;
+    [].forEach.call(side.children,function(n){
+      if(n.classList.contains('nav-section-label')){ pending=n; return; }
+      if(!n.classList.contains('navitem')||!shown(n)) return;
+      var pg=n.getAttribute('data-page');
+      if(pg){ var bar=document.querySelector('#bottom-nav .bn-item[data-page="'+pg+'"]'); if(bar&&shown(bar)) return; }
+      if(pending){ out.push({label:pending.textContent}); pending=null; }
+      out.push({node:n}); any=true;
+    });
+    body.innerHTML='';
+    out.forEach(function(o){
+      if(o.label){ var l=document.createElement('div'); l.className='more-label'; l.textContent=o.label; body.appendChild(l); return; }
+      var n=o.node, pg=n.getAttribute('data-page'), b=document.createElement('button'); b.type='button'; b.className='more-item'+(n.classList.contains('active')?' active':'');
+      var ic=n.querySelector('.ic'), icon=document.createElement('span'); icon.className='ic';
+      var sv=svg(pg||(n.id==='quotes-nav'?'quotes':'')); if(sv) icon.innerHTML=sv; else icon.textContent=ic?ic.textContent:'';
+      var txt=document.createElement('span'); txt.textContent=[].filter.call(n.childNodes,function(c){return c.nodeType===3;}).map(function(c){return c.textContent;}).join('').trim();
+      b.appendChild(icon); b.appendChild(txt);
+      var bd=n.querySelector('.nav-badge');
+      if(bd&&bd.textContent.trim()&&shown(bd)){ var c=document.createElement('span'); c.className='nav-badge'; c.textContent=bd.textContent; b.appendChild(c); }
+      b.addEventListener('click',function(){ close(); n.click(); });
+      body.appendChild(b);
+    });
+    var foot=document.createElement('div'); foot.className='more-foot';
+    var idEl=document.getElementById('sidebar-identity');
+    if(idEl&&idEl.textContent.trim()){ var d=document.createElement('div'); d.className='more-id'; d.textContent=idEl.textContent.trim(); foot.appendChild(d); }
+    var so=document.createElement('button'); so.type='button'; so.className='more-item';
+    so.innerHTML='<span class="ic">'+svg('signout')+'</span><span>Sign out</span>';
+    so.addEventListener('click',function(){ close(); handleSignOut(); });
+    foot.appendChild(so); body.appendChild(foot);
+  }
+  function open(){ build(); bg.classList.add('open'); sheet.classList.add('open'); sheet.setAttribute('aria-hidden','false'); sheet.scrollTop=0; }
+  function close(){ bg.classList.remove('open'); sheet.classList.remove('open'); sheet.setAttribute('aria-hidden','true'); sheet.style.transform=''; sheet.style.transition=''; }
+  window.openMoreSheet=open; window.closeMoreSheet=close;
+  bg.addEventListener('click',close);
+  document.getElementById('more-x').addEventListener('click',close);
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape'&&sheet.classList.contains('open')) close(); });
+  window.addEventListener('resize',function(){ if(window.innerWidth>900&&sheet.classList.contains('open')) close(); });
+  /* swipe down on the header to close */
+  var y0=null, dy=0, head=document.getElementById('more-head');
+  head.addEventListener('touchstart',function(e){ y0=e.touches[0].clientY; dy=0; sheet.style.transition='none'; },{passive:true});
+  head.addEventListener('touchmove',function(e){ if(y0===null) return; dy=Math.max(0,e.touches[0].clientY-y0); sheet.style.transform='translateY('+dy+'px)'; },{passive:true});
+  head.addEventListener('touchend',function(){ if(y0===null) return; var go=dy>70; y0=null; sheet.style.transition=''; if(go) close(); else sheet.style.transform=''; });
 })();
 </script>
 </body>
