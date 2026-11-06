@@ -4320,6 +4320,14 @@ let clients = [];
 function mapLocation(l){ return {id:l.id, name:l.name, type:l.type, parentId:l.parent_id, city:l.city, address:l.address, capacityKVA:l.capacity_kva, currency:l.currency, clientId:l.client_id, timezone:l.timezone, contactName:l.contact_name, contactPhone:l.contact_phone, contactEmail:l.contact_email, status:l.status, code:l.code, loadManagementEnabled:l.load_management_enabled, latitude:l.latitude, longitude:l.longitude, siteDescription:l.site_description, accessMode:l.access_mode, hostPhone:l.host_phone, openingHours:l.opening_hours||null}; }
 function mapCharger(c){ return {id:c.id, locationId:c.location_id, name:c.name, ocppId:c.ocpp_id, vendor:c.vendor, connector:c.connector, powerKW:c.power_kw, ocpp:c.ocpp_version, status:c.status, currentKW:c.current_kw, ocppPassword:c.ocpp_password, lastSeenAt:c.last_seen_at, ocppStatus:c.ocpp_status, listedPublicly:c.listed_publicly, loadPriority:!!c.load_priority}; }
 function mapSession(s){ return {id:s.id, chargerId:s.charger_id, userId:s.user_id, rfidCardId:s.rfid_card_id, kwh:s.kwh, cost:s.cost, currency:s.currency, startedAt:s.started_at, endedAt:s.ended_at, paymentStatus:s.payment_status, payment:s.payment_method, groupId:s.access_group_id, groupMode:s.group_pricing_mode, groupPercent:s.group_discount_percent, offered:s.offered_value, liveKwh:s.live_kwh, liveCost:s.live_cost}; }
+// How a session was paid, in words. The stored payment_method stays 'QR code' / 'RFID card' (the reports count on it);
+// this label adds how the access was granted (free group, group discount).
+function payLabel(s){
+  const web = s.payment === 'QR code';
+  if(s.groupMode === 'free') return web ? 'Free access (web account)' : 'RFID card (free access)';
+  if(s.groupMode === 'discount') return web ? 'Group discount (web account)' : 'RFID card (group discount)';
+  return web ? 'Bank card (QR code)' : (s.payment || '');
+}
 function mapRfid(r){ return {id:r.id, uid:r.uid, userId:r.user_id, complexId:r.location_id, status:r.status, number:r.card_number||null, ownerClientId:r.owner_client_id||null, vehicleName:r.vehicle_name||'', vehicleModel:r.vehicle_model||'', vehiclePlate:r.vehicle_plate||'', vehicleNote:r.vehicle_note||''}; }
 function mapUser(u){ return {id:u.id, name:u.name, unit:u.unit, locationId:u.location_id, role:u.role, phone:u.phone, email:u.email, balance:u.balance, balanceCurrency:u.balance_currency}; }
 function mapTariff(t){ return {id:t.id, locationId:t.location_id, chargerId:t.charger_id, priceDay:t.price_day, priceNight:t.price_night, nightStart:t.night_start, nightEnd:t.night_end, idleFeePerMin:t.idle_fee_per_min, idleGraceMinutes:t.idle_grace_minutes, monthlyFee:t.monthly_ocpp_fee, monthlyKwhIncluded:t.monthly_kwh_included, overagePrice:t.overage_price, currency:t.currency}; }
@@ -5311,7 +5319,7 @@ function renderChargerLiveSession(c){
   const u = users.find(x=>x.id===s.userId);
   const who = u ? u.name + (u.unit && u.unit !== '-' ? ' · ' + u.unit : '') : (s.userId ? 'Roaming driver (from another network member)' : 'Started remotely, no driver linked');
   const t = s.startedAt ? new Date(s.startedAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '';
-  const bits = [t ? 'Started at ' + t : '', s.payment || '', s.liveKwh != null ? Number(s.liveKwh).toFixed(2) + ' kWh so far' : ''].filter(Boolean).map(bEsc).join(' · ');
+  const bits = [t ? 'Started at ' + t : '', payLabel(s), s.liveKwh != null ? Number(s.liveKwh).toFixed(2) + ' kWh so far' : ''].filter(Boolean).map(bEsc).join(' · ');
   el.innerHTML = `<div class="section-title">Charging now</div><div class="card card-pad" style="margin-bottom:14px;"><div style="font-weight:600;font-size:15px;">${bEsc(who)}</div><div style="font-size:12px;color:var(--text-muted);margin-top:4px;">${bits}</div></div>`;
 }
 
@@ -9930,7 +9938,7 @@ function renderSessions(){
     .filter(c=>{ const root=rootOf(c.locationId); return (cf==='all' || (root && root.id===cf)) && (clf==='all' || (root && root.clientId===clf)); })
     .map(c=>[c.id, c.name||'']).sort((a,b)=>a[1].localeCompare(b[1])));
   const ended = sessions.filter(s=>s.endedAt);
-  fillFilterSelect('ses-pay-filter', 'All payment methods', [...new Set(ended.map(s=>s.payment).filter(Boolean))].sort().map(v=>[v,v]));
+  fillFilterSelect('ses-pay-filter', 'All payment methods', [...new Set(ended.map(s=>payLabel(s)).filter(Boolean))].sort().map(v=>[v,v]));
   fillFilterSelect('ses-paystatus-filter', 'Any payment status', [...new Set(ended.map(s=>s.paymentStatus).filter(Boolean))].sort().map(v=>[v, v.charAt(0).toUpperCase()+v.slice(1)]));
   const chf = filterVal('ses-charger-filter'), typeF = filterVal('ses-type-filter'), payF = filterVal('ses-pay-filter'), psF = filterVal('ses-paystatus-filter');
   const period = document.getElementById('ses-period-filter').value || 'all';
@@ -9941,7 +9949,7 @@ function renderSessions(){
   if(clf!=='all') rows = rows.filter(s=>{ const c=chargerOfSession(s); return c && rootClientOfLocation(c.locationId)===clf; });
   if(chf!=='all') rows = rows.filter(s=>s.chargerId===chf);
   if(typeF!=='all') rows = rows.filter(s=>sessionKind(s)===typeF);
-  if(payF!=='all') rows = rows.filter(s=>s.payment===payF);
+  if(payF!=='all') rows = rows.filter(s=>payLabel(s)===payF);
   if(psF!=='all') rows = rows.filter(s=>s.paymentStatus===psF);
   if(period==='week'){
     const cutoff = new Date(Date.now() - 7*24*60*60*1000);
@@ -9974,7 +9982,7 @@ function renderSessions(){
   document.getElementById('sessions-body').innerHTML = rows.map(s=>{
     const c = chargers.find(x=>x.id===s.chargerId);
     const u = users.find(x=>x.id===s.userId);
-    return `<tr><td>${(s.startedAt||'').slice(0,10)}</td><td>${c?c.name:'-'}</td><td>${u?u.name:'-'}</td><td>${fmtDuration(s.startedAt, s.endedAt)}</td><td>${s.kwh??'-'} kWh</td><td>${sessionCostCell(s)}</td><td>${s.payment||'-'}</td></tr>`;
+    return `<tr><td>${(s.startedAt||'').slice(0,10)}</td><td>${c?c.name:'-'}</td><td>${u?u.name:'-'}</td><td>${fmtDuration(s.startedAt, s.endedAt)}</td><td>${s.kwh??'-'} kWh</td><td>${sessionCostCell(s)}</td><td>${payLabel(s)||'-'}</td></tr>`;
   }).join('');
   ensureSessionGroupNames(rows);
 }
