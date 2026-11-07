@@ -2350,11 +2350,11 @@ body.member-mode #bell-btn{display:none !important;}
             <button class="btn btn-sm" onclick="closeAccessMembers()">Close</button>
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:8px;">
-            <div class="form-row" style="margin:0;"><label>Card code</label><input type="text" id="acc-m-uid"></div>
+            <div class="form-row" style="margin:0;"><label>Card code or e-mail</label><input type="text" id="acc-m-uid" autocomplete="off" placeholder="Card code, or the e-mail of a web account"></div>
             <button class="btn btn-sm" onclick="accFindCard()">Find</button>
           </div>
           <div id="acc-m-found" style="display:none;margin:8px 0;">
-            <div style="margin-bottom:8px;">Card <b id="acc-m-found-uid"></b> — <span id="acc-m-found-name"></span></div>
+            <div style="margin-bottom:8px;"><span id="acc-m-found-lbl">Card</span> <b id="acc-m-found-uid"></b><span id="acc-m-found-sep"> — </span><span id="acc-m-found-name"></span></div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
               <div class="form-row" style="margin:0;"><label id="acc-m-until-label">Access until (optional)</label><div id="acc-m-chips" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px;"><button type="button" class="btn btn-sm" data-k="1" onclick="accPick('m','1')">1 h</button><button type="button" class="btn btn-sm" data-k="2" onclick="accPick('m','2')">2 h</button><button type="button" class="btn btn-sm" data-k="3" onclick="accPick('m','3')">3 h</button><button type="button" class="btn btn-sm" data-k="today" onclick="accPick('m','today')">Today</button><button type="button" class="btn btn-sm" data-k="tomorrow" onclick="accPick('m','tomorrow')">Tomorrow</button></div><div style="display:flex;gap:6px;"><input type="date" id="acc-m-until" oninput="accUntilTyped('m')"><input type="time" id="acc-m-time" oninput="accUntilTyped('m')" title="Time (optional, South African time)"></div></div>
               <div class="form-row" style="margin:0;"><label>Reference (e.g. room)</label><input type="text" id="acc-m-ref" maxlength="80"></div>
@@ -7803,7 +7803,17 @@ async function accFindCard(){
   document.getElementById('acc-m-info').textContent = '';
   const uid = document.getElementById('acc-m-uid').value.trim();
   if(!uid) return;
-  const { data, error } = await sb.rpc('lookup_card_for_group', { p_client_id: clients[0].id, p_uid: uid });
+  const isMail = uid.indexOf('@') !== -1;
+  let data, error;
+  if(isMail){
+    const r = await sb.rpc('lookup_web_customer_for_group', { p_client_id: clients[0].id, p_email: uid });
+    error = r.error; data = r.data;
+    if(!error && !(data && data.found)){ errEl.textContent = 'No web account with this e-mail.'; return; }
+    if(error){ errEl.textContent = error.message; return; }
+  } else {
+    const r = await sb.rpc('lookup_card_for_group', { p_client_id: clients[0].id, p_uid: uid });
+    error = r.error; data = r.data;
+  }
   if(error){
     const g = accCurrentGroup();
     if(error.message === 'Card not found' && g && g.pricing_mode === 'free'){
@@ -7819,7 +7829,9 @@ async function accFindCard(){
     return;
   }
   accFoundCard = data;
-  document.getElementById('acc-m-found-uid').textContent = data.uid;
+  document.getElementById('acc-m-found-lbl').textContent = isMail ? 'Web account' : 'Card';
+  document.getElementById('acc-m-found-uid').textContent = isMail ? '' : data.uid;
+  document.getElementById('acc-m-found-sep').style.display = isMail ? 'none' : '';
   document.getElementById('acc-m-found-name').textContent = data.display_name;
   accResetUntil('m');
   document.getElementById('acc-m-ref').value = '';
