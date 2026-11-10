@@ -63,6 +63,7 @@ select.q-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www
 .q-charger-row{background:var(--off);border:1.5px solid var(--border);border-radius:14px;padding:1.2rem;position:relative;transition:border-color .2s}
 .q-charger-row:hover{border-color:rgba(58,143,212,.3)}
 .q-charger-top{display:grid;grid-template-columns:2.5fr 1fr 1.5fr auto;gap:1rem;align-items:end}
+.q-charger-opts{margin-top:.8rem;display:grid;grid-template-columns:1fr 1fr;gap:1rem}
 .q-charger-info{margin-top:.8rem;display:grid;grid-template-columns:1fr 1fr 1fr;gap:.6rem}
 .q-info-chip{background:var(--blue-pale);border:1px solid rgba(58,143,212,.2);border-radius:8px;padding:.5rem .8rem;font-size:.75rem;color:var(--navy)}
 .q-info-chip .ic-label{color:var(--muted);font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.2rem}
@@ -148,7 +149,7 @@ select.q-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www
 
 /* RESPONSIVE */
 @media(max-width:900px){.q-layout{grid-template-columns:1fr}.q-sidebar{position:static}}
-@media(max-width:600px){.q-charger-top{grid-template-columns:1fr 1fr;grid-template-rows:auto auto}.q-charger-info{grid-template-columns:1fr 1fr}.q-grid-2,.q-grid-3{grid-template-columns:1fr}.q-extra-row{grid-template-columns:1fr auto}}
+@media(max-width:600px){.q-charger-top{grid-template-columns:1fr 1fr;grid-template-rows:auto auto}.q-charger-info{grid-template-columns:1fr 1fr}.q-charger-opts{grid-template-columns:1fr}.q-grid-2,.q-grid-3{grid-template-columns:1fr}.q-extra-row{grid-template-columns:1fr auto}}
 
 .q-pack-edit-row{display:flex;gap:.8rem;margin-top:.8rem;padding-top:.8rem;border-top:1px solid var(--border)}
 .q-pack-card.selected .q-pack-edit-row{border-top-color:rgba(58,143,212,.3)}
@@ -514,7 +515,8 @@ const T = {
     total_once:"Total (once-off)", monthly_sub:"Monthly subscription",
     vat_note:"* Excl. VAT. Prices in selected currency.",
     pdf_en:"Generate Quote (English)", pdf_pt:"Gerar Cotação (Português)",
-    currency:"Currency:", charger_type:"Charger Power (kW)", qty:"Qty",
+    currency:"Currency:", charger_type:"Charger Power per gun (kW)", qty:"Qty",
+    guns_label:"Guns", gun_single:"1 gun", gun_dual:"2 guns (dual gun)", current_label:"Current", cur_auto:"Auto", total_power:"Total power",
     unit_price:"Unit Price (R)", description:"Description", unit:"Unit Price", amount:"Amount",
     moto_charge:"Moto 0→80%", car_charge:"Car 0→80%", max_power:"Power",
     charger_lbl:"Charger", remove:"Remove",
@@ -569,7 +571,8 @@ const T = {
     total_once:"Total (pagamento único)", monthly_sub:"Assinatura mensal",
     vat_note:"* Sem IVA. Preços na moeda selecionada.",
     pdf_en:"Generate Quote (English)", pdf_pt:"Gerar Cotação (Português)",
-    currency:"Moeda:", charger_type:"Potência do Carregador (kW)", qty:"Qtd",
+    currency:"Moeda:", charger_type:"Potência do Carregador por prise (kW)", qty:"Qtd",
+    guns_label:"Prises", gun_single:"1 prise", gun_dual:"2 prises (dual gun)", current_label:"Corrente", cur_auto:"Auto", total_power:"Potência total",
     unit_price:"Preço Unitário (R)", description:"Descrição", unit:"Preço Unit.", amount:"Valor",
     moto_charge:"Moto 0→80%", car_charge:"Carro 0→80%", max_power:"Potência",
     charger_lbl:"Carregador", remove:"Remover",
@@ -618,6 +621,11 @@ const QUICK_POWERS = [7, 11, 22, 50, 100, 150, 200];
 const DEFAULT_PRICES = { 7:8999, 11:15499, 22:24999, 50:89999, 100:159999 };
 // AC/DC label threshold: chargers above 22kW are DC in practice.
 function chargerTypeLabel(powerKw) { return powerKw > 22 ? 'DC' : 'AC'; }
+// Each row has a power per gun, a number of guns (1 or 2) and a current: 'auto' follows the power, or AC / DC is forced.
+// Rows saved before these options existed have none of them and read as 1 gun, auto.
+function rowGuns(row) { return row.guns === 2 ? 2 : 1; }
+function rowType(row) { return row.current === 'AC' || row.current === 'DC' ? row.current : chargerTypeLabel(row.power); }
+function rowLabel(row) { return (rowGuns(row) === 2 ? '2 x ' : '') + row.power + 'kW ' + rowType(row); }
 
 // A moto's onboard charger/BMS caps how much power it can actually accept - past this
 // threshold, a bigger charger (100kW, 400kW...) will NOT charge it any faster.
@@ -807,7 +815,7 @@ function currSymbol() { return currency === 'MZN' ? 'MZN' : 'R'; }
 // ─── CHARGER ROWS ───────────────────────────────────────────────
 function addCharger() {
   const id = rowId++;
-  chargerRows.push({ id, power:7, qty:1, customPrice: DEFAULT_PRICES[7] });
+  chargerRows.push({ id, power:7, guns:1, current:'auto', qty:1, customPrice: DEFAULT_PRICES[7] });
   renderChargerList();
   updateSummary();
 }
@@ -821,6 +829,20 @@ function removeCharger(id) {
 function onChargerPowerChange(id, val) {
   const row = chargerRows.find(r => r.id === id);
   if (row) row.power = Math.max(0, parseFloat(val) || 0);
+  renderChargerList();
+  updateSummary();
+}
+
+function onChargerGunsChange(id, n) {
+  const row = chargerRows.find(r => r.id === id);
+  if (row) row.guns = n === 2 ? 2 : 1;
+  renderChargerList();
+  updateSummary();
+}
+
+function onChargerCurrentChange(id, v) {
+  const row = chargerRows.find(r => r.id === id);
+  if (row) row.current = (v === 'AC' || v === 'DC') ? v : 'auto';
   renderChargerList();
   updateSummary();
 }
@@ -866,8 +888,25 @@ function renderChargerList() {
         </div>
         <button class="q-remove-btn" onclick="removeCharger(${row.id})" title="${t('remove')}">✕</button>
       </div>
+      <div class="q-charger-opts">
+        <div class="q-fg">
+          <label>${t('guns_label')}</label>
+          <div class="q-power-chips">
+            <button type="button" class="q-chip ${rowGuns(row)===1?'active':''}" onclick="onChargerGunsChange(${row.id},1)">${t('gun_single')}</button>
+            <button type="button" class="q-chip ${rowGuns(row)===2?'active':''}" onclick="onChargerGunsChange(${row.id},2)">${t('gun_dual')}</button>
+          </div>
+        </div>
+        <div class="q-fg">
+          <label>${t('current_label')}</label>
+          <div class="q-power-chips">
+            <button type="button" class="q-chip ${(row.current!=='AC'&&row.current!=='DC')?'active':''}" onclick="onChargerCurrentChange(${row.id},'auto')">${t('cur_auto')} (${chargerTypeLabel(row.power)})</button>
+            <button type="button" class="q-chip ${row.current==='AC'?'active':''}" onclick="onChargerCurrentChange(${row.id},'AC')">AC</button>
+            <button type="button" class="q-chip ${row.current==='DC'?'active':''}" onclick="onChargerCurrentChange(${row.id},'DC')">DC</button>
+          </div>
+        </div>
+      </div>
       <div class="q-charger-info">
-        <div class="q-info-chip"><div class="ic-label">${t('max_power')}</div><div class="ic-val">${chargerTypeLabel(row.power)} - ${row.power}kW</div></div>
+        <div class="q-info-chip"><div class="ic-label">${t('max_power')}</div><div class="ic-val">${rowType(row)} - ${rowGuns(row)===2 ? '2 x ' : ''}${row.power}kW${rowGuns(row)===2 ? ' (' + t('total_power').toLowerCase() + ' ' + (row.power*2) + 'kW)' : ''}</div></div>
         <div class="q-info-chip"><div class="ic-label">🛵 ${t('moto_charge')}</div><div class="ic-val green">${ct.moto}</div></div>
         <div class="q-info-chip"><div class="ic-label">🚗 ${t('car_charge')}</div><div class="ic-val green">${ct.car}</div></div>
       </div>
@@ -1253,7 +1292,7 @@ function updateSummary() {
 
   // Chargers
   chargerRows.forEach(row => {
-    lines.push({ label:`${row.power}kW ${chargerTypeLabel(row.power)} × ${row.qty}`, val: cf(lineC(row.customPrice, row.qty)) });
+    lines.push({ label:`${rowLabel(row)} × ${row.qty}`, val: cf(lineC(row.customPrice, row.qty)) });
   });
 
   // Management & Payment Pack (a la carte)
@@ -1428,7 +1467,7 @@ function generatePDF(pdfLang) {
     const chHead = [[tl.item, tl.power, 'Moto 0-80%', 'Car 0-80%', tl.qty, `${tl.unit} (${cs})`, `${tl.amount} (${cs})`]];
     const chBody = chargerRows.map(row => {
       const ct = chargeTimesFor(row.power);
-      return [`${row.power}kW ${chargerTypeLabel(row.power)}`, chargerTypeLabel(row.power), ct.moto, ct.car,
+      return [rowLabel(row), rowType(row), ct.moto, ct.car,
         row.qty.toString(), m2(D(row.customPrice)), m2(lineC(row.customPrice, row.qty))];
     });
     const chSubtotal = chargerRows.reduce((a,r) => a + lineC(r.customPrice, r.qty), 0);
