@@ -1842,10 +1842,10 @@ function generatePDF(pdfLang) {
 
   // ── ACCEPTANCE helper ──
   const drawAcceptance = (en, pt) => {
-    ensure(50);
+    ensure(40);
     section(P('ACCEPTANCE', 'ACEITAÇÃO'));
     para(P(en, pt), 9, ink, 'normal', M, CW, 5);
-    y += 22;
+    y += 14;
     const fields = [[P('Name','Nome'), M, M + 55], [P('Date','Data'), M + 65, M + 105], [P('Signature','Assinatura'), M + 115, W - M]];
     doc.setDrawColor(...muted); doc.setLineWidth(0.3);
     fields.forEach(f => {
@@ -1853,7 +1853,7 @@ function generatePDF(pdfLang) {
       doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(...muted);
       doc.text(f[0], f[1], y + 4);
     });
-    y += 10;
+    y += 6;
   };
 
   // ── OPTIONS PAGE (+ acceptance block) ──
@@ -1934,7 +1934,12 @@ function generatePDF(pdfLang) {
       lines.forEach((ln, i) => doc.text(ln, M + 6, y + 3.4 + i * 4.6));
       y += lines.length * 4.6 + 1.2;
     });
-    if (sc.length) { section(P('SCOPE OF WORK', 'ÂMBITO DOS TRABALHOS')); bullets(sc); y += 3; }
+    if (sc.length) {
+      ensure(14);
+      doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(...navy);
+      doc.text(P('Scope of work', 'Âmbito dos trabalhos'), M, y + 3.5); y += 7;
+      bullets(sc); y += 2;
+    }
     if (installation.coc) {
       ensure(10);
       box(M, y + 0.6, true);
@@ -1988,7 +1993,7 @@ function generatePDF(pdfLang) {
         lines.forEach((ln, i) => doc.text(ln, M + 7, y + 3.4 + i * 4.6));
         y += lines.length * 4.6 + 1.5;
       });
-      y += 4;
+      y += 1;
     }
     if (accOn) drawAcceptance(`On behalf of ${clientName}, I also accept the installation by Plug n Drive as quoted above, with the equipment and platform quotation ${quoteNum}.`,
                               `Em nome de ${clientName}, aceito também a instalação pela Plug n Drive conforme orçamentada acima, com a cotação ${quoteNum} do equipamento e da plataforma.`);
