@@ -441,7 +441,7 @@ body.ok #gate{display:none}
 
     <!-- ROI CALCULATOR -->
     <div class="q-card" style="border:2px solid var(--blue)">
-      <div class="q-card-title"><span class="num blue">9</span> <span>ROI Calculator</span> <span style="font-size:.72rem;color:var(--muted);font-weight:500">(printed on quote)</span></div>
+      <div class="q-card-title"><span class="num blue">9</span> <span>ROI Calculator</span> <span style="font-size:.72rem;color:var(--muted);font-weight:500">(optional)</span> <label class="q-check" style="margin-left:auto;font-size:.78rem;font-weight:600"><input type="checkbox" id="roiOn" checked> Print on quote</label></div>
       <div class="q-grid-3" style="margin-bottom:1rem">
         <div class="q-fg"><label>Charging sessions / day / charger</label><input class="q-input" type="number" id="roiSessions" value="8" min="1" onchange="calcROI()"></div>
         <div class="q-fg"><label>Avg kWh per session</label><input class="q-input" type="number" id="roiKwh" value="20" min="1" step="0.5" onchange="calcROI()"></div>
@@ -1838,7 +1838,8 @@ function generatePDF(pdfLang) {
       para(P('These estimates are shown before any revenue share described in this quotation.', 'Estas estimativas são apresentadas antes de qualquer partilha de receita descrita nesta cotação.'), 7.5, muted, 'italic', M, CW, 3.8);
     }
   };
-  if (!hasInst) drawROI();
+  const roiPrint = document.getElementById('roiOn').checked;
+  if (!hasInst && roiPrint) drawROI();
 
   // ── ACCEPTANCE helper ──
   const drawAcceptance = (en, pt) => {
@@ -1998,8 +1999,7 @@ function generatePDF(pdfLang) {
     if (accOn) drawAcceptance(`On behalf of ${clientName}, I also accept the installation by Plug n Drive as quoted above, with the equipment and platform quotation ${quoteNum}.`,
                               `Em nome de ${clientName}, aceito também a instalação pela Plug n Drive conforme orçamentada acima, com a cotação ${quoteNum} do equipamento e da plataforma.`);
     // ROI annex
-    doc.addPage(); y = 24;
-    drawROI();
+    if (roiPrint) { doc.addPage(); y = 24; drawROI(); }
   }
 
   // ── FOOTER (every page) + running header (pages 2+) ──
