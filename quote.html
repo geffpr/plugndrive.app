@@ -352,6 +352,12 @@ body.ok #gate{display:none}
       <button class="q-add-btn" onclick="addExtra()" style="margin-top:.5rem"><span>＋</span> <span data-t="add_line">Add a line item</span></button>
     </div>
 
+    <!-- INSTALLATION (optional, separate page + own acceptance) -->
+    <div class="q-card">
+      <div class="q-card-title"><span class="num">5b</span> <span>Installation</span> <span style="font-size:.72rem;color:var(--muted);font-weight:500">(optional, printed on its own page with its own acceptance)</span></div>
+      <div id="instBox"></div>
+    </div>
+
     <!-- MAINTENANCE AFTER WARRANTY -->
     <div class="q-card">
       <div class="q-card-title"><span class="num">6</span> <span data-t="maint_title">Maintenance after Warranty</span> <span style="font-size:.72rem;color:var(--muted);font-weight:500" data-t="optional">(optional)</span></div>
@@ -443,7 +449,7 @@ body.ok #gate{display:none}
       </div>
       <div class="q-grid-3" style="margin-bottom:1.5rem">
         <div class="q-fg"><label>Your cost / kWh (electricity)</label><input class="q-input" type="number" id="roiCostKwh" value="2.10" min="0" step="0.1" onchange="calcROI()"></div>
-        <div class="q-fg"><label>No. of active chargers</label><input class="q-input" type="number" id="roiNumChargers" value="5" min="1" onchange="calcROI()"></div>
+        <div class="q-fg"><label>No. of active chargers</label><input class="q-input" type="number" id="roiNumChargers" value="" placeholder="auto (chargers on the quote)" min="1" onchange="calcROI()"></div>
         <div class="q-fg"><label>Operating days / month</label><input class="q-input" type="number" id="roiDays" value="26" min="1" max="31" onchange="calcROI()"></div>
       </div>
       <!-- ROI RESULTS -->
@@ -973,7 +979,7 @@ function calcROI() {
   const kwh        = parseFloat(document.getElementById('roiKwh').value) || 0;
   const priceKwh   = parseFloat(document.getElementById('roiPriceKwh').value) || 0;
   const costKwh    = parseFloat(document.getElementById('roiCostKwh').value) || 0;
-  const numCh      = parseFloat(document.getElementById('roiNumChargers').value) || 0;
+  const numCh      = parseFloat(document.getElementById('roiNumChargers').value) || totalChargerQty();
   const days       = parseFloat(document.getElementById('roiDays').value) || 26;
 
   const monthlyRevenue   = sessions * kwh * priceKwh * numCh * days;
@@ -984,7 +990,8 @@ function calcROI() {
   // Total cost of ownership = hardware + extras (once-off) + pack × payback months
   // We solve iteratively: payback = hardware / (profit - pack) - pack already in profit
   const hardwareCost  = chargerRows.reduce((a,r)=>a+r.customPrice*r.qty, 0)
-                      + extraRows.reduce((a,r)=>a+(r.opt?0:r.price), 0);
+                      + extraRows.reduce((a,r)=>a+(r.opt?0:r.price), 0)
+                      + instRawZar();
   // payback is based on net profit which already deducts monthly pack
   const paybackMonths = monthlyNetProfit > 0 ? hardwareCost / monthlyNetProfit : null;
   // Total cost over payback period = hardware + (pack × payback months)
@@ -1067,6 +1074,63 @@ function vatBreakdown(subC) {
   if (!vatOn() || !vatRate()) return { on:false, sub:subC, vat:0, total:subC };
   const vat = Math.round(subC * vatRate() / 100);
   return { on:true, sub:subC, vat, total:subC + vat };
+}
+// ─── INSTALLATION (optional section, quoted separately) ─────────
+let installation = null;
+function instNew() { return { lines:[{ id:1, desc:'', price:0 }], lid:2, scope:'', coc:true, payMode:'50_50', payCustom:'', leadWeeks:'', validDays:'', limits:'', ownElec:true }; }
+function instValidLines() { return installation ? installation.lines.filter(l => l.desc || l.price) : []; }
+function instRawZar() { return instValidLines().reduce((a, l) => a + (l.price || 0), 0); }
+function instC() { return instValidLines().reduce((a, l) => a + D(l.price), 0); }
+function instScopeItems() { return installation ? String(installation.scope || '').split(/\r?\n/).map(x => x.replace(/^\s*[-•*·]+\s*/, '').trim()).filter(Boolean) : []; }
+function totalChargerQty() { return chargerRows.reduce((a, r) => a + (r.qty || 0), 0); }
+function addInstallation() { installation = instNew(); renderInstall(); updateSummary(); }
+function removeInstallation() { if (!confirm('Remove the installation section from this quote?')) return; installation = null; renderInstall(); updateSummary(); }
+function instSet(k, v) { if (!installation) return; installation[k] = v; if (k === 'payMode') renderInstall(); updateSummary(); }
+function instLineSet(id, k, v) { const l = installation.lines.find(x => x.id === id); if (l) l[k] = (k === 'price' ? (parseFloat(v) || 0) : v); updateSummary(); }
+function instLineAdd() { installation.lines.push({ id: installation.lid++, desc:'', price:0 }); renderInstall(); }
+function instLineDel(id) { installation.lines = installation.lines.filter(x => x.id !== id); if (!installation.lines.length) installation.lines.push({ id: installation.lid++, desc:'', price:0 }); renderInstall(); updateSummary(); }
+function renderInstall() {
+  const el = document.getElementById('instBox'); if (!el) return;
+  if (!installation) {
+    el.innerHTML = `<div class="q-hint" style="margin-bottom:.7rem">The installation is quoted on its own page, so the client can take the equipment and platform only and use their own electrician. Build it from your electrician's quote.</div>
+      <button class="q-add-btn" onclick="addInstallation()"><span>＋</span> <span>Add installation</span></button>`;
+    return;
+  }
+  const I = installation, g = 'display:grid;grid-template-columns:1fr auto 150px auto;gap:.6rem;align-items:center;margin-bottom:.45rem';
+  const fg = (label, inner, st) => `<div class="q-fg" style="${st || ''}"><label>${label}</label>${inner}</div>`;
+  el.innerHTML = `
+    <div style="font-size:.74rem;font-weight:700;color:var(--muted);margin-bottom:.4rem">PRICE LINES (from the electrician's quote, plus your own extras if any)</div>
+    ${I.lines.map(l => `<div style="${g}">
+        <input class="q-input" placeholder="Description" value="${escHtml(l.desc)}" onchange="instLineSet(${l.id},'desc',this.value)">
+        <div style="font-size:.75rem;color:var(--muted);font-weight:600">${currSymbol()}</div>
+        <input class="q-input" type="number" step="any" placeholder="0" value="${l.price || ''}" onchange="instLineSet(${l.id},'price',this.value)">
+        <button class="q-remove-btn" onclick="instLineDel(${l.id})">✕</button></div>`).join('')}
+    <button class="q-add-btn" onclick="instLineAdd()" style="margin:.3rem 0 1rem"><span>＋</span> <span>Add a price line</span></button>
+    ${fg('Scope of work (one item per line, paste from the electrician quote)', `<textarea class="q-input" rows="6" placeholder="Supply and install DB board&#10;Supply and install 3-core cable, 40 m&#10;Trenching and reinstatement" oninput="installation.scope=this.value" onchange="instSet('scope',this.value)">${escHtml(I.scope)}</textarea>`)}
+    <div style="display:flex;gap:1.4rem;flex-wrap:wrap;margin:.2rem 0 1rem">
+      <label class="q-check"><input type="checkbox" ${I.coc ? 'checked' : ''} onchange="instSet('coc',this.checked)"> Certificate of Compliance (CoC) included</label>
+      <label class="q-check"><input type="checkbox" ${I.ownElec ? 'checked' : ''} onchange="instSet('ownElec',this.checked)"> Show "If you use your own electrician" note</label>
+    </div>
+    <div style="font-size:.74rem;font-weight:700;color:var(--muted);margin-bottom:.4rem">INSTALLATION CONDITIONS (separate from the equipment)</div>
+    <div class="q-fg-row" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.8rem">
+      ${fg('Payment', `<select class="q-input" onchange="instSet('payMode',this.value)">
+        <option value="50_50" ${I.payMode === '50_50' ? 'selected' : ''}>50% on order, 50% on completion</option>
+        <option value="100_order" ${I.payMode === '100_order' ? 'selected' : ''}>100% on order</option>
+        <option value="100_done" ${I.payMode === '100_done' ? 'selected' : ''}>100% on completion</option>
+        <option value="custom" ${I.payMode === 'custom' ? 'selected' : ''}>Custom text</option></select>`)}
+      ${fg('Lead time (weeks, optional)', `<input class="q-input" type="number" min="0" value="${escHtml(I.leadWeeks)}" onchange="instSet('leadWeeks',this.value)">`)}
+      ${fg('Price valid (days, optional)', `<input class="q-input" type="number" min="0" value="${escHtml(I.validDays)}" onchange="instSet('validDays',this.value)">`)}
+    </div>
+    ${I.payMode === 'custom' ? fg('Custom payment terms', `<input class="q-input" value="${escHtml(I.payCustom)}" onchange="instSet('payCustom',this.value)">`, 'margin-top:.6rem') : ''}
+    ${fg('Limits / exclusions (one per line, optional)', `<textarea class="q-input" rows="3" placeholder="Cable run beyond 40 m is quoted separately&#10;Civil works not included" oninput="installation.limits=this.value" onchange="instSet('limits',this.value)">${escHtml(I.limits)}</textarea>`, 'margin-top:.6rem')}
+    <button class="q-remove-btn" onclick="removeInstallation()" style="margin-top:.8rem;width:auto;padding:.4rem .9rem">Remove the installation section</button>`;
+}
+function instPayText(L) {
+  const P = (en, pt) => L === 'pt' ? pt : en, I = installation;
+  if (I.payMode === '100_order') return P('Installation: full payment is due on order of the installation.', 'Instalação: o pagamento integral é devido na encomenda da instalação.');
+  if (I.payMode === '100_done') return P('Installation: full payment is due on completion of the installation.', 'Instalação: o pagamento integral é devido na conclusão da instalação.');
+  if (I.payMode === 'custom') return String(I.payCustom || '').trim();
+  return P('Installation: 50% is due on order of the installation and 50% on completion.', 'Instalação: 50% é devido na encomenda da instalação e 50% na conclusão.');
 }
 function onExtraOpt(id, checked) { const r = extraRows.find(r => r.id === id); if (r) r.opt = checked; updateSummary(); }
 
@@ -1252,7 +1316,8 @@ function termsList(L) {
       ? P('Full payment is due on order.', 'O pagamento integral é devido na encomenda.')
       : P(`A ${dep}% deposit is due on order. The balance (${100 - dep}%) is due on delivery.`, `Um sinal de ${dep}% é devido na encomenda. O saldo (${100 - dep}%) é devido na entrega.`));
   }
-  if (on('tcInstall')) out.push(document.getElementById('tcInstallVal').value === 'included'
+  if (installation) out.push(P('Installation is quoted separately (see the Installation page) and may be accepted or declined independently of the equipment and platform.', 'A instalação é orçamentada à parte (ver a página Instalação) e pode ser aceite ou recusada independentemente do equipamento e da plataforma.'));
+  else if (on('tcInstall')) out.push(document.getElementById('tcInstallVal').value === 'included'
     ? P('Installation is included.', 'A instalação está incluída.') : P('Installation is not included.', 'A instalação não está incluída.'));
   if (on('tcComm')) out.push(document.getElementById('tcCommVal').value === 'included'
     ? P('Commissioning (configuration and testing of the charger once installed) is included.', 'A colocação em serviço (configuração e testes do carregador após a instalação) está incluída.')
@@ -1310,6 +1375,10 @@ function updateSummary() {
   extraRows.forEach(r => {
     if ((r.price || r.desc) && r.opt) lines.push({ label: `${r.desc || t('description')} (${t('extra_optional').toLowerCase()})`, val: r.price ? cf(D(r.price)) : t('free_word'), cls:'opt' });
   });
+
+  if (installation && (instValidLines().length)) {
+    lines.push({ label: 'Installation (quoted separately, own page)', val: cf(instC()), cls:'opt' });
+  }
 
   if (maintPlanActive()) {
     lines.push({ label: `${t('maint_title')} (${maintQty()} ${lang === 'pt' ? (maintQty() === 1 ? 'carregador' : 'carregadores') : (maintQty() === 1 ? 'charger' : 'chargers')})` + (maintIsOpt() ? ` - ${t('extra_optional').toLowerCase()}` : ''), val: cf(maintAnnualC()) + t('per_year'), cls:'opt' });
@@ -1458,6 +1527,9 @@ function generatePDF(pdfLang) {
   const validExtras = extraRows.filter(r => (r.desc || r.price) && !r.opt);
   const optExtras = extraRows.filter(r => (r.desc || r.price) && r.opt);
   const onceZar = chargerRows.reduce((a,r)=>a+r.customPrice*r.qty,0) + validExtras.reduce((a,r)=>a+r.price,0);
+  const hasInst = !!installation && (instValidLines().length > 0 || instScopeItems().length > 0);
+  const instCents = hasInst ? instC() : 0;
+  const onceZarInst = onceZar + (hasInst ? instRawZar() : 0);
   const rs = rsSentence(L);
   const totalsNeed = (vb.on ? 38 : 30) + (packActive() ? 13 : 0) + 6;
 
@@ -1590,7 +1662,7 @@ function generatePDF(pdfLang) {
   doc.setDrawColor(...navy); doc.setLineWidth(0.6); doc.line(x0, y, W - M, y);
   y += 2;
   doc.setFont('helvetica','bold'); doc.setFontSize(10.5); doc.setTextColor(...navy);
-  doc.text(vb.on ? P('TOTAL INCL. VAT (ONCE-OFF)','TOTAL COM IVA (PAGAMENTO ÚNICO)') : tl.once_total, x0, y + 5.5);
+  doc.text(hasInst ? (vb.on ? P('EQUIPMENT & PLATFORM, INCL. VAT','EQUIPAMENTO E PLATAFORMA, COM IVA') : P('EQUIPMENT & PLATFORM TOTAL','TOTAL EQUIPAMENTO E PLATAFORMA')) : (vb.on ? P('TOTAL INCL. VAT (ONCE-OFF)','TOTAL COM IVA (PAGAMENTO ÚNICO)') : tl.once_total), x0, y + 5.5);
   doc.setFontSize(13);
   doc.text(`${cs} ${m2(vb.total)}`, W - M, y + 5.8, { align:'right' });
   y += 11;
@@ -1695,24 +1767,24 @@ function generatePDF(pdfLang) {
     y += 4;
   }
 
-  // ── ROI ──
-  {
+  // ── ROI (inline in legacy quotes, annex on the last page when an installation is quoted) ──
+  const drawROI = () => {
     const sessions = parseFloat(val('roiSessions')) || 0;
     const kwh = parseFloat(val('roiKwh')) || 0;
     const priceKwh = parseFloat(val('roiPriceKwh')) || 0;
     const costKwh = parseFloat(val('roiCostKwh')) || 0;
-    const numCh = parseFloat(val('roiNumChargers')) || 0;
+    const numCh = parseFloat(val('roiNumChargers')) || totalChargerQty();
     const days = parseFloat(val('roiDays')) || 26;
     const monthlyRev = sessions*kwh*priceKwh*numCh*days;
     const monthlyElec = sessions*kwh*costKwh*numCh*days;
     const monthlyPk = packMonthlyEquivalent();
     const netProfit = monthlyRev - monthlyElec - monthlyPk;
-    const hardwareCost = onceZar;
+    const hardwareCost = onceZarInst;
     const payback = netProfit > 0 ? hardwareCost / netProfit : null;
     const totalCOO = payback ? hardwareCost + monthlyPk * Math.ceil(payback) : hardwareCost;
 
     ensure(128);
-    section(P('RETURN ON INVESTMENT (ROI)', 'RETORNO SOBRE O INVESTIMENTO (ROI)'));
+    section(hasInst ? P('ANNEX: RETURN ON INVESTMENT (ROI)', 'ANEXO: RETORNO SOBRE O INVESTIMENTO (ROI)') : P('RETURN ON INVESTMENT (ROI)', 'RETORNO SOBRE O INVESTIMENTO (ROI)'));
     para(P('The figures below show the estimated monthly revenue your charging infrastructure generates, the net profit after electricity costs and subscription fees, and how quickly the initial investment pays for itself.',
            'Os valores abaixo mostram a receita mensal estimada gerada pela infra-estrutura de carregamento, o lucro líquido após custos de electricidade e mensalidade, e o tempo necessário para recuperar o investimento inicial.'), 8.5, muted, 'normal', M, CW, 4.4);
     y += 2;
@@ -1754,8 +1826,8 @@ function generatePDF(pdfLang) {
       const packLine = monthlyPk > 0
         ? P(` + ${cs} ${nf(fmtRaw(monthlyPk * months))} in subscription fees over ${months} month${months>1?'s':''}`, ` + ${cs} ${nf(fmtRaw(monthlyPk * months))} em mensalidades ao longo de ${months} ${months>1?'meses':'mês'}`) : '';
       const instOn = document.getElementById('tcInstall').checked, instIncl = document.getElementById('tcInstallVal').value === 'included';
-      const hwEn = instOn ? (instIncl ? 'hardware & installation' : 'hardware, installation quoted separately') : 'hardware';
-      const hwPt = instOn ? (instIncl ? 'hardware e instalação' : 'hardware, instalação orçamentada à parte') : 'hardware';
+      const hwEn = hasInst ? 'hardware & installation' : instOn ? (instIncl ? 'hardware & installation' : 'hardware, installation quoted separately') : 'hardware';
+      const hwPt = hasInst ? 'hardware e instalação' : instOn ? (instIncl ? 'hardware e instalação' : 'hardware, instalação orçamentada à parte') : 'hardware';
       const sentence = P(
         `Total cost of ownership over the payback period: ${cs} ${nf(fmtRaw(hardwareCost))} (${hwEn})${packLine} = ${cs} ${nf(fmtRaw(totalCOO))} fully recovered in ${months} month${months>1?'s':''}. After that, your network generates ${cs} ${nf(fmtRaw(netProfit))} in net profit every month.`,
         `Custo total de propriedade durante o período de retorno: ${cs} ${nf(fmtRaw(hardwareCost))} (${hwPt})${packLine} = ${cs} ${nf(fmtRaw(totalCOO))} totalmente recuperados em ${months} ${months>1?'meses':'mês'}. Depois disso, a sua rede gera ${cs} ${nf(fmtRaw(netProfit))} de lucro líquido todos os meses.`);
@@ -1765,13 +1837,32 @@ function generatePDF(pdfLang) {
       y += 1;
       para(P('These estimates are shown before any revenue share described in this quotation.', 'Estas estimativas são apresentadas antes de qualquer partilha de receita descrita nesta cotação.'), 7.5, muted, 'italic', M, CW, 3.8);
     }
-  }
+  };
+  if (!hasInst) drawROI();
+
+  // ── ACCEPTANCE helper ──
+  const drawAcceptance = (en, pt) => {
+    ensure(50);
+    section(P('ACCEPTANCE', 'ACEITAÇÃO'));
+    para(P(en, pt), 9, ink, 'normal', M, CW, 5);
+    y += 22;
+    const fields = [[P('Name','Nome'), M, M + 55], [P('Date','Data'), M + 65, M + 105], [P('Signature','Assinatura'), M + 115, W - M]];
+    doc.setDrawColor(...muted); doc.setLineWidth(0.3);
+    fields.forEach(f => {
+      doc.line(f[1], y, f[2], y);
+      doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(...muted);
+      doc.text(f[0], f[1], y + 4);
+    });
+    y += 10;
+  };
 
   // ── OPTIONS PAGE (+ acceptance block) ──
-  if (optExtras.length || maintIsOpt()) {
-    const accOn = document.getElementById('accOn').checked;
-    doc.addPage(); y = 24;
-    section(accOn ? P('OPTIONS AND ACCEPTANCE', 'OPÇÕES E ACEITAÇÃO') : P('OPTIONS', 'OPÇÕES'));
+  const accOn = document.getElementById('accOn').checked;
+  const hasOpts = !!(optExtras.length || maintIsOpt());
+  if (hasOpts || (hasInst && accOn)) {
+    if (hasOpts) { doc.addPage(); y = 24; }
+    if (hasOpts) section(accOn ? P('OPTIONS AND ACCEPTANCE', 'OPÇÕES E ACEITAÇÃO') : P('OPTIONS', 'OPÇÕES'));
+    if (hasOpts) {
     para(P('The items below are optional and are not included in the total of this quotation. Tick the ones you wish to order.',
            'Os itens abaixo são opcionais e não estão incluídos no total desta cotação. Assinale os que pretende encomendar.'), 8.5, ink, 'normal', M, CW, 4.6);
     y += 2;
@@ -1803,23 +1894,107 @@ function generatePDF(pdfLang) {
       para(P('Recurring options are billed separately and are not included in the totals.', 'As opções recorrentes são faturadas à parte e não estão incluídas nos totais.') + (vatOn() ? P(' Prices exclude VAT.', ' Os preços não incluem IVA.') : ''), 7.5, muted, 'italic', M, CW, 3.8);
       y += 6;
     }
+    }
     if (accOn) {
-      ensure(70);
-      section(P('ACCEPTANCE', 'ACEITAÇÃO'));
       const billingMention = (packActive() && packOffer() === 'both')
         ? P(' and the OCPP billing option ticked in the Management Pack', ' e a opção de faturação OCPP assinalada no Pack de Gestão') : '';
-      para(P(`On behalf of ${clientName}, I accept quotation ${quoteNum} with the options ticked above${billingMention}.`,
-             `Em nome de ${clientName}, aceito a cotação ${quoteNum} com as opções assinaladas acima${billingMention}.`), 9, ink, 'normal', M, CW, 5);
-      y += 22;
-      const fields = [[P('Name','Nome'), M, M + 55], [P('Date','Data'), M + 65, M + 105], [P('Signature','Assinatura'), M + 115, W - M]];
-      doc.setDrawColor(...muted); doc.setLineWidth(0.3);
-      fields.forEach(f => {
-        doc.line(f[1], y, f[2], y);
-        doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(...muted);
-        doc.text(f[0], f[1], y + 4);
-      });
-      y += 10;
+      if (hasInst) {
+        drawAcceptance(`On behalf of ${clientName}, I accept quotation ${quoteNum} for the equipment and platform${hasOpts ? ', with the options ticked above' : ''}${billingMention}. The installation is quoted separately on the next page.`,
+                       `Em nome de ${clientName}, aceito a cotação ${quoteNum} para o equipamento e a plataforma${hasOpts ? ', com as opções assinaladas acima' : ''}${billingMention}. A instalação é orçamentada à parte na página seguinte.`);
+      } else {
+        drawAcceptance(`On behalf of ${clientName}, I accept quotation ${quoteNum} with the options ticked above${billingMention}.`,
+                       `Em nome de ${clientName}, aceito a cotação ${quoteNum} com as opções assinaladas acima${billingMention}.`);
+      }
     }
+  }
+
+  // ── INSTALLATION PAGE (own conditions + own acceptance) ──
+  if (hasInst) {
+    doc.addPage(); y = 24;
+    section(P('INSTALLATION (OPTIONAL)', 'INSTALAÇÃO (OPCIONAL)'));
+    para(P('The installation is quoted separately. You may choose the Plug n Drive installation below, or take the equipment and platform only and use your own qualified electrician. Sign and return this page only if you choose the Plug n Drive installation.',
+           'A instalação é orçamentada à parte. Pode escolher a instalação da Plug n Drive abaixo, ou levar apenas o equipamento e a plataforma e recorrer ao seu próprio eletricista qualificado. Assine e devolva esta página apenas se escolher a instalação da Plug n Drive.'), 8.5, ink, 'normal', M, CW, 4.6);
+    y += 3;
+    const ivl = instValidLines();
+    if (ivl.length) {
+      const iBody = ivl.map(l => [cleanTxt(l.desc) || '-', amt(l.price)]);
+      doc.autoTable(Object.assign({}, tbl, {
+        head: [[P('Installation','Instalação'), `${tl.amount} (${cs})`]], body: iBody, startY: y,
+        columnStyles: { 1:{ halign:'right', cellWidth:40 } },
+        didParseCell: d => { if (d.column.index === 1 && d.section === 'head') d.cell.styles.halign = 'right'; }
+      }));
+      y = doc.lastAutoTable.finalY + 6;
+    }
+    const sc = instScopeItems();
+    const bullets = (items) => items.forEach(tx => {
+      const lines = doc.splitTextToSize(tx, CW - 8);
+      ensure(lines.length * 4.6 + 1.2);
+      doc.setFillColor(...navy); doc.circle(M + 1.6, y + 2.6, 0.7, 'F');
+      doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(...ink);
+      lines.forEach((ln, i) => doc.text(ln, M + 6, y + 3.4 + i * 4.6));
+      y += lines.length * 4.6 + 1.2;
+    });
+    if (sc.length) { section(P('SCOPE OF WORK', 'ÂMBITO DOS TRABALHOS')); bullets(sc); y += 3; }
+    if (installation.coc) {
+      ensure(10);
+      box(M, y + 0.6, true);
+      doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.setTextColor(...navy);
+      doc.text(P('Certificate of Compliance (CoC) issued on completion: included', 'Certificado de Conformidade (CoC) emitido na conclusão: incluído'), M + 7, y + 3.4);
+      y += 8;
+    }
+    if (installation.ownElec) {
+      const txt = P('If you use your own electrician: the installation must comply with SANS 10142-1 and a Certificate of Compliance must be provided. Plug n Drive configures and commissions the charger once the certificate is provided.',
+                    'Se utilizar o seu próprio eletricista: a instalação deve cumprir a norma SANS 10142-1 e deve ser fornecido um Certificado de Conformidade. A Plug n Drive configura e coloca o carregador em serviço depois de receber o certificado.');
+      const tl2 = doc.splitTextToSize(txt, CW - 8), bh = tl2.length * 4.6 + 6;
+      ensure(bh + 4);
+      doc.setFillColor(240,244,250); doc.rect(M, y, CW, bh, 'F');
+      doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(...ink);
+      tl2.forEach((ln, i) => doc.text(ln, M + 4, y + 5.2 + i * 4.6));
+      y += bh + 5;
+    }
+    // totals
+    const eqB = vatBreakdown(tt.req), bothB = vatBreakdown(tt.req + instCents);
+    const instInc = bothB.total - eqB.total, instSub = instCents;
+    ensure(34);
+    const sfx2 = vb.on ? P(' (incl. VAT)', ' (com IVA)') : P(' (excl. VAT)', ' (sem IVA)');
+    if (vb.on) {
+      line2(P('Installation (excl. VAT)', 'Instalação (sem IVA)'), instSub, false);
+      line2(`${P('VAT','IVA')} ${vatRate()}%`, instInc - instSub, false);
+    }
+    doc.setDrawColor(...navy); doc.setLineWidth(0.6); doc.line(x0, y, W - M, y); y += 2;
+    doc.setFont('helvetica','bold'); doc.setFontSize(10.5); doc.setTextColor(...navy);
+    doc.text(P('INSTALLATION TOTAL', 'TOTAL DA INSTALAÇÃO') + sfx2, x0 - 6, y + 5.5);
+    doc.setFontSize(13); doc.text(`${cs} ${m2(instInc)}`, W - M, y + 5.8, { align:'right' });
+    y += 12;
+    line2(P('Equipment and platform', 'Equipamento e plataforma') + sfx2, eqB.total, false);
+    line2(P('With installation', 'Com instalação') + sfx2, bothB.total, true);
+    y += 4;
+    // installation conditions
+    const conds = [];
+    const pt = instPayText(L); if (pt) conds.push(pt);
+    const lw = parseInt(installation.leadWeeks) || 0;
+    if (lw) conds.push(P(`Installation lead time: ${lw} week${lw > 1 ? 's' : ''} after acceptance${/50|order/.test(installation.payMode) ? ' and payment due on order' : ''}.`, `Prazo da instalação: ${lw} semana${lw > 1 ? 's' : ''} após a aceitação${/50|order/.test(installation.payMode) ? ' e o pagamento devido na encomenda' : ''}.`));
+    const vd = parseInt(installation.validDays) || 0;
+    if (vd) conds.push(P(`The installation price is valid for ${vd} days from the quotation date.`, `O preço da instalação é válido por ${vd} dias a partir da data da cotação.`));
+    String(installation.limits || '').split(/\r?\n/).map(x => x.trim()).filter(Boolean).forEach(x => conds.push(x));
+    if (conds.length) {
+      ensure(16 + conds.length * 5);
+      section(P('INSTALLATION CONDITIONS', 'CONDIÇÕES DA INSTALAÇÃO'));
+      conds.forEach(tx => {
+        const lines = doc.splitTextToSize(tx, CW - 8);
+        ensure(lines.length * 4.6 + 1.5);
+        box(M, y + 0.6, true);
+        doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(...ink);
+        lines.forEach((ln, i) => doc.text(ln, M + 7, y + 3.4 + i * 4.6));
+        y += lines.length * 4.6 + 1.5;
+      });
+      y += 4;
+    }
+    if (accOn) drawAcceptance(`On behalf of ${clientName}, I also accept the installation by Plug n Drive as quoted above, with the equipment and platform quotation ${quoteNum}.`,
+                              `Em nome de ${clientName}, aceito também a instalação pela Plug n Drive conforme orçamentada acima, com a cotação ${quoteNum} do equipamento e da plataforma.`);
+    // ROI annex
+    doc.addPage(); y = 24;
+    drawROI();
   }
 
   // ── FOOTER (every page) + running header (pages 2+) ──
@@ -1868,7 +2043,7 @@ function qCollect() {
     fields[el.id] = el.type === 'checkbox' ? el.checked : el.value;
   });
   const usedCustom = customFeatures.filter(c => mgmtPack.features.includes(c.id));
-  return { v: 1, fields, chargerRows, extraRows, rowId, mgmtPack, usedCustom, rsRows, rsId, lang, currency, mznRate };
+  return { v: 1, fields, chargerRows, extraRows, rowId, mgmtPack, usedCustom, rsRows, rsId, lang, currency, mznRate, installation };
 }
 
 function qApply(s) {
@@ -1883,12 +2058,13 @@ function qApply(s) {
   saveCustomFeatures();
   rsRows = (s.rsRows && s.rsRows.length) ? s.rsRows.map(r => Object.assign({}, r, { rate: (r.rate === null ? NaN : r.rate) })) : [{ id: 1, rate: 5, kind: 'ongoing', val: '' }];
   rsId = s.rsId || 2;
+  installation = s.installation || null;
   currency = s.currency || 'ZAR'; document.getElementById('currencySelect').value = currency;
   if (s.mznRate) mznRate = s.mznRate;
   const vr = document.getElementById('vatRate'); if (vr) vr.dataset.touched = '1';
   onRsMode(); onPackField(); onMaintMode();
   setLang(s.lang || 'en');
-  renderPackFeatures(); renderChargerList(); renderExtraList(); renderRsRows();
+  renderPackFeatures(); renderChargerList(); renderExtraList(); renderRsRows(); renderInstall();
   updateSummary(); calcROI();
 }
 
@@ -2007,6 +2183,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   fetchRate();
   renderChargerList();
   renderExtraList();
+  renderInstall();
   loadCustomFeatures();
   renderPackFeatures();
   renderRsRows();
