@@ -2145,35 +2145,22 @@ function generateComparePDF(pdfLang) {
   para(P('Below are the chargers we propose for your site, side by side: power, charging speed and price. The option and the quantity you choose depend on your needs, and the quantities shown can be adjusted.',
          'Abaixo estão os carregadores que propomos para o seu local, lado a lado: potência, velocidade de carga e preço. A opção e a quantidade que escolher dependem das suas necessidades, e as quantidades indicadas podem ser ajustadas.'), 8.5, ink, 'normal', M, CW, 4.6);
   y += 3;
-  for (let s = 0; s < cols.length; s += 4) {
-    const chunk = cols.slice(s, s + 4), n = chunk.length;
-    ensure(95);
-    const head = [[''].concat(chunk.map((c, i) => `${letter(s + i)}. ${cleanTxt(c.label)}` + (c.row.rec ? '\n' + P('RECOMMENDED','RECOMENDADO') : '')))];
-    const cells = f => [''].concat(chunk.map(f));
-    const body = [
-      [P('Type','Tipo')].concat(chunk.map(c => rowType(c.row))),
-      [P('Power per gun','Potência por pistola')].concat(chunk.map(c => `${c.row.power} kW`)),
-      [P('Guns','Pistolas')].concat(chunk.map(c => String(rowGuns(c.row)))),
-      [P('Total power','Potência total')].concat(chunk.map(c => `${c.row.power * rowGuns(c.row)} kW`)),
-      [P('Car, 0 to 80%','Carro, 0 a 80%')].concat(chunk.map(c => chargeTimesFor(c.row.power).car)),
-      [P('Moto, 0 to 80%','Moto, 0 a 80%')].concat(chunk.map(c => chargeTimesFor(c.row.power).moto)),
-      [P('Quantity','Quantidade')].concat(chunk.map(c => String(c.row.qty))),
-      [`${P('Unit price','Preço unitário')} (${cs})`].concat(chunk.map(c => m2(D(c.row.customPrice)))),
-      [`${P('Equipment total','Total do equipamento')} (${cs})`].concat(chunk.map(c => m2(c.eq)))
-    ];
-    const lastIdx = body.length - 1;
-    const cw = (CW - 38) / n;
-    const colStyles = { 0:{ cellWidth:38, fontStyle:'bold' } };
-    for (let i = 1; i <= n; i++) colStyles[i] = { cellWidth: cw, halign:'center' };
+  {
+    const rec = cols.map(c => !!c.row.rec);
+    const head = [[P('Option','Opção'), P('Type','Tipo'), P('Power','Potência'), P('Car 0-80%','Carro 0-80%'), P('Moto 0-80%','Moto 0-80%'), P('Qty','Qtd'), `${P('Unit price','Preço unit.')} (${cs})`, `${P('Total','Total')} (${cs})`]];
+    const body = cols.map((c, i) => {
+      const r = c.row, g = rowGuns(r), ct = chargeTimesFor(r.power);
+      return [`${letter(i)}. ${cleanTxt(c.label)}` + (r.rec ? `\n${P('RECOMMENDED','RECOMENDADO')}` : ''),
+        rowType(r), g === 2 ? `2 x ${r.power} kW` : `${r.power} kW`, ct.car, ct.moto, String(r.qty), m2(D(r.customPrice)), m2(c.eq)];
+    });
     doc.autoTable(Object.assign({}, tbl, {
-      head, body, startY: y, tableWidth: CW, columnStyles: colStyles,
+      head, body, startY: y, tableWidth: CW,
+      styles: Object.assign({}, tbl.styles, { fontSize: 8.3, cellPadding: 2.6 }),
+      columnStyles: { 0:{ cellWidth:46, fontStyle:'bold' }, 1:{ cellWidth:12, halign:'center' }, 2:{ cellWidth:24, halign:'center' }, 3:{ cellWidth:20, halign:'center' }, 4:{ cellWidth:20, halign:'center' }, 5:{ cellWidth:10, halign:'center' }, 6:{ halign:'right' }, 7:{ halign:'right', fontStyle:'bold' } },
       didParseCell: d => {
-        if (d.section === 'head') {
-          d.cell.styles.halign = d.column.index === 0 ? 'left' : 'center';
-          if (d.column.index > 0 && chunk[d.column.index - 1].row.rec) d.cell.styles.fillColor = blue;
-        }
-        if (d.section === 'body' && d.row.index === lastIdx) { d.cell.styles.fontStyle = 'bold'; d.cell.styles.fillColor = [240,244,250]; d.cell.styles.textColor = navy; }
-        if (d.section === 'body' && d.column.index > 0 && chunk[d.column.index - 1].row.rec && d.row.index !== lastIdx) d.cell.styles.fillColor = [232,243,251];
+        if (d.section === 'head' && d.column.index >= 6) d.cell.styles.halign = 'right';
+        if (d.section === 'head' && d.column.index >= 1 && d.column.index <= 5) d.cell.styles.halign = 'center';
+        if (d.section === 'body' && rec[d.row.index]) { d.cell.styles.fillColor = [232,243,251]; if (d.column.index === 0) d.cell.styles.textColor = blue; }
       }
     }));
     y = doc.lastAutoTable.finalY + 4;
@@ -2212,28 +2199,31 @@ function generateComparePDF(pdfLang) {
   // what each option costs (equipment once-off, platform recurring)
   ensure(60);
   section(P('WHAT EACH OPTION COSTS','QUANTO CUSTA CADA OPÇÃO'));
-  for (let s = 0; s < cols.length; s += 4) {
-    const chunk = cols.slice(s, s + 4), n = chunk.length;
-    const head = [[''].concat(chunk.map((c, i) => `${letter(s + i)}. ${cleanTxt(c.label)} x ${c.row.qty}`))];
-    const body = [[P('Equipment, once-off','Equipamento, pagamento único')].concat(chunk.map(c => money(c.eq)))];
-    if (vatOn() && vatRate()) body.push([P('Equipment incl. VAT','Equipamento com IVA')].concat(chunk.map(c => money(vatBreakdown(c.eq).total))));
-    if (act && offer !== 'annual') body.push([P('Platform, per month','Plataforma, por mês')].concat(chunk.map(c => `${money(c.pm)} ${perM}`)));
-    if (act && offer !== 'monthly') body.push([P('Platform, per year','Plataforma, por ano')].concat(chunk.map(c => `${money(c.py)} ${perY}`)));
-    if (act) {
-      const annualY1 = offer !== 'monthly';
-      body.push([annualY1 ? P('Year 1: equipment + annual platform','Ano 1: equipamento + plataforma anual') : P('Year 1: equipment + 12 months platform','Ano 1: equipamento + 12 meses de plataforma')]
-        .concat(chunk.map(c => money(c.eq + (annualY1 ? c.py : c.pm * 12)))));
-    }
-    const lastIdx = body.length - 1;
-    const cw = (CW - 44) / n;
-    const colStyles = { 0:{ cellWidth:44, fontStyle:'bold' } };
-    for (let i = 1; i <= n; i++) colStyles[i] = { cellWidth: cw, halign:'center' };
+  {
+    const vatCol = vatOn() && vatRate();
+    const annualY1 = offer !== 'monthly';
+    const head = [[P('Option','Opção'), P('Equipment, once-off','Equipamento, único')]];
+    if (vatCol) head[0].push(P('Equipment incl. VAT','Equip. com IVA'));
+    if (act && offer !== 'annual') head[0].push(P('Platform / month','Plataforma / mês'));
+    if (act && offer !== 'monthly') head[0].push(P('Platform / year','Plataforma / ano'));
+    if (act) head[0].push(annualY1 ? P('Year 1 total','Total ano 1') : P('Year 1 (12 months)','Ano 1 (12 meses)'));
+    const body = cols.map((c, i) => {
+      const row = [`${letter(i)}. ${cleanTxt(c.label)} x ${c.row.qty}`, money(c.eq)];
+      if (vatCol) row.push(money(vatBreakdown(c.eq).total));
+      if (act && offer !== 'annual') row.push(`${money(c.pm)}`);
+      if (act && offer !== 'monthly') row.push(`${money(c.py)}`);
+      if (act) row.push(money(c.eq + (annualY1 ? c.py : c.pm * 12)));
+      return row;
+    });
+    const rec = cols.map(c => !!c.row.rec), nc = head[0].length;
     ensure(14 + body.length * 9);
     doc.autoTable(Object.assign({}, tbl, {
-      head, body, startY: y, tableWidth: CW, columnStyles: colStyles,
+      head, body, startY: y, tableWidth: CW,
+      columnStyles: Object.assign({ 0:{ cellWidth:44, fontStyle:'bold' } }, act ? { [nc - 1]:{ fontStyle:'bold', cellWidth:32 } } : {}),
       didParseCell: d => {
-        if (d.section === 'head') d.cell.styles.halign = d.column.index === 0 ? 'left' : 'center';
-        if (act && d.section === 'body' && d.row.index === lastIdx) { d.cell.styles.fontStyle = 'bold'; d.cell.styles.fillColor = [240,244,250]; d.cell.styles.textColor = navy; }
+        if (d.column.index >= 1) d.cell.styles.halign = 'right';
+        if (d.section === 'body' && rec[d.row.index]) d.cell.styles.fillColor = [232,243,251];
+        if (act && d.section === 'body' && d.column.index === nc - 1) d.cell.styles.textColor = navy;
       }
     }));
     y = doc.lastAutoTable.finalY + 4;
