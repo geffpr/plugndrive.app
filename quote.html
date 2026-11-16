@@ -2276,54 +2276,6 @@ function generateComparePDF(pdfLang) {
   const rs = rsSentence(L);
   if (rs) { ensure(24); section(P('REVENUE SHARE ON CHARGING','PARTILHA DA RECEITA DE CARREGAMENTO')); para(rs, 8.5, ink, 'normal', M, CW, 4.6); y += 4; }
 
-  // ROI, on the recommended option (optional)
-  if (document.getElementById('roiOn').checked) {
-    const rb = roiBasis();
-    if (rb) {
-      const num = id => parseFloat(val(id)) || 0;
-      const nfd = n => { const r = Math.round(n * 100) / 100; return Number.isInteger(r) ? nf(r) : r.toFixed(2); };
-      const sessions = num('roiSessions'), kwh = num('roiKwh'), priceKwh = num('roiPriceKwh'), costKwh = num('roiCostKwh'), days = num('roiDays') || 26;
-      const rev = sessions * kwh * priceKwh * rb.n * days, elec = sessions * kwh * costKwh * rb.n * days, net = rev - elec - rb.pack;
-      const payback = net > 0 ? rb.hw / net : null;
-      const idx = chargerRows.indexOf(rb.row), lab = cleanTxt(cols[idx] ? cols[idx].label : rowLabel(rb.row));
-      ensure(110);
-      section(P('RETURN ON INVESTMENT (ROI)','RETORNO SOBRE O INVESTIMENTO (ROI)'));
-      para(P(`Estimate for option ${letter(idx)} (${lab}) with ${rb.n} charger${rb.n > 1 ? 's' : ''}. It shows the monthly revenue your chargers can generate, the net profit after electricity and platform costs, and how quickly the equipment pays for itself. Installation is not included.`,
-             `Estimativa para a opção ${letter(idx)} (${lab}) com ${rb.n} carregador${rb.n > 1 ? 'es' : ''}. Mostra a receita mensal que os carregadores podem gerar, o lucro líquido após custos de eletricidade e plataforma, e o tempo para recuperar o investimento no equipamento. A instalação não está incluída.`), 8.5, ink, 'normal', M, CW, 4.6);
-      y += 2;
-      doc.autoTable(Object.assign({}, tbl, {
-        head: [[P('Assumption','Parâmetro'), P('Value','Valor')]],
-        body: [
-          [P('Charging sessions per charger / day','Sessões de carga por carregador / dia'), sessions.toString()],
-          [P('Average kWh per session','Média de kWh por sessão'), kwh.toString()],
-          [P('Price charged to user','Preço cobrado ao utilizador'), `${cs} ${nfd(fmtRaw(priceKwh))} / kWh`],
-          [P('Your electricity cost','Custo da eletricidade'), `${cs} ${nfd(fmtRaw(costKwh))} / kWh`],
-          [P('Number of chargers','Número de carregadores'), rb.n.toString()],
-          [P('Operating days / month','Dias de operação / mês'), days.toString()],
-        ],
-        startY: y, styles: Object.assign({}, tbl.styles, { cellPadding: 2 }),
-        columnStyles: { 1:{ halign:'right', cellWidth:48 } },
-        didParseCell: d => { if (d.column.index === 1 && d.section === 'head') d.cell.styles.halign = 'right'; }
-      }));
-      y = doc.lastAutoTable.finalY + 5;
-      ensure(30);
-      doc.setDrawColor(...navy); doc.setLineWidth(0.4); doc.rect(M, y, CW, 22);
-      const colW = CW / 3;
-      const cell = (i, label, text, color) => {
-        const cx = M + colW * (i + 0.5);
-        doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(...muted);
-        doc.text(label, cx, y + 7.5, { align:'center', charSpace: 0.3 });
-        doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(...color);
-        doc.text(text, cx, y + 16, { align:'center' });
-        if (i > 0) { doc.setDrawColor(...rule); doc.setLineWidth(0.2); doc.line(M + colW * i, y + 4, M + colW * i, y + 18); }
-      };
-      cell(0, P('MONTHLY REVENUE','RECEITA MENSAL'), `${cs} ${nf(fmtRaw(rev))}`, navy);
-      cell(1, P('MONTHLY NET PROFIT','LUCRO LÍQUIDO MENSAL'), `${cs} ${nf(fmtRaw(net))}`, net >= 0 ? [22,120,60] : [190,40,40]);
-      cell(2, P('PAYBACK PERIOD','PERÍODO DE RETORNO'), payback ? (payback < 1 ? P('< 1 month','< 1 mês') : Math.ceil(payback) + P(' months',' meses')) : 'N/A', navy);
-      y += 28;
-    }
-  }
-
   // payment details
   if (document.getElementById('bankOn').checked) {
     const items = [
@@ -2378,6 +2330,54 @@ function generateComparePDF(pdfLang) {
     };
     rowOf([[P('Option chosen (A, B, C...)','Opção escolhida (A, B, C...)'), M, M + 70], [P('Quantity','Quantidade'), M + 80, M + 110], [(act && offer === 'both') ? P('Billing: monthly / annual','Faturação: mensal / anual') : P('Notes','Notas'), M + 120, W - M]]);
     rowOf([[P('Name','Nome'), M, M + 55], [P('Date','Data'), M + 65, M + 105], [P('Signature','Assinatura'), M + 115, W - M]]);
+  }
+
+  // ROI annex, on the recommended option (optional), after the signature block
+  if (document.getElementById('roiOn').checked) {
+    const rb = roiBasis();
+    if (rb) {
+      const num = id => parseFloat(val(id)) || 0;
+      const nfd = n => { const r = Math.round(n * 100) / 100; return Number.isInteger(r) ? nf(r) : r.toFixed(2); };
+      const sessions = num('roiSessions'), kwh = num('roiKwh'), priceKwh = num('roiPriceKwh'), costKwh = num('roiCostKwh'), days = num('roiDays') || 26;
+      const rev = sessions * kwh * priceKwh * rb.n * days, elec = sessions * kwh * costKwh * rb.n * days, net = rev - elec - rb.pack;
+      const payback = net > 0 ? rb.hw / net : null;
+      const idx = chargerRows.indexOf(rb.row), lab = cleanTxt(cols[idx] ? cols[idx].label : rowLabel(rb.row));
+      doc.addPage(); y = 24;
+      section(P('ANNEX: RETURN ON INVESTMENT (ROI)','ANEXO: RETORNO SOBRE O INVESTIMENTO (ROI)'));
+      para(P(`Estimate for option ${letter(idx)} (${lab}) with ${rb.n} charger${rb.n > 1 ? 's' : ''}. It shows the monthly revenue your chargers can generate, the net profit after electricity and platform costs, and how quickly the equipment pays for itself. Installation is not included.`,
+             `Estimativa para a opção ${letter(idx)} (${lab}) com ${rb.n} carregador${rb.n > 1 ? 'es' : ''}. Mostra a receita mensal que os carregadores podem gerar, o lucro líquido após custos de eletricidade e plataforma, e o tempo para recuperar o investimento no equipamento. A instalação não está incluída.`), 8.5, ink, 'normal', M, CW, 4.6);
+      y += 2;
+      doc.autoTable(Object.assign({}, tbl, {
+        head: [[P('Assumption','Parâmetro'), P('Value','Valor')]],
+        body: [
+          [P('Charging sessions per charger / day','Sessões de carga por carregador / dia'), sessions.toString()],
+          [P('Average kWh per session','Média de kWh por sessão'), kwh.toString()],
+          [P('Price charged to user','Preço cobrado ao utilizador'), `${cs} ${nfd(fmtRaw(priceKwh))} / kWh`],
+          [P('Your electricity cost','Custo da eletricidade'), `${cs} ${nfd(fmtRaw(costKwh))} / kWh`],
+          [P('Number of chargers','Número de carregadores'), rb.n.toString()],
+          [P('Operating days / month','Dias de operação / mês'), days.toString()],
+        ],
+        startY: y, styles: Object.assign({}, tbl.styles, { cellPadding: 2 }),
+        columnStyles: { 1:{ halign:'right', cellWidth:48 } },
+        didParseCell: d => { if (d.column.index === 1 && d.section === 'head') d.cell.styles.halign = 'right'; }
+      }));
+      y = doc.lastAutoTable.finalY + 5;
+      ensure(30);
+      doc.setDrawColor(...navy); doc.setLineWidth(0.4); doc.rect(M, y, CW, 22);
+      const colW = CW / 3;
+      const cell = (i, label, text, color) => {
+        const cx = M + colW * (i + 0.5);
+        doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(...muted);
+        doc.text(label, cx, y + 7.5, { align:'center', charSpace: 0.3 });
+        doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(...color);
+        doc.text(text, cx, y + 16, { align:'center' });
+        if (i > 0) { doc.setDrawColor(...rule); doc.setLineWidth(0.2); doc.line(M + colW * i, y + 4, M + colW * i, y + 18); }
+      };
+      cell(0, P('MONTHLY REVENUE','RECEITA MENSAL'), `${cs} ${nf(fmtRaw(rev))}`, navy);
+      cell(1, P('MONTHLY NET PROFIT','LUCRO LÍQUIDO MENSAL'), `${cs} ${nf(fmtRaw(net))}`, net >= 0 ? [22,120,60] : [190,40,40]);
+      cell(2, P('PAYBACK PERIOD','PERÍODO DE RETORNO'), payback ? (payback < 1 ? P('< 1 month','< 1 mês') : Math.ceil(payback) + P(' months',' meses')) : 'N/A', navy);
+      y += 28;
+    }
   }
 
   // footer and running header
