@@ -43,6 +43,8 @@ body{background:var(--grey);color:var(--navy);font-family:var(--font);font-size:
 .q-layout{display:grid;grid-template-columns:1fr 360px;gap:1.5rem;max-width:1280px;margin:0 auto;padding:2rem 2%}
 
 /* CARDS */
+body.cmp .std-only{display:none !important}
+body.cmp .q-sum-total-row,body.cmp .q-sum-divider,body.cmp .q-sum-monthly{display:none !important}
 .q-card{background:#fff;border:1px solid var(--border);border-radius:20px;padding:2rem;margin-bottom:1.5rem}
 .q-card-title{font-size:.95rem;font-weight:800;color:var(--navy);margin-bottom:1.5rem;display:flex;align-items:center;gap:.6rem}
 .q-card-title .num{width:26px;height:26px;background:var(--navy);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:800;flex-shrink:0}
@@ -243,6 +245,17 @@ body.ok #gate{display:none}
   <!-- LEFT COLUMN -->
   <div>
 
+    <!-- QUOTE TYPE -->
+    <div class="q-card" style="padding:1.2rem 2rem">
+      <div class="q-fg" style="max-width:460px">
+        <label>Quote type</label>
+        <select class="q-input" id="quoteMode" onchange="onQuoteMode()">
+          <option value="standard">Standard quote</option>
+          <option value="compare">Comparison quote (several chargers side by side)</option>
+        </select>
+      </div>
+    </div>
+
     <!-- CLIENT INFO -->
     <div class="q-card">
       <div class="q-card-title"><span class="num">1</span> <span data-t="client_info">Client Information</span></div>
@@ -278,7 +291,7 @@ body.ok #gate{display:none}
           <label data-t="pack_discount">Annual discount (%)</label>
           <input class="q-input" type="number" id="packDiscount" value="0" min="0" max="100" step="0.5" oninput="onPackField()">
         </div>
-        <div class="q-fg">
+        <div class="q-fg std-only">
           <label data-t="pack_qty">Chargers billed</label>
           <input class="q-input" type="number" id="packQty" placeholder="auto" min="1" oninput="onPackField()">
         </div>
@@ -353,13 +366,13 @@ body.ok #gate{display:none}
     </div>
 
     <!-- INSTALLATION (optional, separate page + own acceptance) -->
-    <div class="q-card">
+    <div class="q-card std-only">
       <div class="q-card-title"><span class="num">5b</span> <span>Installation</span> <span style="font-size:.72rem;color:var(--muted);font-weight:500">(optional, printed on its own page with its own acceptance)</span></div>
       <div id="instBox"></div>
     </div>
 
     <!-- MAINTENANCE AFTER WARRANTY -->
-    <div class="q-card">
+    <div class="q-card std-only">
       <div class="q-card-title"><span class="num">6</span> <span data-t="maint_title">Maintenance after Warranty</span> <span style="font-size:.72rem;color:var(--muted);font-weight:500" data-t="optional">(optional)</span></div>
       <div class="q-fg" style="max-width:340px">
         <label data-t="maint_mode">On the quote</label>
@@ -440,7 +453,7 @@ body.ok #gate{display:none}
     </div>
 
     <!-- ROI CALCULATOR -->
-    <div class="q-card" style="border:2px solid var(--blue)">
+    <div class="q-card std-only" style="border:2px solid var(--blue)">
       <div class="q-card-title"><span class="num blue">9</span> <span>ROI Calculator</span> <span style="font-size:.72rem;color:var(--muted);font-weight:500">(optional)</span> <label class="q-check" style="margin-left:auto;font-size:.78rem;font-weight:600"><input type="checkbox" id="roiOn" checked> Print on quote</label></div>
       <div class="q-grid-3" style="margin-bottom:1rem">
         <div class="q-fg"><label>Charging sessions / day / charger</label><input class="q-input" type="number" id="roiSessions" value="8" min="1" onchange="calcROI()"></div>
@@ -735,6 +748,7 @@ let lang = 'en';
 let currency = 'ZAR';
 let mznRate = null;
 let chargerRows = [];
+let quoteMode = 'standard';   // 'standard' or 'compare' (several chargers side by side)
 let extraRows = [];
 let rowId = 0;
 
@@ -894,6 +908,7 @@ function renderChargerList() {
         </div>
         <button class="q-remove-btn" onclick="removeCharger(${row.id})" title="${t('remove')}">✕</button>
       </div>
+      ${quoteMode === 'compare' ? `<div class="q-grid-2" style="margin:1rem 0 .9rem"><div class="q-fg"><label>Column title (optional)</label><input class="q-input" maxlength="40" value="${escHtml(row.name || '')}" placeholder="${escHtml(rowLabel(row))}" onchange="onChargerName(${row.id},this.value)"></div><label class="q-check" style="align-self:end;padding-bottom:.6rem"><input type="checkbox" ${row.rec ? 'checked' : ''} onchange="onChargerRec(${row.id},this.checked)"> <span>Mark as recommended</span></label></div>` : ''}
       <div class="q-charger-opts">
         <div class="q-fg">
           <label>${t('guns_label')}</label>
@@ -1346,6 +1361,7 @@ function updateSummary() {
   const rsPrev = document.getElementById('rsPreview');
   if (rsPrev) rsPrev.textContent = (rsSentence(lang) || '-') + (rsIncomplete() ? '  ⚠ ' + t('rs_warn') : '');
 
+  if (quoteMode === 'compare') { renderCompareSummary(); return; }
   const linesEl = document.getElementById('summaryLines');
   const totalOnceEl = document.getElementById('totalOnce');
   const totalMonthlyEl = document.getElementById('totalMonthly');
@@ -1435,6 +1451,7 @@ const LOGO_RATIO = 388 / 274;
 
 // ─── PDF GENERATION ─────────────────────────────────────────────
 function generatePDF(pdfLang) {
+  if (quoteMode === 'compare') { generateComparePDF(pdfLang); return; }
   try {
   if (rsIncomplete() && !confirm(pdfLang === 'pt' ? 'Um período da partilha de receita está incompleto e será ignorado. Gerar o PDF mesmo assim?' : 'A revenue share period is incomplete and will be skipped. Generate the PDF anyway?')) return;
   const tl = T[pdfLang];
@@ -2028,6 +2045,335 @@ function generatePDF(pdfLang) {
   }
 }
 
+// ─── COMPARISON QUOTE (several chargers side by side) ───────────
+// Each charger row is one column. Platform is priced per charger (stated once); installation is quoted after a site assessment.
+function cmpCols() {
+  return chargerRows.map(r => ({
+    row: r,
+    label: String(r.name || '').trim() || rowLabel(r),
+    eq: lineC(r.customPrice, r.qty),
+    pm: D(mgmtPack.price) * r.qty,
+    py: packAnnualPerC() * r.qty
+  }));
+}
+
+function generateComparePDF(pdfLang) {
+  try {
+  const tl = T[pdfLang];
+  const L = pdfLang === 'pt' ? 'pt' : 'en';
+  const P = (en, pt) => L === 'pt' ? pt : en;
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit:'mm', format:'a4' });
+  const W = 210, M = 15, CW = W - 2*M, BOTTOM = 272;
+  const navy = [26,50,96], blue = [58,143,212], ink = [40,60,100], muted = [107,122,154], rule = [210,218,232], white = [255,255,255];
+  const cs = currSymbol();
+  const m2 = c => fmtC(c, L, false);
+  const money = c => `${cs} ${m2(c)}`;
+  const val = id => document.getElementById(id).value;
+  const cleanTxt = s => String(s || '').replace(/[–—]/g, '-').replace(/\s{2,}/g, ' ').trim();
+  let y = 0;
+  const ensure = h => { if (y + h > BOTTOM) { doc.addPage(); y = 24; } };
+  const section = title => {
+    ensure(16);
+    doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(...navy);
+    doc.text(title, M, y + 4, { charSpace: 0.4 });
+    doc.setDrawColor(...navy); doc.setLineWidth(0.3); doc.line(M, y + 6.5, W - M, y + 6.5);
+    y += 11;
+  };
+  const para = (text, size, color, style, x, width, lh) => {
+    doc.setFont('helvetica', style || 'normal'); doc.setFontSize(size || 8.5); doc.setTextColor(...(color || ink));
+    const lines = doc.splitTextToSize(text, width || CW);
+    lines.forEach(ln => { ensure(lh || 4.6); doc.text(ln, x == null ? M : x, y + 3.2); y += (lh || 4.6); });
+  };
+  const box = (x, yy, checked) => {
+    doc.setDrawColor(...navy); doc.setLineWidth(0.3); doc.rect(x, yy, 3.4, 3.4);
+    if (checked) { doc.setLineWidth(0.55); doc.line(x + 0.7, yy + 1.8, x + 1.5, yy + 2.7); doc.line(x + 1.5, yy + 2.7, x + 2.8, yy + 0.7); }
+  };
+  const tbl = {
+    theme:'grid', margin:{ left:M, right:M },
+    styles:{ font:'helvetica', fontSize:8.5, cellPadding:2.8, textColor:ink, lineColor:rule, lineWidth:0.15 },
+    headStyles:{ fillColor:navy, textColor:white, fontStyle:'bold', fontSize:8, lineColor:navy },
+    rowPageBreak:'avoid'
+  };
+  const clientName = val('clientName') || '-';
+  const contactPerson = val('contactPerson');
+  const clientEmail = val('clientEmail');
+  const quoteDate = val('quoteDate') || new Date().toISOString().slice(0,10);
+  const quoteNum = val('quoteNum') || 'PND-' + Date.now().toString().slice(-6);
+  const validOn = document.getElementById('tcValid').checked;
+  const validDays = parseInt(val('tcValidDays')) || 30;
+  const vatNo = val('vatNumber').trim();
+
+  // header
+  const logoH = 22, logoW = logoH * LOGO_RATIO;
+  try { doc.addImage(PND_LOGO, 'PNG', M, 9, logoW, logoH); }
+  catch (e) { doc.setFont('helvetica','bold'); doc.setFontSize(20); doc.setTextColor(...navy); doc.text('Plug n Drive', M, 20); }
+  doc.setFont('helvetica','bold'); doc.setFontSize(20); doc.setTextColor(...navy);
+  doc.text(tl.pdf_title, W - M, 17, { align:'right', charSpace: 1 });
+  doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(...muted);
+  let hy = 23.5;
+  const hline = txt => { doc.text(txt, W - M, hy, { align:'right' }); hy += 4.4; };
+  hline(`${tl.quote_no} ${quoteNum}`);
+  hline(`${tl.date}: ${fmtDate(quoteDate, L)}`);
+  if (validOn) hline(`${P('Valid until','Válida até')}: ${fmtDate(addDaysISO(quoteDate, validDays), L)}`);
+  hline(currency === 'MZN' ? `${P('Currency','Moeda')}: MZN (1 ZAR = ${(mznRate||3.82).toFixed(2)} MZN)` : `${P('Currency','Moeda')}: ZAR`);
+  doc.setDrawColor(...navy); doc.setLineWidth(0.6); doc.line(M, 42, W - M, 42);
+  y = 49;
+  const colR = W / 2 + 8;
+  doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(...muted);
+  doc.text(P('PREPARED FOR','PREPARADO PARA'), M, y, { charSpace: 0.4 });
+  doc.text(P('PREPARED BY','PREPARADO POR'), colR, y, { charSpace: 0.4 });
+  let ly = y + 5.5, ry = y + 5.5;
+  doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(...ink);
+  doc.text(clientName, M, ly); ly += 5;
+  doc.text('Plug n Drive', colR, ry); ry += 5;
+  doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(...muted);
+  if (contactPerson) { doc.text(contactPerson, M, ly); ly += 4.4; }
+  if (clientEmail) { doc.text(clientEmail, M, ly); ly += 4.4; }
+  [tl.mail, tl.phone, tl.website].forEach(s => { doc.text(s, colR, ry); ry += 4.4; });
+  if (vatNo) { doc.text(`${P('VAT no.','NUIT/IVA n.º')} ${vatNo}`, colR, ry); ry += 4.4; }
+  y = Math.max(ly, ry) + 6;
+
+  const cols = cmpCols();
+  const act = packActive();
+  const offer = packOffer(), disc = packDiscount();
+  const perM = L === 'pt' ? '/ mês' : '/ month', perY = L === 'pt' ? '/ ano' : '/ year';
+  const letter = i => String.fromCharCode(65 + i);
+
+  // intro + charger grid(s), 4 columns per grid
+  section(P('COMPARE YOUR CHARGER OPTIONS','COMPARE AS SUAS OPÇÕES DE CARREGADORES'));
+  para(P('Below are the chargers we propose for your site, side by side: power, charging speed and price. The option and the quantity you choose depend on your needs, and the quantities shown can be adjusted.',
+         'Abaixo estão os carregadores que propomos para o seu local, lado a lado: potência, velocidade de carga e preço. A opção e a quantidade que escolher dependem das suas necessidades, e as quantidades indicadas podem ser ajustadas.'), 8.5, ink, 'normal', M, CW, 4.6);
+  y += 3;
+  for (let s = 0; s < cols.length; s += 4) {
+    const chunk = cols.slice(s, s + 4), n = chunk.length;
+    ensure(95);
+    const head = [[''].concat(chunk.map((c, i) => `${letter(s + i)}. ${cleanTxt(c.label)}` + (c.row.rec ? '\n' + P('RECOMMENDED','RECOMENDADO') : '')))];
+    const cells = f => [''].concat(chunk.map(f));
+    const body = [
+      [P('Type','Tipo')].concat(chunk.map(c => rowType(c.row))),
+      [P('Power per gun','Potência por pistola')].concat(chunk.map(c => `${c.row.power} kW`)),
+      [P('Guns','Pistolas')].concat(chunk.map(c => String(rowGuns(c.row)))),
+      [P('Total power','Potência total')].concat(chunk.map(c => `${c.row.power * rowGuns(c.row)} kW`)),
+      [P('Car, 0 to 80%','Carro, 0 a 80%')].concat(chunk.map(c => chargeTimesFor(c.row.power).car)),
+      [P('Moto, 0 to 80%','Moto, 0 a 80%')].concat(chunk.map(c => chargeTimesFor(c.row.power).moto)),
+      [P('Quantity','Quantidade')].concat(chunk.map(c => String(c.row.qty))),
+      [`${P('Unit price','Preço unitário')} (${cs})`].concat(chunk.map(c => m2(D(c.row.customPrice)))),
+      [`${P('Equipment total','Total do equipamento')} (${cs})`].concat(chunk.map(c => m2(c.eq)))
+    ];
+    const lastIdx = body.length - 1;
+    const cw = (CW - 38) / n;
+    const colStyles = { 0:{ cellWidth:38, fontStyle:'bold' } };
+    for (let i = 1; i <= n; i++) colStyles[i] = { cellWidth: cw, halign:'center' };
+    doc.autoTable(Object.assign({}, tbl, {
+      head, body, startY: y, tableWidth: CW, columnStyles: colStyles,
+      didParseCell: d => {
+        if (d.section === 'head') {
+          d.cell.styles.halign = d.column.index === 0 ? 'left' : 'center';
+          if (d.column.index > 0 && chunk[d.column.index - 1].row.rec) d.cell.styles.fillColor = blue;
+        }
+        if (d.section === 'body' && d.row.index === lastIdx) { d.cell.styles.fontStyle = 'bold'; d.cell.styles.fillColor = [240,244,250]; d.cell.styles.textColor = navy; }
+        if (d.section === 'body' && d.column.index > 0 && chunk[d.column.index - 1].row.rec && d.row.index !== lastIdx) d.cell.styles.fillColor = [232,243,251];
+      }
+    }));
+    y = doc.lastAutoTable.finalY + 4;
+  }
+  para(P('Charge times are indicative for a typical car battery (45 kWh) and a moto battery (3.5 kWh). Real-world time depends on the maximum power accepted by the vehicle.',
+         'Os tempos de carga são indicativos para uma bateria de carro típica (45 kWh) e de moto (3,5 kWh). O tempo real depende da potência máxima aceite pelo veículo.'), 7.5, muted, 'italic', M, CW, 3.8);
+  y += 4;
+
+  // platform: stated once, per charger
+  if (act) {
+    ensure(52);
+    section(P('OCPP MANAGEMENT PLATFORM, PER CHARGER','PLATAFORMA DE GESTÃO OCPP, POR CARREGADOR'));
+    para(P('Every charger connects to our OCPP management platform. The platform price below is per charger and applies to every option above.',
+           'Cada carregador liga-se à nossa plataforma de gestão OCPP. O preço da plataforma abaixo é por carregador e aplica-se a todas as opções acima.'), 8.5, ink, 'normal', M, CW, 4.6);
+    y += 1.5;
+    para(`${P('Includes','Inclui')}: ${mgmtPack.features.map(id => featureName(id, L)).join(', ')}`, 8.5, ink, 'normal', M, CW, 4.6);
+    y += 1.5;
+    const prow = [];
+    if (offer !== 'annual') prow.push([P('Monthly billing','Faturação mensal'), `${money(D(mgmtPack.price))} ${P('per charger','por carregador')} ${perM}`]);
+    if (offer !== 'monthly') prow.push([P('Annual billing','Faturação anual') + (disc > 0 ? ` (${P('save','poupe')} ${pctStr(disc)})` : ''), `${money(packAnnualPerC())} ${P('per charger','por carregador')} ${perY}`]);
+    doc.autoTable(Object.assign({}, tbl, {
+      head: [[P('Billing','Faturação'), P('Price','Preço')]], body: prow, startY: y,
+      columnStyles: { 1:{ halign:'right', fontStyle:'bold' } },
+      didParseCell: d => { if (d.column.index === 1 && d.section === 'head') d.cell.styles.halign = 'right'; }
+    }));
+    y = doc.lastAutoTable.finalY + 4;
+    const term = packTermMonths();
+    let termTxt = !term ? P('No minimum term.', 'Sem duração mínima.')
+      : P(`Minimum term: ${term} months, starting on the date of ${packTermStart()==='install' ? 'installation' : 'signature'}.`,
+          `Duração mínima: ${term} meses, com início na data de ${packTermStart()==='install' ? 'instalação' : 'assinatura'}.`);
+    if (vatOn() && vatRate()) termTxt += ' ' + P(`Subscription prices exclude VAT (${vatRate()}% is added).`, `Os preços da assinatura não incluem IVA (acresce ${vatRate()}%).`);
+    para(termTxt, 8.5, ink, 'normal', M, CW, 4.6);
+    y += 4;
+  }
+
+  // what each option costs (equipment once-off, platform recurring)
+  ensure(60);
+  section(P('WHAT EACH OPTION COSTS','QUANTO CUSTA CADA OPÇÃO'));
+  for (let s = 0; s < cols.length; s += 4) {
+    const chunk = cols.slice(s, s + 4), n = chunk.length;
+    const head = [[''].concat(chunk.map((c, i) => `${letter(s + i)}. ${cleanTxt(c.label)} x ${c.row.qty}`))];
+    const body = [[P('Equipment, once-off','Equipamento, pagamento único')].concat(chunk.map(c => money(c.eq)))];
+    if (vatOn() && vatRate()) body.push([P('Equipment incl. VAT','Equipamento com IVA')].concat(chunk.map(c => money(vatBreakdown(c.eq).total))));
+    if (act && offer !== 'annual') body.push([P('Platform, per month','Plataforma, por mês')].concat(chunk.map(c => `${money(c.pm)} ${perM}`)));
+    if (act && offer !== 'monthly') body.push([P('Platform, per year','Plataforma, por ano')].concat(chunk.map(c => `${money(c.py)} ${perY}`)));
+    if (act) {
+      const annualY1 = offer !== 'monthly';
+      body.push([annualY1 ? P('Year 1: equipment + annual platform','Ano 1: equipamento + plataforma anual') : P('Year 1: equipment + 12 months platform','Ano 1: equipamento + 12 meses de plataforma')]
+        .concat(chunk.map(c => money(c.eq + (annualY1 ? c.py : c.pm * 12)))));
+    }
+    const lastIdx = body.length - 1;
+    const cw = (CW - 44) / n;
+    const colStyles = { 0:{ cellWidth:44, fontStyle:'bold' } };
+    for (let i = 1; i <= n; i++) colStyles[i] = { cellWidth: cw, halign:'center' };
+    ensure(14 + body.length * 9);
+    doc.autoTable(Object.assign({}, tbl, {
+      head, body, startY: y, tableWidth: CW, columnStyles: colStyles,
+      didParseCell: d => {
+        if (d.section === 'head') d.cell.styles.halign = d.column.index === 0 ? 'left' : 'center';
+        if (act && d.section === 'body' && d.row.index === lastIdx) { d.cell.styles.fontStyle = 'bold'; d.cell.styles.fillColor = [240,244,250]; d.cell.styles.textColor = navy; }
+      }
+    }));
+    y = doc.lastAutoTable.finalY + 4;
+  }
+  if (act && offer === 'both') para(P('The year 1 total uses annual billing. With monthly billing, the platform is charged each month instead.', 'O total do ano 1 usa a faturação anual. Com faturação mensal, a plataforma é cobrada todos os meses.'), 7.5, muted, 'italic', M, CW, 3.8);
+  para((vatOn() && vatRate()) ? P(`Prices exclude VAT unless stated. VAT of ${vatRate()}% is added.`, `Os preços não incluem IVA, salvo indicação. Acresce IVA de ${vatRate()}%.`) : P('All prices exclude VAT.', 'Todos os preços não incluem IVA.'), 7.5, muted, 'italic', M, CW, 3.8);
+  y += 4;
+
+  // installation: after assessment
+  ensure(22);
+  const insTxt = P('Installation: quoted after a site assessment. It is not included in the prices above. We confirm the price once we know the site, the cable run and the electrical supply.',
+                   'Instalação: orçamentada após uma avaliação do local. Não está incluída nos preços acima. Confirmamos o preço depois de conhecermos o local, o percurso do cabo e a alimentação elétrica.');
+  doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
+  const insLines = doc.splitTextToSize(insTxt, CW - 8), insH = insLines.length * 4.6 + 5;
+  doc.setFillColor(240,244,250); doc.rect(M, y, CW, insH, 'F');
+  doc.setTextColor(...navy);
+  insLines.forEach((ln, i) => doc.text(ln, M + 4, y + 5.2 + i * 4.6));
+  y += insH + 6;
+
+  // optional extras (not in any total)
+  const exRows = extraRows.filter(r => (r.desc || r.price));
+  if (exRows.length) {
+    ensure(30);
+    section(P('OPTIONAL EXTRAS','EXTRAS OPCIONAIS'));
+    doc.autoTable(Object.assign({}, tbl, {
+      head: [[P('Extra','Extra'), `${tl.amount} (${cs})`]],
+      body: exRows.map(r => [cleanTxt(r.desc) || '-', r.price ? m2(D(r.price)) : P('FREE','GRÁTIS')]),
+      startY: y, columnStyles: { 1:{ halign:'right', cellWidth:40 } },
+      didParseCell: d => { if (d.column.index === 1 && d.section === 'head') d.cell.styles.halign = 'right'; }
+    }));
+    y = doc.lastAutoTable.finalY + 3;
+    para(P('Extras are not included in the prices above.', 'Os extras não estão incluídos nos preços acima.'), 7.5, muted, 'italic', M, CW, 3.8);
+    y += 4;
+  }
+
+  const rs = rsSentence(L);
+  if (rs) { ensure(24); section(P('REVENUE SHARE ON CHARGING','PARTILHA DA RECEITA DE CARREGAMENTO')); para(rs, 8.5, ink, 'normal', M, CW, 4.6); y += 4; }
+
+  // payment details
+  if (document.getElementById('bankOn').checked) {
+    const items = [
+      [P('Account holder','Titular da conta'), val('bankHolder')], [P('Bank','Banco'), val('bankName')],
+      [P('Account number','Número da conta'), val('bankNumber')], [P('Branch code','Código da agência'), val('bankBranch')],
+      [P('Payment reference','Referência de pagamento'), quoteNum]
+    ].filter(it => (it[1] || '').trim());
+    if (items.length) {
+      const rowsN = Math.ceil(items.length / 2), bh = rowsN * 6 + 7;
+      ensure(bh + 16);
+      section(P('PAYMENT DETAILS','DADOS PARA PAGAMENTO'));
+      doc.setDrawColor(...rule); doc.setLineWidth(0.3); doc.rect(M, y, CW, bh);
+      items.forEach((it, i) => {
+        const col = i % 2, row = Math.floor(i / 2);
+        const x = M + 4 + col * (CW / 2), yy = y + 6 + row * 6;
+        doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(...muted); doc.text(it[0], x, yy);
+        doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.setTextColor(...ink); doc.text(doc.splitTextToSize(it[1], CW / 2 - 40)[0], x + 36, yy);
+      });
+      y += bh + 7;
+    }
+  }
+
+  // terms and notes
+  const terms = termsList(L);
+  if (terms.length) {
+    ensure(30);
+    section(P('TERMS AND CONDITIONS','TERMOS E CONDIÇÕES'));
+    terms.forEach(tx => {
+      const lines = doc.splitTextToSize(tx, CW - 8);
+      ensure(lines.length * 4.6 + 1.5);
+      box(M, y + 0.6, true);
+      doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(...ink);
+      lines.forEach((ln, i) => doc.text(ln, M + 7, y + 3.4 + i * 4.6));
+      y += lines.length * 4.6 + 1.5;
+    });
+    y += 4;
+  }
+  const notes = val('quoteNotes').trim();
+  if (notes) { ensure(20); section(tl.notes_title.toUpperCase()); para(notes, 8.5, ink, 'normal', M, CW, 4.6); y += 4; }
+
+  // choice and acceptance
+  if (document.getElementById('accOn').checked) {
+    ensure(58);
+    section(P('YOUR CHOICE AND ACCEPTANCE','A SUA ESCOLHA E ACEITAÇÃO'));
+    para(P(`On behalf of ${clientName}, I accept quotation ${quoteNum} for the option and quantity written below. The installation is quoted separately after the site assessment.`,
+           `Em nome de ${clientName}, aceito a cotação ${quoteNum} para a opção e a quantidade indicadas abaixo. A instalação é orçamentada à parte, após a avaliação do local.`), 9, ink, 'normal', M, CW, 5);
+    y += 12;
+    const rowOf = fields => {
+      doc.setDrawColor(...muted); doc.setLineWidth(0.3);
+      fields.forEach(f => { doc.line(f[1], y, f[2], y); doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(...muted); doc.text(f[0], f[1], y + 4); });
+      y += 14;
+    };
+    rowOf([[P('Option chosen (A, B, C...)','Opção escolhida (A, B, C...)'), M, M + 70], [P('Quantity','Quantidade'), M + 80, M + 110], [(act && offer === 'both') ? P('Billing: monthly / annual','Faturação: mensal / anual') : P('Notes','Notas'), M + 120, W - M]]);
+    rowOf([[P('Name','Nome'), M, M + 55], [P('Date','Data'), M + 65, M + 105], [P('Signature','Assinatura'), M + 115, W - M]]);
+  }
+
+  // footer and running header
+  const pageCount = doc.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    if (i > 1) {
+      doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(...navy); doc.text('Plug n Drive', M, 12);
+      doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(...muted); doc.text(`${tl.quote_no} ${quoteNum}`, W - M, 12, { align:'right' });
+      doc.setDrawColor(...rule); doc.setLineWidth(0.3); doc.line(M, 15, W - M, 15);
+    }
+    doc.setDrawColor(...rule); doc.setLineWidth(0.3); doc.line(M, 281, W - M, 281);
+    doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(...muted);
+    doc.text(`Plug n Drive  |  ${tl.mail}  |  ${tl.website}  |  ${tl.phone}`, M, 285.5);
+    doc.text(`${P('Plug n Drive is a trading name of','Plug n Drive é um nome comercial de')} RC Tradeworx Holdings (Pty) Ltd  |  Reg. 2025/174107/07${vatNo ? '  |  ' + P('VAT no.','IVA n.º') + ' ' + vatNo : ''}`, M, 289.5);
+    doc.text(`${P('Page','Página')} ${i} / ${pageCount}`, W - M, 285.5, { align:'right' });
+  }
+  const fname = (val('clientName') || 'quote').replace(/\s+/g,'-');
+  doc.save(`PnD-Comparison-${fname}-${quoteNum || Date.now()}.pdf`);
+  } catch (err) { alert('PDF generation error: ' + err.message); console.error(err); }
+}
+
+function renderCompareSummary() {
+  const el = document.getElementById('summaryLines');
+  const cf = c => (currency === 'MZN' ? 'MZN ' : 'R ') + fmtC(c, 'en', true);
+  const cols = cmpCols();
+  if (!cols.length) { el.innerHTML = `<div class="q-empty-state"><span class="ei">⚡</span><span>${t('add_items_hint')}</span></div>`; return; }
+  const act = packActive(), offer = packOffer();
+  let h = `<div class="q-sumline"><span class="sl-label"><strong>Comparison quote</strong></span><span class="sl-val">${cols.length} option${cols.length > 1 ? 's' : ''}</span></div>`;
+  cols.forEach((c, i) => {
+    h += `<div class="q-sumline"><span class="sl-label">${escHtml(String.fromCharCode(65 + i) + '. ' + c.label)} × ${c.row.qty}${c.row.rec ? ' (recommended)' : ''}</span><span class="sl-val">${cf(c.eq)}</span></div>`;
+    if (act) h += `<div class="q-sumline pack"><span class="sl-label">Platform</span><span class="sl-val">${offer === 'annual' ? cf(c.py) + t('per_year') : cf(c.pm) + t('per_month')}</span></div>`;
+  });
+  h += `<div class="q-sumline opt"><span class="sl-label">Installation: quoted after site assessment</span><span class="sl-val">-</span></div>`;
+  el.innerHTML = h;
+  document.getElementById('vatNoteEl').textContent = vatOn() ? t('vat_note_incl') : t('vat_note');
+}
+
+function onQuoteMode() {
+  const e = document.getElementById('quoteMode');
+  quoteMode = (e && e.value === 'compare') ? 'compare' : 'standard';
+  document.body.classList.toggle('cmp', quoteMode === 'compare');
+  renderChargerList();
+  updateSummary();
+}
+function onChargerName(id, v) { const r = chargerRows.find(x => x.id === id); if (r) r.name = String(v || '').slice(0, 40); updateSummary(); }
+function onChargerRec(id, on) { chargerRows.forEach(r => { r.rec = (r.id === id) ? !!on : false; }); renderChargerList(); updateSummary(); }
+
 // ─── INIT ───────────────────────────────────────────────────────
 
 // ─── QUOTES APP (Supabase, admin only) ──────────────────────────
@@ -2067,13 +2413,13 @@ function qApply(s) {
   currency = s.currency || 'ZAR'; document.getElementById('currencySelect').value = currency;
   if (s.mznRate) mznRate = s.mznRate;
   const vr = document.getElementById('vatRate'); if (vr) vr.dataset.touched = '1';
-  onRsMode(); onPackField(); onMaintMode();
+  onRsMode(); onPackField(); onMaintMode(); onQuoteMode();
   setLang(s.lang || 'en');
   renderPackFeatures(); renderChargerList(); renderExtraList(); renderRsRows(); renderInstall();
   updateSummary(); calcROI();
 }
 
-function qTotalCents() { try { return vatBreakdown(onceTotals().req).total; } catch (e) { return 0; } }
+function qTotalCents() { try { if (quoteMode === 'compare') { const c = cmpCols(); return c.length ? vatBreakdown(Math.min(...c.map(x => x.eq))).total : 0; } return vatBreakdown(onceTotals().req).total; } catch (e) { return 0; } }
 
 function qUi() {
   const info = document.getElementById('qbInfo'), lock = document.getElementById('qLock');
