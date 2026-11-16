@@ -44,6 +44,8 @@ body{background:var(--grey);color:var(--navy);font-family:var(--font);font-size:
 
 /* CARDS */
 body.cmp .std-only{display:none !important}
+.cmp-only{display:none}
+body.cmp .cmp-only{display:block}
 body.cmp .q-sum-total-row,body.cmp .q-sum-divider,body.cmp .q-sum-monthly{display:none !important}
 .q-card{background:#fff;border:1px solid var(--border);border-radius:20px;padding:2rem;margin-bottom:1.5rem}
 .q-card-title{font-size:.95rem;font-weight:800;color:var(--navy);margin-bottom:1.5rem;display:flex;align-items:center;gap:.6rem}
@@ -453,8 +455,9 @@ body.ok #gate{display:none}
     </div>
 
     <!-- ROI CALCULATOR -->
-    <div class="q-card std-only" style="border:2px solid var(--blue)">
+    <div class="q-card" style="border:2px solid var(--blue)">
       <div class="q-card-title"><span class="num blue">9</span> <span>ROI Calculator</span> <span style="font-size:.72rem;color:var(--muted);font-weight:500">(optional)</span> <label class="q-check" style="margin-left:auto;font-size:.78rem;font-weight:600"><input type="checkbox" id="roiOn" checked> Print on quote</label></div>
+      <div class="q-hint cmp-only" style="margin-bottom:1rem">Comparison quote: the ROI is calculated for the option marked as recommended (the first option if none is marked), with its quantity unless you fill in a number of chargers below. Installation is not included.</div>
       <div class="q-grid-3" style="margin-bottom:1rem">
         <div class="q-fg"><label>Charging sessions / day / charger</label><input class="q-input" type="number" id="roiSessions" value="8" min="1" onchange="calcROI()"></div>
         <div class="q-fg"><label>Avg kWh per session</label><input class="q-input" type="number" id="roiKwh" value="20" min="1" step="0.5" onchange="calcROI()"></div>
@@ -989,24 +992,35 @@ function updatePackCalc() {
 }
 
 // ─── ROI CALCULATOR ─────────────────────────────────────────────
+function roiBasis() {
+  if (quoteMode !== 'compare') return null;
+  const r = chargerRows.find(x => x.rec) || chargerRows[0];
+  if (!r) return null;
+  const ov = parseFloat(document.getElementById('roiNumChargers').value);
+  const n = ov > 0 ? ov : (r.qty || 1);
+  const perM = packActive() ? (packOffer() === 'annual' ? packAnnualPerCharger() / 12 : mgmtPack.price) : 0;
+  return { row: r, n, hw: r.customPrice * n, pack: perM * n };
+}
 function calcROI() {
+  const rb = roiBasis();
+  document.getElementById('roiNumChargers').placeholder = rb ? 'auto (quantity of the recommended option)' : 'auto (chargers on the quote)';
   const sessions   = parseFloat(document.getElementById('roiSessions').value) || 0;
   const kwh        = parseFloat(document.getElementById('roiKwh').value) || 0;
   const priceKwh   = parseFloat(document.getElementById('roiPriceKwh').value) || 0;
   const costKwh    = parseFloat(document.getElementById('roiCostKwh').value) || 0;
-  const numCh      = parseFloat(document.getElementById('roiNumChargers').value) || totalChargerQty();
+  const numCh      = rb ? rb.n : (parseFloat(document.getElementById('roiNumChargers').value) || totalChargerQty());
   const days       = parseFloat(document.getElementById('roiDays').value) || 26;
 
   const monthlyRevenue   = sessions * kwh * priceKwh * numCh * days;
   const monthlyElecCost  = sessions * kwh * costKwh   * numCh * days;
-  const monthlyPack      = packMonthlyEquivalent();
+  const monthlyPack      = rb ? rb.pack : packMonthlyEquivalent();
   const monthlyNetProfit = monthlyRevenue - monthlyElecCost - monthlyPack;
 
   // Total cost of ownership = hardware + extras (once-off) + pack × payback months
   // We solve iteratively: payback = hardware / (profit - pack) - pack already in profit
-  const hardwareCost  = chargerRows.reduce((a,r)=>a+r.customPrice*r.qty, 0)
+  const hardwareCost  = rb ? rb.hw : (chargerRows.reduce((a,r)=>a+r.customPrice*r.qty, 0)
                       + extraRows.reduce((a,r)=>a+(r.opt?0:r.price), 0)
-                      + instRawZar();
+                      + instRawZar());
   // payback is based on net profit which already deducts monthly pack
   const paybackMonths = monthlyNetProfit > 0 ? hardwareCost / monthlyNetProfit : null;
   // Total cost over payback period = hardware + (pack × payback months)
@@ -1361,7 +1375,7 @@ function updateSummary() {
   const rsPrev = document.getElementById('rsPreview');
   if (rsPrev) rsPrev.textContent = (rsSentence(lang) || '-') + (rsIncomplete() ? '  ⚠ ' + t('rs_warn') : '');
 
-  if (quoteMode === 'compare') { renderCompareSummary(); return; }
+  if (quoteMode === 'compare') { renderCompareSummary(); calcROI(); return; }
   const linesEl = document.getElementById('summaryLines');
   const totalOnceEl = document.getElementById('totalOnce');
   const totalMonthlyEl = document.getElementById('totalMonthly');
@@ -2261,6 +2275,54 @@ function generateComparePDF(pdfLang) {
 
   const rs = rsSentence(L);
   if (rs) { ensure(24); section(P('REVENUE SHARE ON CHARGING','PARTILHA DA RECEITA DE CARREGAMENTO')); para(rs, 8.5, ink, 'normal', M, CW, 4.6); y += 4; }
+
+  // ROI, on the recommended option (optional)
+  if (document.getElementById('roiOn').checked) {
+    const rb = roiBasis();
+    if (rb) {
+      const num = id => parseFloat(val(id)) || 0;
+      const nfd = n => { const r = Math.round(n * 100) / 100; return Number.isInteger(r) ? nf(r) : r.toFixed(2); };
+      const sessions = num('roiSessions'), kwh = num('roiKwh'), priceKwh = num('roiPriceKwh'), costKwh = num('roiCostKwh'), days = num('roiDays') || 26;
+      const rev = sessions * kwh * priceKwh * rb.n * days, elec = sessions * kwh * costKwh * rb.n * days, net = rev - elec - rb.pack;
+      const payback = net > 0 ? rb.hw / net : null;
+      const idx = chargerRows.indexOf(rb.row), lab = cleanTxt(cols[idx] ? cols[idx].label : rowLabel(rb.row));
+      ensure(110);
+      section(P('RETURN ON INVESTMENT (ROI)','RETORNO SOBRE O INVESTIMENTO (ROI)'));
+      para(P(`Estimate for option ${letter(idx)} (${lab}) with ${rb.n} charger${rb.n > 1 ? 's' : ''}. It shows the monthly revenue your chargers can generate, the net profit after electricity and platform costs, and how quickly the equipment pays for itself. Installation is not included.`,
+             `Estimativa para a opção ${letter(idx)} (${lab}) com ${rb.n} carregador${rb.n > 1 ? 'es' : ''}. Mostra a receita mensal que os carregadores podem gerar, o lucro líquido após custos de eletricidade e plataforma, e o tempo para recuperar o investimento no equipamento. A instalação não está incluída.`), 8.5, ink, 'normal', M, CW, 4.6);
+      y += 2;
+      doc.autoTable(Object.assign({}, tbl, {
+        head: [[P('Assumption','Parâmetro'), P('Value','Valor')]],
+        body: [
+          [P('Charging sessions per charger / day','Sessões de carga por carregador / dia'), sessions.toString()],
+          [P('Average kWh per session','Média de kWh por sessão'), kwh.toString()],
+          [P('Price charged to user','Preço cobrado ao utilizador'), `${cs} ${nfd(fmtRaw(priceKwh))} / kWh`],
+          [P('Your electricity cost','Custo da eletricidade'), `${cs} ${nfd(fmtRaw(costKwh))} / kWh`],
+          [P('Number of chargers','Número de carregadores'), rb.n.toString()],
+          [P('Operating days / month','Dias de operação / mês'), days.toString()],
+        ],
+        startY: y, styles: Object.assign({}, tbl.styles, { cellPadding: 2 }),
+        columnStyles: { 1:{ halign:'right', cellWidth:48 } },
+        didParseCell: d => { if (d.column.index === 1 && d.section === 'head') d.cell.styles.halign = 'right'; }
+      }));
+      y = doc.lastAutoTable.finalY + 5;
+      ensure(30);
+      doc.setDrawColor(...navy); doc.setLineWidth(0.4); doc.rect(M, y, CW, 22);
+      const colW = CW / 3;
+      const cell = (i, label, text, color) => {
+        const cx = M + colW * (i + 0.5);
+        doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(...muted);
+        doc.text(label, cx, y + 7.5, { align:'center', charSpace: 0.3 });
+        doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(...color);
+        doc.text(text, cx, y + 16, { align:'center' });
+        if (i > 0) { doc.setDrawColor(...rule); doc.setLineWidth(0.2); doc.line(M + colW * i, y + 4, M + colW * i, y + 18); }
+      };
+      cell(0, P('MONTHLY REVENUE','RECEITA MENSAL'), `${cs} ${nf(fmtRaw(rev))}`, navy);
+      cell(1, P('MONTHLY NET PROFIT','LUCRO LÍQUIDO MENSAL'), `${cs} ${nf(fmtRaw(net))}`, net >= 0 ? [22,120,60] : [190,40,40]);
+      cell(2, P('PAYBACK PERIOD','PERÍODO DE RETORNO'), payback ? (payback < 1 ? P('< 1 month','< 1 mês') : Math.ceil(payback) + P(' months',' meses')) : 'N/A', navy);
+      y += 28;
+    }
+  }
 
   // payment details
   if (document.getElementById('bankOn').checked) {
