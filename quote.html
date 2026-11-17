@@ -200,6 +200,7 @@ body.ok #gate{display:none}
 #qlist .act a{color:var(--blue);cursor:pointer;margin-right:.7rem;font-weight:600;text-decoration:none}
 #qlist .act a.del{color:var(--red)}
 .st{display:inline-block;padding:.12rem .55rem;border-radius:99px;font-size:.7rem;font-weight:700}
+select.st{border:0;cursor:pointer;font-family:inherit;padding:.12rem .4rem}
 .st-draft{background:#eef2f8;color:#556}.st-sent{background:#e0f0ff;color:#1a5fa0}.st-accepted{background:#dcfce7;color:#16803c}.st-refused{background:#fee2e2;color:#b42318}
 </style>
 </head>
@@ -220,6 +221,7 @@ body.ok #gate{display:none}
 <div id="qlist" onclick="if(event.target===this)qCloseList()"><div class="box">
   <h2><span>My quotes</span><button class="qb-btn" style="border:1px solid var(--border);background:#fff;border-radius:8px;padding:.3rem .7rem;cursor:pointer" onclick="qCloseList()">Close</button></h2>
   <input class="qs" id="qSearch" placeholder="Search by client or number" oninput="qRenderList()">
+  <div id="qMsg" style="font-size:.8rem;color:var(--muted);min-height:1.1rem;margin:.3rem 0"></div>
   <table><thead><tr><th>Number</th><th>Client</th><th class="r">Total</th><th>Status</th><th>Updated</th><th></th></tr></thead><tbody id="qRows"></tbody></table>
   <div id="qEmpty" style="padding:1rem;color:var(--muted);display:none">No quotes yet.</div>
 </div></div>
@@ -2599,18 +2601,37 @@ async function qSetStatus(v) {
 }
 
 // Sent / Accepted / Refused quotes are mirrored in Zoho CRM as a deal (one quote = one deal, kept on the quote).
+async function qZohoCall(id) {
+  try {
+    const r = await sb.functions.invoke('quote-to-zoho', { body: { quote_id: id } });
+    const d = r.data || {};
+    if (r.error || !d.ok) return 'Zoho: not updated (' + (d.error || (r.error && r.error.message) || 'error') + ')';
+    return ({ deal_created: 'Zoho: deal created', lead_converted: 'Zoho: lead converted to a deal', contact_deal_updated: 'Zoho: existing deal updated', named_deal_updated: 'Zoho: existing deal updated', updated: 'Zoho: deal updated' })[d.action] || 'Zoho: done';
+  } catch (e) { return 'Zoho: not updated (' + (e && e.message || 'error') + ')'; }
+}
+
+// Status change straight from the "My quotes" list.
+async function qListStatus(id, v) {
+  const q = qCache.find(x => x.id === id), msgEl = document.getElementById('qMsg');
+  if (!q || v === q.status) return;
+  if (q.status === 'draft' && !confirm(`Mark ${q.quote_no} as ${qStatusLabel(v)}? A quote that is no longer a draft cannot be edited, only duplicated.`)) { qRenderList(); return; }
+  const r = await sb.from('quotes').update({ status: v }).eq('id', id);
+  if (r.error) { alert('Could not change status: ' + r.error.message); qRenderList(); return; }
+  q.status = v;
+  if (qCur && qCur.id === id) { qCur.status = v; qUi(); }
+  qRenderList();
+  if (msgEl) msgEl.textContent = `${q.quote_no} - ${qStatusLabel(v)} - sending to Zoho...`;
+  const msg = await qZohoCall(id);
+  if (msgEl) msgEl.textContent = `${q.quote_no} - ${qStatusLabel(v)} - ${msg}`;
+  if (msg.indexOf('not updated') >= 0) alert(msg);
+}
+
 async function qZoho(auto) {
   if (!qCur || qCur.status === 'draft') return;
   const info = document.getElementById('qbInfo'), btn = document.getElementById('qbZoho');
   if (btn) btn.disabled = true;
   if (info) info.textContent = `${qCur.quote_no} - ${qStatusLabel(qCur.status)} - sending to Zoho...`;
-  let msg;
-  try {
-    const r = await sb.functions.invoke('quote-to-zoho', { body: { quote_id: qCur.id } });
-    const d = r.data || {};
-    if (r.error || !d.ok) msg = 'Zoho: not updated (' + (d.error || (r.error && r.error.message) || 'error') + ')';
-    else msg = ({ deal_created: 'Zoho: deal created', lead_converted: 'Zoho: lead converted to a deal', contact_deal_updated: 'Zoho: existing deal updated', named_deal_updated: 'Zoho: existing deal updated', updated: 'Zoho: deal updated' })[d.action] || 'Zoho: done';
-  } catch (e) { msg = 'Zoho: not updated (' + (e && e.message || 'error') + ')'; }
+  const msg = await qZohoCall(qCur.id);
   if (btn) btn.disabled = false;
   qUi();
   if (info) info.textContent = `${qCur.quote_no} - ${qStatusLabel(qCur.status)} - ${msg}`;
@@ -2643,7 +2664,7 @@ function qRenderList() {
   document.getElementById('qRows').innerHTML = rows.map(q => `<tr>
     <td><strong>${escHtml(q.quote_no)}</strong></td><td>${escHtml(q.client_name || '-')}</td>
     <td class="r">${q.total_cents != null ? qMoney(q.total_cents, q.currency) : '-'}</td>
-    <td><span class="st st-${q.status}">${qStatusLabel(q.status)}</span></td>
+    <td><select class="st st-${q.status}" onchange="qListStatus('${q.id}', this.value)" title="Change the status">${(q.status === 'draft' ? ['draft', 'sent', 'accepted', 'refused'] : ['sent', 'accepted', 'refused']).map(o => `<option value="${o}" ${o === q.status ? 'selected' : ''}>${qStatusLabel(o)}</option>`).join('')}</select></td>
     <td>${new Date(q.updated_at).toLocaleDateString('en-GB')}</td>
     <td class="act"><a href="/quote?q=${q.id}">Open</a><a href="/quote?dup=${q.id}">Duplicate</a>${q.status === 'draft' ? `<a class="del" onclick="qDelete('${q.id}')">Delete</a>` : ''}</td></tr>`).join('');
 }
