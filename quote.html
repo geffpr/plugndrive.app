@@ -2546,7 +2546,9 @@ function qApply(s) {
   updateSummary(); calcROI();
 }
 
-function qTotalCents() { try { if (quoteMode === 'compare') { const c = cmpCols(); return c.length ? vatBreakdown(Math.min(...c.map(x => x.eq))).total : 0; } return vatBreakdown(onceTotals().req).total; } catch (e) { return 0; } }
+// Project value = what the client buys: the hardware, the platform (first 12 months), or both.
+function qYearPlatformC(n) { return packOffer() === 'monthly' ? D(mgmtPack.price) * 12 * n : packAnnualPerC() * n; }
+function qTotalCents() { try { if (quoteMode === 'compare') { const c = cmpCols(); if (!c.length) return 0; const best = c.reduce((m, x) => x.eq < m.eq ? x : m, c[0]); return vatBreakdown(best.eq + (packActive() ? qYearPlatformC(best.row.qty || 1) : 0)).total; } return vatBreakdown(onceTotals().req + (packActive() ? qYearPlatformC(packQty()) : 0)).total; } catch (e) { return 0; } }
 
 function qUi() {
   const info = document.getElementById('qbInfo'), lock = document.getElementById('qLock');
