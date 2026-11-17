@@ -1891,7 +1891,7 @@ function generatePDF(pdfLang) {
   // ── OPTIONS PAGE (+ acceptance block) ──
   const accOn = document.getElementById('accOn').checked;
   const hasOpts = !!(optExtras.length || maintIsOpt());
-  if (hasOpts || (hasInst && accOn)) {
+  if (hasOpts || accOn) {
     if (hasOpts) { doc.addPage(); y = 24; }
     if (hasOpts) section(accOn ? P('OPTIONS AND ACCEPTANCE', 'OPÇÕES E ACEITAÇÃO') : P('OPTIONS', 'OPÇÕES'));
     if (hasOpts) {
@@ -1934,8 +1934,8 @@ function generatePDF(pdfLang) {
         drawAcceptance(`On behalf of ${clientName}, I accept quotation ${quoteNum} for the equipment and platform${hasOpts ? ', with the options ticked above' : ''}${billingMention}. The installation is quoted separately on the next page.`,
                        `Em nome de ${clientName}, aceito a cotação ${quoteNum} para o equipamento e a plataforma${hasOpts ? ', com as opções assinaladas acima' : ''}${billingMention}. A instalação é orçamentada à parte na página seguinte.`);
       } else {
-        drawAcceptance(`On behalf of ${clientName}, I accept quotation ${quoteNum} with the options ticked above${billingMention}.`,
-                       `Em nome de ${clientName}, aceito a cotação ${quoteNum} com as opções assinaladas acima${billingMention}.`);
+        drawAcceptance(`On behalf of ${clientName}, I accept quotation ${quoteNum}${hasOpts ? ' with the options ticked above' : ''}${billingMention}.`,
+                       `Em nome de ${clientName}, aceito a cotação ${quoteNum}${hasOpts ? ' com as opções assinaladas acima' : ''}${billingMention}.`);
       }
     }
   }
