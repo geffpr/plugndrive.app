@@ -1847,7 +1847,7 @@ function generatePDF(pdfLang) {
     y += 4;
   }
 
-  // ── ROI (inline in legacy quotes, annex on the last page when an installation is quoted) ──
+  // ── ROI (always an annex on its own page, after the signature) ──
   const drawROI = () => {
     const sessions = parseFloat(val('roiSessions')) || 0;
     const kwh = parseFloat(val('roiKwh')) || 0;
@@ -1919,7 +1919,6 @@ function generatePDF(pdfLang) {
     }
   };
   const roiPrint = document.getElementById('roiOn').checked;
-  if (!hasInst && roiPrint) drawROI();
 
   // ── ACCEPTANCE helper ──
   const drawAcceptance = (en, pt) => {
@@ -1988,6 +1987,9 @@ function generatePDF(pdfLang) {
       }
     }
   }
+
+  // ROI annex, after the signature, when there is no installation page (with one, it closes that page).
+  if (!hasInst && roiPrint) { doc.addPage(); y = 24; drawROI(); }
 
   // ── INSTALLATION PAGE (own conditions + own acceptance) ──
   if (hasInst) {
