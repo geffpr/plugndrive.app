@@ -213,6 +213,7 @@ body.ok #gate{display:none}
   <a class="qb-btn" href="/quote">New quote</a>
   <button class="qb-btn qb-primary" id="qbSave" onclick="qSave(true)">Save</button>
   <select id="qbStatus" onchange="qSetStatus(this.value)" title="Status"></select>
+  <button class="qb-btn" id="qbZoho" onclick="qZoho(false)" style="display:none" title="Create or update the deal in Zoho CRM">Send to Zoho</button>
   <span class="qb-info" id="qbInfo">Not saved yet. The number is assigned on save.</span>
 </div>
 <div class="q-lock" id="qLock">This quote was sent: it can no longer be edited. Use "My quotes", then Duplicate, to make a new version. You can still generate its PDF.</div>
@@ -2553,6 +2554,7 @@ function qUi() {
   sel.innerHTML = opts.map(o => `<option value="${o}" ${o === st ? 'selected' : ''}>${qStatusLabel(o)}</option>`).join('');
   const locked = !!qCur && st !== 'draft';
   save.disabled = locked; lock.style.display = locked ? 'block' : 'none';
+  const zb = document.getElementById('qbZoho'); if (zb) zb.style.display = locked ? '' : 'none';
   info.textContent = qCur ? `${qCur.quote_no} - ${qStatusLabel(st)}` : 'Not saved yet. The number is assigned on save.';
   document.getElementById('quoteNum').readOnly = !!qCur;
 }
@@ -2593,6 +2595,26 @@ async function qSetStatus(v) {
   const r = await sb.from('quotes').update({ status: v }).eq('id', qCur.id);
   if (r.error) { alert('Could not change status: ' + r.error.message); qUi(); return; }
   qCur.status = v; qUi();
+  qZoho(true);
+}
+
+// Sent / Accepted / Refused quotes are mirrored in Zoho CRM as a deal (one quote = one deal, kept on the quote).
+async function qZoho(auto) {
+  if (!qCur || qCur.status === 'draft') return;
+  const info = document.getElementById('qbInfo'), btn = document.getElementById('qbZoho');
+  if (btn) btn.disabled = true;
+  if (info) info.textContent = `${qCur.quote_no} - ${qStatusLabel(qCur.status)} - sending to Zoho...`;
+  let msg;
+  try {
+    const r = await sb.functions.invoke('quote-to-zoho', { body: { quote_id: qCur.id } });
+    const d = r.data || {};
+    if (r.error || !d.ok) msg = 'Zoho: not updated (' + (d.error || (r.error && r.error.message) || 'error') + ')';
+    else msg = ({ deal_created: 'Zoho: deal created', lead_converted: 'Zoho: lead converted to a deal', contact_deal_updated: 'Zoho: existing deal updated', named_deal_updated: 'Zoho: existing deal updated', updated: 'Zoho: deal updated' })[d.action] || 'Zoho: done';
+  } catch (e) { msg = 'Zoho: not updated (' + (e && e.message || 'error') + ')'; }
+  if (btn) btn.disabled = false;
+  qUi();
+  if (info) info.textContent = `${qCur.quote_no} - ${qStatusLabel(qCur.status)} - ${msg}`;
+  if (!auto || msg.indexOf('not updated') >= 0) alert(msg);
 }
 
 async function qLoad(id, asDuplicate) {
