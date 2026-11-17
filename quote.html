@@ -2546,7 +2546,10 @@ function qApply(s) {
   updateSummary(); calcROI();
 }
 
-function qTotalCents() { try { if (quoteMode === 'compare') { const c = cmpCols(); return c.length ? vatBreakdown(Math.min(...c.map(x => x.eq))).total : 0; } return vatBreakdown(onceTotals().req).total; } catch (e) { return 0; } }
+function qTotalCents() { try { if (quoteMode === 'compare') { const c = cmpCols(); return c.length ? vatBreakdown(Math.min(...c.map(x => x.eq))).total : 0; } const once = onceTotals().req;
+    if (once > 0 || !packActive()) return vatBreakdown(once).total;
+    // Platform-only quote (no hardware): the quote is worth its first year of platform fees.
+    return vatBreakdown(packOffer() === 'monthly' ? packMonthlyC() * 12 : packAnnualC()).total; } catch (e) { return 0; } }
 
 function qUi() {
   const info = document.getElementById('qbInfo'), lock = document.getElementById('qLock');
