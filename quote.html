@@ -67,6 +67,7 @@ select.q-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www
 .q-charger-row{background:var(--off);border:1.5px solid var(--border);border-radius:14px;padding:1.2rem;position:relative;transition:border-color .2s}
 .q-charger-row:hover{border-color:rgba(58,143,212,.3)}
 .q-charger-top{display:grid;grid-template-columns:2.5fr 1fr 1.5fr auto;gap:1rem;align-items:end}
+.q-photo{margin-top:.8rem;display:flex;align-items:center;gap:.9rem;flex-wrap:wrap}.q-photo img{height:54px;max-width:96px;object-fit:contain;border-radius:8px;border:1.5px solid var(--border);background:#fff}.q-photo-btn{font-size:.78rem;font-weight:600;color:var(--navy);background:#fff;border:1.5px solid var(--border);border-radius:8px;padding:.45rem .8rem;cursor:pointer}.q-photo-btn:hover{border-color:var(--navy)}.q-photo-rm{font-size:.74rem;color:var(--red);background:none;border:none;cursor:pointer;text-decoration:underline;padding:0}
 .q-charger-opts{margin-top:.8rem;display:grid;grid-template-columns:1fr 1fr;gap:1rem}
 .q-charger-info{margin-top:.8rem;display:grid;grid-template-columns:1fr 1fr 1fr;gap:.6rem}
 .q-info-chip{background:var(--blue-pale);border:1px solid rgba(58,143,212,.2);border-radius:8px;padding:.5rem .8rem;font-size:.75rem;color:var(--navy)}
@@ -543,6 +544,7 @@ const T = {
     moto_charge:"Moto 0→80%", car_charge:"Car 0→80%", max_power:"Power",
     charger_lbl:"Charger", remove:"Remove",
     moto_note:"⚠ Real-world time depends on the max charging power accepted by the vehicle.",
+    photo_lbl:"Photo (shown in the PDF)", photo_add:"Add a photo", photo_chg:"Change photo", photo_rm:"Remove", photo_err:"This file is not a readable image.",
     subtotal_chargers:"Subtotal - Chargers",
     subtotal_extras:"Subtotal - Services",
     pdf_title:"QUOTATION", prepared_by:"Prepared by",
@@ -599,6 +601,7 @@ const T = {
     moto_charge:"Moto 0→80%", car_charge:"Carro 0→80%", max_power:"Potência",
     charger_lbl:"Carregador", remove:"Remover",
     moto_note:"⚠ O tempo real depende da potência máxima de carga aceite pelo veículo.",
+    photo_lbl:"Foto (aparece no PDF)", photo_add:"Adicionar foto", photo_chg:"Mudar foto", photo_rm:"Remover", photo_err:"Este ficheiro não é uma imagem legível.",
     subtotal_chargers:"Subtotal - Carregadores",
     subtotal_extras:"Subtotal - Serviços",
     pdf_title:"COTAÇÃO", prepared_by:"Preparado por",
@@ -912,6 +915,12 @@ function renderChargerList() {
         <button class="q-remove-btn" onclick="removeCharger(${row.id})" title="${t('remove')}">✕</button>
       </div>
       ${quoteMode === 'compare' ? `<div class="q-grid-2" style="margin:1rem 0 .9rem"><div class="q-fg"><label>Column title (optional)</label><input class="q-input" maxlength="40" value="${escHtml(row.name || '')}" placeholder="${escHtml(rowLabel(row))}" onchange="onChargerName(${row.id},this.value)"></div><label class="q-check" style="align-self:end;padding-bottom:.6rem"><input type="checkbox" ${row.rec ? 'checked' : ''} onchange="onChargerRec(${row.id},this.checked)"> <span>Mark as recommended</span></label></div>` : ''}
+      <div class="q-photo">
+        ${row.photo ? `<img src="${row.photo}" alt="">` : ''}
+        <label class="q-photo-btn">${row.photo ? t('photo_chg') : t('photo_add')}<input type="file" accept="image/*" style="display:none" onchange="onChargerPhoto(${row.id},this)"></label>
+        ${row.photo ? `<button type="button" class="q-photo-rm" onclick="onChargerPhotoClear(${row.id})">${t('photo_rm')}</button>` : ''}
+        <span style="font-size:.74rem;color:var(--muted)">${t('photo_lbl')}</span>
+      </div>
       <div class="q-charger-opts">
         <div class="q-fg">
           <label>${t('guns_label')}</label>
@@ -943,6 +952,41 @@ function renderChargerList() {
 }
 
 function refreshChargerRows() { renderChargerList(); }
+
+// Photo of a charger: shrunk in the browser (max 480 px, JPEG) so the PDF and the saved quote stay light.
+function onChargerPhoto(id, input) {
+  const file = input.files && input.files[0]; input.value = '';
+  const row = chargerRows.find(r => r.id === id);
+  if (!file || !row) return;
+  const rd = new FileReader();
+  rd.onerror = () => alert(t('photo_err'));
+  rd.onload = () => {
+    const img = new Image();
+    img.onerror = () => alert(t('photo_err'));
+    img.onload = () => {
+      const k = Math.min(1, 480 / Math.max(img.width, img.height));
+      const w = Math.max(1, Math.round(img.width * k)), h = Math.max(1, Math.round(img.height * k));
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      const cx = c.getContext('2d'); cx.fillStyle = '#fff'; cx.fillRect(0, 0, w, h); cx.drawImage(img, 0, 0, w, h);
+      row.photo = c.toDataURL('image/jpeg', 0.82); row.photoW = w; row.photoH = h;
+      renderChargerList(); updateSummary();
+    };
+    img.src = rd.result;
+  };
+  rd.readAsDataURL(file);
+}
+function onChargerPhotoClear(id) {
+  const row = chargerRows.find(r => r.id === id);
+  if (row) { delete row.photo; delete row.photoW; delete row.photoH; }
+  renderChargerList(); updateSummary();
+}
+// Thumbnail drawn in the first cell of a charger table row (PDF).
+function pdfPhotoCell(doc, d, row) {
+  if (!row || !row.photo) return;
+  const bw = 17, bh = 13, ar = (row.photoW || 4) / (row.photoH || 3);
+  let w = bw, h = bw / ar; if (h > bh) { h = bh; w = bh * ar; }
+  try { doc.addImage(row.photo, 'JPEG', d.cell.x + 2.2 + (bw - w) / 2, d.cell.y + (d.cell.height - h) / 2, w, h); } catch (e) { /* skip a bad image */ }
+}
 
 // ─── MANAGEMENT & PAYMENT PACK (a la carte) ──────────────────────
 function renderPackFeatures() {
@@ -1575,6 +1619,7 @@ function generatePDF(pdfLang) {
     });
     const chSubtotal = chargerRows.reduce((a,r) => a + lineC(r.customPrice, r.qty), 0);
     chBody.push(['', '', '', '', '', tl.subtotal_chargers, m2(chSubtotal)]);
+    const anyPhoto = chargerRows.some(r => r.photo);
     doc.autoTable(Object.assign({}, tbl, {
       head: chHead, body: chBody, startY: y,
       didParseCell: d => {
@@ -1582,7 +1627,11 @@ function generatePDF(pdfLang) {
         if (d.section === 'body' && d.row.index === chBody.length - 1) {
           d.cell.styles.fontStyle = 'bold'; d.cell.styles.fillColor = [240,244,250]; d.cell.styles.textColor = navy;
         }
-      }
+        if (d.section === 'body' && d.column.index === 0 && chargerRows[d.row.index] && chargerRows[d.row.index].photo) {
+          d.cell.styles.cellPadding = { top: 2, bottom: 2, left: 22, right: 2 }; d.cell.styles.minCellHeight = 17;
+        }
+      },
+      didDrawCell: d => { if (anyPhoto && d.section === 'body' && d.column.index === 0) pdfPhotoCell(doc, d, chargerRows[d.row.index]); }
     }));
     y = doc.lastAutoTable.finalY + 5;
     if (chargerRows.some(r => chargeTimesFor(r.power).motoCapped)) {
@@ -2175,7 +2224,11 @@ function generateComparePDF(pdfLang) {
         if (d.section === 'head' && d.column.index >= 6) d.cell.styles.halign = 'right';
         if (d.section === 'head' && d.column.index >= 1 && d.column.index <= 5) d.cell.styles.halign = 'center';
         if (d.section === 'body' && rec[d.row.index]) { d.cell.styles.fillColor = [232,243,251]; if (d.column.index === 0) d.cell.styles.textColor = blue; }
-      }
+        if (d.section === 'body' && d.column.index === 0 && cols[d.row.index] && cols[d.row.index].row.photo) {
+          d.cell.styles.cellPadding = { top: 2, bottom: 2, left: 22, right: 2 }; d.cell.styles.minCellHeight = 17;
+        }
+      },
+      didDrawCell: d => { if (d.section === 'body' && d.column.index === 0 && cols[d.row.index]) pdfPhotoCell(doc, d, cols[d.row.index].row); }
     }));
     y = doc.lastAutoTable.finalY + 4;
   }
