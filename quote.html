@@ -539,7 +539,7 @@ const T = {
     vat_note:"* Excl. VAT. Prices in selected currency.",
     pdf_en:"Generate Quote (English)", pdf_pt:"Gerar Cotação (Português)",
     currency:"Currency:", charger_type:"Charger Power per gun (kW)", qty:"Qty",
-    guns_label:"Guns", gun_single:"1 gun", gun_dual:"2 guns (dual gun)", current_label:"Current", cur_auto:"Auto", total_power:"Total power",
+    guns_label:"Guns", gun_single:"1 gun", gun_dual:"2 guns (dual gun)", share_label:"Power of a dual gun", share_each:"Per gun (each gun at the power entered)", share_shared:"Shared (the power entered is the total)", current_label:"Current", cur_auto:"Auto", total_power:"Total power",
     unit_price:"Unit Price (R)", description:"Description", unit:"Unit Price", amount:"Amount",
     moto_charge:"Moto 0→80%", car_charge:"Car 0→80%", max_power:"Power",
     charger_lbl:"Charger", remove:"Remove",
@@ -596,7 +596,7 @@ const T = {
     vat_note:"* Sem IVA. Preços na moeda selecionada.",
     pdf_en:"Generate Quote (English)", pdf_pt:"Gerar Cotação (Português)",
     currency:"Moeda:", charger_type:"Potência do Carregador por prise (kW)", qty:"Qtd",
-    guns_label:"Prises", gun_single:"1 prise", gun_dual:"2 prises (dual gun)", current_label:"Corrente", cur_auto:"Auto", total_power:"Potência total",
+    guns_label:"Prises", gun_single:"1 prise", gun_dual:"2 prises (dual gun)", share_label:"Potência do dual gun", share_each:"Por prise (cada prise à potência indicada)", share_shared:"Partilhada (a potência indicada é o total)", current_label:"Corrente", cur_auto:"Auto", total_power:"Potência total",
     unit_price:"Preço Unitário (R)", description:"Descrição", unit:"Preço Unit.", amount:"Valor",
     moto_charge:"Moto 0→80%", car_charge:"Carro 0→80%", max_power:"Potência",
     charger_lbl:"Carregador", remove:"Remover",
@@ -650,7 +650,10 @@ function chargerTypeLabel(powerKw) { return powerKw > 22 ? 'DC' : 'AC'; }
 // Rows saved before these options existed have none of them and read as 1 gun, auto.
 function rowGuns(row) { return row.guns === 2 ? 2 : 1; }
 function rowType(row) { return row.current === 'AC' || row.current === 'DC' ? row.current : chargerTypeLabel(row.power); }
-function rowLabel(row) { return (rowGuns(row) === 2 ? '2 x ' : '') + row.power + 'kW ' + rowType(row); }
+// A dual gun either gives each gun the power entered ('each', e.g. 2 x 11 kW) or shares it ('shared', e.g. 120 kW in total).
+function rowShared(row) { return rowGuns(row) === 2 && row.shared === true; }
+function rowLabel(row) { return rowShared(row) ? row.power + 'kW ' + rowType(row) + ' (2 guns)' : (rowGuns(row) === 2 ? '2 x ' : '') + row.power + 'kW ' + rowType(row); }
+function rowPowerText(row) { return rowShared(row) ? row.power + ' kW shared' : (rowGuns(row) === 2 ? '2 x ' : '') + row.power + ' kW'; }
 
 // A moto's onboard charger/BMS caps how much power it can actually accept - past this
 // threshold, a bigger charger (100kW, 400kW...) will NOT charge it any faster.
@@ -866,6 +869,13 @@ function onChargerGunsChange(id, n) {
   updateSummary();
 }
 
+function onChargerShareChange(id, shared) {
+  const row = chargerRows.find(r => r.id === id);
+  if (row) row.shared = !!shared;
+  renderChargerList();
+  updateSummary();
+}
+
 function onChargerCurrentChange(id, v) {
   const row = chargerRows.find(r => r.id === id);
   if (row) row.current = (v === 'AC' || v === 'DC') ? v : 'auto';
@@ -929,6 +939,13 @@ function renderChargerList() {
             <button type="button" class="q-chip ${rowGuns(row)===2?'active':''}" onclick="onChargerGunsChange(${row.id},2)">${t('gun_dual')}</button>
           </div>
         </div>
+        ${rowGuns(row)===2 ? `<div class="q-fg" style="grid-column:1/-1">
+          <label>${t('share_label')}</label>
+          <div class="q-power-chips">
+            <button type="button" class="q-chip ${!rowShared(row)?'active':''}" onclick="onChargerShareChange(${row.id},false)">${t('share_each')}</button>
+            <button type="button" class="q-chip ${rowShared(row)?'active':''}" onclick="onChargerShareChange(${row.id},true)">${t('share_shared')}</button>
+          </div>
+        </div>` : ''}
         <div class="q-fg">
           <label>${t('current_label')}</label>
           <div class="q-power-chips">
@@ -939,7 +956,7 @@ function renderChargerList() {
         </div>
       </div>
       <div class="q-charger-info">
-        <div class="q-info-chip"><div class="ic-label">${t('max_power')}</div><div class="ic-val">${rowType(row)} - ${rowGuns(row)===2 ? '2 x ' : ''}${row.power}kW${rowGuns(row)===2 ? ' (' + t('total_power').toLowerCase() + ' ' + (row.power*2) + 'kW)' : ''}</div></div>
+        <div class="q-info-chip"><div class="ic-label">${t('max_power')}</div><div class="ic-val">${rowType(row)} - ${rowShared(row) ? row.power + 'kW (2 guns, ' + t('total_power').toLowerCase() + ' ' + row.power + 'kW shared)' : (rowGuns(row)===2 ? '2 x ' : '') + row.power + 'kW' + (rowGuns(row)===2 ? ' (' + t('total_power').toLowerCase() + ' ' + (row.power*2) + 'kW)' : '')}</div></div>
         <div class="q-info-chip"><div class="ic-label">🛵 ${t('moto_charge')}</div><div class="ic-val green">${ct.moto}</div></div>
         <div class="q-info-chip"><div class="ic-label">🚗 ${t('car_charge')}</div><div class="ic-val green">${ct.car}</div></div>
       </div>
@@ -2216,7 +2233,7 @@ function generateComparePDF(pdfLang) {
     const body = cols.map((c, i) => {
       const r = c.row, g = rowGuns(r), ct = chargeTimesFor(r.power);
       return [`${letter(i)}. ${cleanTxt(c.label)}` + (r.rec ? `\n${P('RECOMMENDED','RECOMENDADO')}` : ''),
-        rowType(r), g === 2 ? `2 x ${r.power} kW` : `${r.power} kW`, ct.car, ct.moto, String(r.qty), m2(D(r.customPrice)), m2(c.eq)];
+        rowType(r), rowPowerText(r), ct.car, ct.moto, String(r.qty), m2(D(r.customPrice)), m2(c.eq)];
     });
     doc.autoTable(Object.assign({}, tbl, {
       head, body, startY: y, tableWidth: CW,
