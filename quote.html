@@ -369,6 +369,12 @@ select.st{border:0;cursor:pointer;font-family:inherit;padding:.12rem .4rem}
       <div class="q-card-title"><span class="num">5</span> <span data-t="additional">Additional Services</span> <span style="font-size:.72rem;color:var(--muted);font-weight:500" data-t="optional">(optional)</span></div>
       <div class="q-extra-list" id="extraList"></div>
       <button class="q-add-btn" onclick="addExtra()" style="margin-top:.5rem"><span>＋</span> <span data-t="add_line">Add a line item</span></button>
+      <div class="std-only" style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin-top:1rem;padding-top:.9rem;border-top:1px dashed var(--border,#d2dae8)">
+        <span style="font-size:.78rem;color:var(--muted)">Global discount (optional)</span>
+        <input class="q-input" id="gDiscLabel" style="width:11rem" maxlength="40" placeholder="Label, e.g. Launch offer" oninput="onGlobalDisc()">
+        <select class="q-input" id="gDiscType" style="width:auto" onchange="onGlobalDisc()"><option value="pct">%</option><option value="amt">R</option></select>
+        <input class="q-input" id="gDiscVal" type="number" min="0" step="any" style="width:7rem" placeholder="0" oninput="onGlobalDisc()">
+      </div>
     </div>
 
     <!-- INSTALLATION (optional, separate page + own acceptance) -->
@@ -898,6 +904,13 @@ function onChargerPriceChange(id, val) {
   updateSummary();
 }
 
+function onChargerDisc(id, k, v) {
+  const row = chargerRows.find(r => r.id === id); if (!row) return;
+  if (k === 'dType') row.dType = v === 'amt' ? 'amt' : 'pct'; else row.dVal = Math.max(0, parseFloat(v) || 0);
+  renderChargerList(); updateSummary();
+}
+function onGlobalDisc() { updateSummary(); }
+
 function renderChargerList() {
   const el = document.getElementById('chargerList');
   if (chargerRows.length === 0) {
@@ -926,6 +939,12 @@ function renderChargerList() {
           <input class="q-input" type="number" step="any" value="${row.customPrice}" onchange="onChargerPriceChange(${row.id},this.value)">
         </div>
         <button class="q-remove-btn" onclick="removeCharger(${row.id})" title="${t('remove')}">✕</button>
+      </div>
+      <div class="q-disc" style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin:.6rem 0 .2rem">
+        <span style="font-size:.78rem;color:var(--muted)">Discount</span>
+        <select class="q-input" style="width:auto" onchange="onChargerDisc(${row.id},'dType',this.value)"><option value="pct" ${row.dType !== 'amt' ? 'selected' : ''}>%</option><option value="amt" ${row.dType === 'amt' ? 'selected' : ''}>R (on the line)</option></select>
+        <input class="q-input" type="number" min="0" step="any" style="width:7rem" value="${row.dVal || ''}" placeholder="0" onchange="onChargerDisc(${row.id},'dVal',this.value)">
+        ${rowDiscC(row) > 0 ? `<span style="font-size:.78rem;color:var(--muted)">- ${(currency === 'MZN' ? 'MZN ' : 'R ') + fmtC(rowDiscC(row), 'en', true)} = <strong>${(currency === 'MZN' ? 'MZN ' : 'R ') + fmtC(rowNetC(row), 'en', true)}</strong></span>` : ''}
       </div>
       ${quoteMode === 'compare' ? `<div class="q-grid-2" style="margin:1rem 0 .9rem"><div class="q-fg"><label>Column title (optional)</label><input class="q-input" maxlength="40" value="${escHtml(row.name || '')}" placeholder="${escHtml(rowLabel(row))}" onchange="onChargerName(${row.id},this.value)"></div><label class="q-check" style="align-self:end;padding-bottom:.6rem"><input type="checkbox" ${row.rec ? 'checked' : ''} onchange="onChargerRec(${row.id},this.checked)"> <span>Mark as recommended</span></label></div>` : ''}
       <div class="q-photo">
@@ -1063,7 +1082,7 @@ function roiBasis() {
   const ov = parseFloat(document.getElementById('roiNumChargers').value);
   const n = ov > 0 ? ov : (r.qty || 1);
   const perM = packActive() ? (packOffer() === 'annual' ? packAnnualPerCharger() / 12 : mgmtPack.price) : 0;
-  return { row: r, n, hw: r.customPrice * n, pack: perM * n };
+  return { row: r, n, hw: (rowNetC(r) / 100 / rateNow() / (r.qty || 1)) * n, pack: perM * n };
 }
 function calcROI() {
   const rb = roiBasis();
@@ -1082,7 +1101,7 @@ function calcROI() {
 
   // Total cost of ownership = hardware + extras (once-off) + pack × payback months
   // We solve iteratively: payback = hardware / (profit - pack) - pack already in profit
-  const hardwareCost  = rb ? rb.hw : (chargerRows.reduce((a,r)=>a+r.customPrice*r.qty, 0)
+  const hardwareCost  = rb ? rb.hw : ((chargerRows.reduce((a,r)=>a+rowNetC(r), 0) - onceTotals().gd) / 100 / rateNow()
                       + extraRows.reduce((a,r)=>a+(r.opt?0:r.price), 0)
                       + instRawZar());
   // payback is based on net profit which already deducts monthly pack
@@ -1148,6 +1167,25 @@ function vatRate() { const v = parseFloat(document.getElementById('vatRate').val
 function rateNow() { return currency === 'MZN' ? (mznRate || 3.82) : 1; }
 function D(zar) { return Math.round(zar * rateNow() * 100); }
 function lineC(price, qty) { return D(price) * qty; }
+// Discounts: per charger line (% of the line, or an amount in R off the line) and one optional global discount on the required once-off subtotal.
+function discOf(baseC, type, val) {
+  const v = parseFloat(val) || 0; if (v <= 0 || baseC <= 0) return 0;
+  return Math.min(baseC, type === 'amt' ? D(v) : Math.round(baseC * Math.min(v, 100) / 100));
+}
+function rowGrossC(r) { return lineC(r.customPrice, r.qty); }
+function rowDiscC(r) { return discOf(rowGrossC(r), r.dType, r.dVal); }
+function rowNetC(r) { return rowGrossC(r) - rowDiscC(r); }
+function rowDiscText(r) { const v = parseFloat(r.dVal) || 0; return r.dType === 'amt' ? '' : ' (-' + (Math.round(v * 100) / 100) + ' %)'; }
+function globalDiscC(baseC) {
+  if (quoteMode === 'compare') return 0;
+  const ty = document.getElementById('gDiscType'), va = document.getElementById('gDiscVal');
+  return ty && va ? discOf(baseC, ty.value, va.value) : 0;
+}
+function globalDiscLabel() {
+  const l = document.getElementById('gDiscLabel'), ty = document.getElementById('gDiscType'), va = document.getElementById('gDiscVal');
+  const base = (l && l.value.trim()) || 'Discount';
+  return base + (ty && ty.value !== 'amt' && va ? ' (-' + (Math.round((parseFloat(va.value) || 0) * 100) / 100) + ' %)' : '');
+}
 function fmtC(c, L, ui) {
   const neg = c < 0; c = Math.abs(Math.round(c));
   const whole = Math.floor(c / 100), dec = c % 100;
@@ -1159,9 +1197,10 @@ function packMonthlyC() { return D(mgmtPack.price) * packQty(); }
 function packAnnualPerC() { return D(packAnnualPerCharger()); }
 function packAnnualC() { return packAnnualPerC() * packQty(); }
 function onceTotals() {
-  let req = chargerRows.reduce((a, r) => a + lineC(r.customPrice, r.qty), 0), opt = 0;
+  let req = chargerRows.reduce((a, r) => a + rowNetC(r), 0), opt = 0;
   extraRows.forEach(r => { if (!(r.desc || r.price)) return; if (r.opt) opt += D(r.price); else req += D(r.price); });
-  return { req, opt };
+  const pre = req, gd = globalDiscC(pre);
+  return { req: pre - gd, opt, pre, gd };
 }
 function vatBreakdown(subC) {
   if (!vatOn() || !vatRate()) return { on:false, sub:subC, vat:0, total:subC };
@@ -1451,7 +1490,8 @@ function updateSummary() {
 
   // Chargers
   chargerRows.forEach(row => {
-    lines.push({ label:`${rowLabel(row)} × ${row.qty}`, val: cf(lineC(row.customPrice, row.qty)) });
+    lines.push({ label:`${rowLabel(row)} × ${row.qty}`, val: cf(rowGrossC(row)) });
+    if (rowDiscC(row) > 0) lines.push({ label:`Discount${rowDiscText(row)}`, val: '-' + cf(rowDiscC(row)), cls:'disc' });
   });
 
   // Management & Payment Pack (a la carte)
@@ -1469,6 +1509,8 @@ function updateSummary() {
   extraRows.forEach(r => {
     if ((r.price || r.desc) && r.opt) lines.push({ label: `${r.desc || t('description')} (${t('extra_optional').toLowerCase()})`, val: r.price ? cf(D(r.price)) : t('free_word'), cls:'opt' });
   });
+
+  { const g = onceTotals().gd; if (g > 0) lines.push({ label: globalDiscLabel(), val: '-' + cf(g), cls:'disc' }); }
 
   if (installation && (instValidLines().length)) {
     lines.push({ label: 'Installation (quoted separately, own page)', val: cf(instC()), cls:'opt' });
@@ -1621,7 +1663,7 @@ function generatePDF(pdfLang) {
   const vb = vatBreakdown(tt.req);
   const validExtras = extraRows.filter(r => (r.desc || r.price) && !r.opt);
   const optExtras = extraRows.filter(r => (r.desc || r.price) && r.opt);
-  const onceZar = chargerRows.reduce((a,r)=>a+r.customPrice*r.qty,0) + validExtras.reduce((a,r)=>a+r.price,0);
+  const onceZar = tt.req / 100 / rateNow();
   const hasInst = !!installation && (instValidLines().length > 0 || instScopeItems().length > 0);
   const instCents = hasInst ? instC() : 0;
   const onceZarInst = onceZar + (hasInst ? instRawZar() : 0);
@@ -1632,12 +1674,18 @@ function generatePDF(pdfLang) {
   if (chargerRows.length > 0) {
     section(tl.charger_section);
     const chHead = [[tl.item, tl.power, 'Moto 0-80%', 'Car 0-80%', tl.qty, `${tl.unit} (${cs})`, `${tl.amount} (${cs})`]];
-    const chBody = chargerRows.map(row => {
+    const chBody = [], chRowOf = [], chDiscRows = new Set();
+    chargerRows.forEach(row => {
       const ct = chargeTimesFor(row.power);
-      return [rowLabel(row), rowType(row), ct.moto, ct.car,
-        row.qty.toString(), m2(D(row.customPrice)), m2(lineC(row.customPrice, row.qty))];
+      chRowOf[chBody.length] = row;
+      chBody.push([rowLabel(row), rowType(row), ct.moto, ct.car,
+        row.qty.toString(), m2(D(row.customPrice)), m2(rowGrossC(row))]);
+      if (rowDiscC(row) > 0) {
+        chDiscRows.add(chBody.length);
+        chBody.push(['', '', '', '', '', `${P('Discount','Desconto')}${rowDiscText(row)}`, '-' + m2(rowDiscC(row))]);
+      }
     });
-    const chSubtotal = chargerRows.reduce((a,r) => a + lineC(r.customPrice, r.qty), 0);
+    const chSubtotal = chargerRows.reduce((a,r) => a + rowNetC(r), 0);
     chBody.push(['', '', '', '', '', tl.subtotal_chargers, m2(chSubtotal)]);
     const anyPhoto = chargerRows.some(r => r.photo);
     doc.autoTable(Object.assign({}, tbl, {
@@ -1647,11 +1695,12 @@ function generatePDF(pdfLang) {
         if (d.section === 'body' && d.row.index === chBody.length - 1) {
           d.cell.styles.fontStyle = 'bold'; d.cell.styles.fillColor = [240,244,250]; d.cell.styles.textColor = navy;
         }
-        if (d.section === 'body' && d.column.index === 0 && chargerRows[d.row.index] && chargerRows[d.row.index].photo) {
+        if (d.section === 'body' && chDiscRows.has(d.row.index) && d.column.index >= 5) { d.cell.styles.textColor = [185,60,40]; d.cell.styles.fontStyle = 'bold'; }
+        if (d.section === 'body' && d.column.index === 0 && chRowOf[d.row.index] && chRowOf[d.row.index].photo) {
           d.cell.styles.cellPadding = { top: 2, bottom: 2, left: 22, right: 2 }; d.cell.styles.minCellHeight = 17;
         }
       },
-      didDrawCell: d => { if (anyPhoto && d.section === 'body' && d.column.index === 0) pdfPhotoCell(doc, d, chargerRows[d.row.index]); }
+      didDrawCell: d => { if (anyPhoto && d.section === 'body' && d.column.index === 0 && chRowOf[d.row.index]) pdfPhotoCell(doc, d, chRowOf[d.row.index]); }
     }));
     y = doc.lastAutoTable.finalY + 5;
     if (chargerRows.some(r => chargeTimesFor(r.power).motoCapped)) {
@@ -1755,6 +1804,11 @@ function generatePDF(pdfLang) {
     });
     if (!vb.on) { doc.setFont('helvetica','italic'); doc.setFontSize(8); doc.setTextColor(...muted); doc.text(P('All prices exclude VAT.', 'Todos os preços não incluem IVA.'), M, y + 2); y += 5; }
   } else {
+  if (tt.gd > 0) {
+    ensure(14);
+    line2(P('Subtotal before discount', 'Subtotal antes do desconto'), tt.pre, false);
+    line2(globalDiscLabel(), -tt.gd, false);
+  }
   if (vb.on) {
     line2(P('Subtotal (excl. VAT)', 'Subtotal (sem IVA)'), vb.sub, false);
     line2(`${P('VAT','IVA')} ${vatRate()}%`, vb.vat, false);
@@ -2136,7 +2190,7 @@ function cmpCols() {
   return chargerRows.map(r => ({
     row: r,
     label: String(r.name || '').trim() || rowLabel(r),
-    eq: lineC(r.customPrice, r.qty),
+    eq: rowNetC(r), gross: rowGrossC(r),
     pm: D(mgmtPack.price) * r.qty,
     py: packAnnualPerC() * r.qty
   }));
@@ -2238,6 +2292,8 @@ function generateComparePDF(pdfLang) {
       return [`${letter(i)}. ${cleanTxt(c.label)}` + (r.rec ? `\n${P('RECOMMENDED','RECOMENDADO')}` : ''),
         rowType(r), rowPowerText(r), ct.car, ct.moto, String(r.qty), m2(D(r.customPrice)), m2(c.eq)];
     });
+    const cmpDisc = cols.map(c => c.gross > c.eq);
+    body.forEach((b, i) => { if (cmpDisc[i]) b[7] = m2(cols[i].gross) + '\n' + m2(cols[i].eq); });
     doc.autoTable(Object.assign({}, tbl, {
       head, body, startY: y, tableWidth: CW,
       styles: Object.assign({}, tbl.styles, { fontSize: 8.3, cellPadding: 2.6 }),
@@ -2250,7 +2306,15 @@ function generateComparePDF(pdfLang) {
           d.cell.styles.cellPadding = { top: 2, bottom: 2, left: 22, right: 2 }; d.cell.styles.minCellHeight = 17;
         }
       },
-      didDrawCell: d => { if (d.section === 'body' && d.column.index === 0 && cols[d.row.index]) pdfPhotoCell(doc, d, cols[d.row.index].row); }
+      didDrawCell: d => {
+        if (d.section === 'body' && d.column.index === 0 && cols[d.row.index]) pdfPhotoCell(doc, d, cols[d.row.index].row);
+        if (d.section === 'body' && d.column.index === 7 && cmpDisc[d.row.index]) {
+          const c = cols[d.row.index], txt = m2(c.gross), pad = 2.6;
+          doc.setFont('helvetica', 'normal'); doc.setFontSize(8.3);
+          const w = doc.getTextWidth(txt), xr = d.cell.x + d.cell.width - pad, yy = d.cell.y + pad + 1.8;
+          doc.setDrawColor(150, 60, 50); doc.setLineWidth(0.25); doc.line(xr - w, yy, xr, yy);
+        }
+      }
     }));
     y = doc.lastAutoTable.finalY + 4;
   }
