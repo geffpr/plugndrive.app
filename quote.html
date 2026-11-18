@@ -288,16 +288,26 @@ select.st{border:0;cursor:pointer;font-family:inherit;padding:.12rem .4rem}
       <div class="q-card-title"><span class="num">3</span> <span data-t="pack_title">Management & Payment Pack</span> <span style="font-size:.72rem;color:var(--muted);font-weight:500" data-t="optional">(optional)</span></div>
       <div class="q-pack-feat-grid" id="packFeatGrid"></div>
       <div class="q-feat-add"><input class="q-input" id="customFeatInput" maxlength="80" onkeydown="if(event.key==='Enter'){event.preventDefault();addCustomFeature()}"><button type="button" class="q-feat-add-btn" onclick="addCustomFeature()" aria-label="Add">＋</button></div>
-      <div class="q-grid-3" style="margin-top:1.2rem">
+      <div class="q-fg" style="margin-top:1.2rem">
+        <label data-t="pack_plan">Platform plan</label>
+        <select class="q-input" id="packPlan" onchange="onPackPlan(this.value)">
+          <option value="" data-t="plan_custom">Custom (price per charger)</option>
+          <option value="starter">Starter: 1 charger, R 399 / month</option>
+          <option value="network">Network: 2 to 5 chargers, R 999 / month</option>
+          <option value="operator">Operator: up to 15 chargers, R 1 999 / month</option>
+          <option value="cpo">CPO: 16 to 50 chargers, R 4 999 / month</option>
+        </select>
+      </div>
+      <div class="q-grid-3" style="margin-top:1rem">
         <div class="q-fg">
-          <label data-t="pack_price_pm">Monthly price per charger</label>
+          <label data-t="pack_price_pm" id="packPriceLabel">Monthly price per charger</label>
           <input class="q-input" type="number" step="any" id="packPriceInput" placeholder="0" min="0" oninput="onPackPriceInput(this.value)" style="font-weight:700">
         </div>
         <div class="q-fg">
           <label data-t="pack_discount">Annual discount (%)</label>
           <input class="q-input" type="number" id="packDiscount" value="0" min="0" max="100" step="0.5" oninput="onPackField()">
         </div>
-        <div class="q-fg std-only">
+        <div class="q-fg std-only" id="packQtyWrap">
           <label data-t="pack_qty">Chargers billed</label>
           <input class="q-input" type="number" id="packQty" placeholder="auto" min="1" oninput="onPackField()">
         </div>
@@ -566,7 +576,7 @@ const T = {
     pack_section:"MANAGEMENT PACK",
     thank_you:"Thank you for choosing Plug n Drive.",
     website:"www.plugndrive.co.za", phone:"+27 61 153 1743", mail:"hello@plugndrive.co.za",
-    pack_price_pm:"Monthly price per charger", pack_discount:"Annual discount (%)", pack_qty:"Chargers billed",
+    pack_price_pm:"Monthly price per charger", pack_price_plan:"Monthly plan price", pack_plan:"Platform plan", plan_custom:"Custom (price per charger)", pack_discount:"Annual discount (%)", pack_qty:"Chargers billed",
     pack_offer:"Billing options offered", offer_both:"Monthly or annual (client chooses)", offer_monthly:"Monthly only", offer_annual:"Annual only",
     pack_term:"Minimum term", term_none:"No minimum term", term_12:"12 months", term_24:"24 months", term_36:"36 months", term_custom:"Custom (months)",
     pack_term_start:"Term starts", start_install:"On installation (Plug n Drive chargers)", start_sign:"On signature (other chargers)",
@@ -623,7 +633,7 @@ const T = {
     pack_section:"PACK DE GESTÃO",
     thank_you:"Obrigado por escolher a Plug n Drive.",
     website:"www.plugndrive.co.za", phone:"+27 61 153 1743", mail:"hello@plugndrive.co.za",
-    pack_price_pm:"Preço mensal por carregador", pack_discount:"Desconto anual (%)", pack_qty:"Carregadores faturados",
+    pack_price_pm:"Preço mensal por carregador", pack_price_plan:"Preço mensal do plano", pack_plan:"Plano da plataforma", plan_custom:"Personalizado (preço por carregador)", pack_discount:"Desconto anual (%)", pack_qty:"Carregadores faturados",
     pack_offer:"Opções de faturação oferecidas", offer_both:"Mensal ou anual (o cliente escolhe)", offer_monthly:"Apenas mensal", offer_annual:"Apenas anual",
     pack_term:"Duração mínima", term_none:"Sem duração mínima", term_12:"12 meses", term_24:"24 meses", term_36:"36 meses", term_custom:"Personalizada (meses)",
     pack_term_start:"Início da duração", start_install:"Na instalação (carregadores Plug n Drive)", start_sign:"Na assinatura (outros carregadores)",
@@ -705,7 +715,18 @@ const PACK_FEATURES = [
   { id:'groups',     en:'Access groups (free or discounted guests)', pt:'Grupos de acesso (hóspedes gratuitos ou com desconto)' },
   { id:'reports',    en:'Reports and revenue tracking', pt:'Relatórios e acompanhamento de receitas' },
 ];
-let mgmtPack = { features: [], price: 0 };
+let mgmtPack = { features: [], price: 0, plan: '' };
+// Platform plans: one flat monthly price that covers every charger up to the plan's limit (same as the pricing page).
+const PLATFORM_PLANS = [
+  { id:'starter',  name:'Starter',  price:399,  min:1,  max:1,  en:'1 charger',          pt:'1 carregador' },
+  { id:'network',  name:'Network',  price:999,  min:2,  max:5,  en:'2 to 5 chargers',    pt:'2 a 5 carregadores' },
+  { id:'operator', name:'Operator', price:1999, min:1,  max:15, en:'up to 15 chargers',  pt:'até 15 carregadores' },
+  { id:'cpo',      name:'CPO',      price:4999, min:16, max:50, en:'16 to 50 chargers',  pt:'16 a 50 carregadores' },
+];
+function packPlan() { return PLATFORM_PLANS.find(p => p.id === mgmtPack.plan) || null; }
+function planLabel(L) { const p = packPlan(); if (!p) return ''; return L === 'pt' ? `Plano ${p.name} (${p.pt})` : `${p.name} plan (${p.en})`; }
+// Billing units: a flat plan is billed once whatever the number of chargers; otherwise per charger.
+function packUnits() { return packPlan() ? 1 : packQty(); }
 let customFeatures = [];
 function featureName(id, L) {
   const f = PACK_FEATURES.find(x => x.id === id);
@@ -747,8 +768,8 @@ function packDiscount() {
 }
 function packOffer() { const e = document.getElementById('packOffer'); return e ? e.value : 'both'; }
 function packAnnualPerCharger() { return Math.round(mgmtPack.price * 12 * (1 - packDiscount()/100) * 100) / 100; }
-function packMonthlyTotal() { return mgmtPack.price * packQty(); }
-function packAnnualTotal() { return packAnnualPerCharger() * packQty(); }
+function packMonthlyTotal() { return mgmtPack.price * packUnits(); }
+function packAnnualTotal() { return packAnnualPerCharger() * packUnits(); }
 function packTermMonths() {
   const e = document.getElementById('packTerm');
   if (!e) return 0;
@@ -1040,6 +1061,8 @@ function renderPackFeatures() {
   if (ci) ci.placeholder = t('feat_add_ph');
   const priceEl = document.getElementById('packPriceInput');
   if (priceEl && document.activeElement !== priceEl) priceEl.value = mgmtPack.price || '';
+  const planEl = document.getElementById('packPlan');
+  if (planEl) planEl.value = mgmtPack.plan || '';
 }
 
 function togglePackFeature(id) {
@@ -1047,6 +1070,16 @@ function togglePackFeature(id) {
   if (idx > -1) mgmtPack.features.splice(idx,1); else mgmtPack.features.push(id);
   renderPackFeatures();
   updateSummary();
+}
+
+function onPackPlan(id) {
+  mgmtPack.plan = id || '';
+  const p = packPlan();
+  if (p) mgmtPack.price = p.price;
+  const priceEl = document.getElementById('packPriceInput');
+  if (priceEl) priceEl.value = mgmtPack.price || '';
+  updateSummary();
+  calcROI();
 }
 
 function onPackPriceInput(val) {
@@ -1065,10 +1098,23 @@ function onPackField() {
 function updatePackCalc() {
   const qEl = document.getElementById('packQty');
   if (qEl) qEl.placeholder = String(totalChargers() || 1);
+  const plan = packPlan();
+  const pl = document.getElementById('packPriceLabel');
+  if (pl) pl.textContent = t(plan ? 'pack_price_plan' : 'pack_price_pm');
+  const qw = document.getElementById('packQtyWrap');
+  if (qw) qw.style.visibility = plan ? 'hidden' : '';
   const el = document.getElementById('packCalc');
   if (!el) return;
   if (!mgmtPack.price) { el.textContent = ''; return; }
   const d = packDiscount();
+  if (plan) {
+    const n = totalChargers();
+    const warn = n && (n < plan.min || n > plan.max)
+      ? (lang === 'pt' ? `  |  Atenção: ${n} carregadores na cotação, fora do plano ${plan.name}` : `  |  Check: ${n} chargers on the quote, outside the ${plan.name} plan`) : '';
+    el.textContent = planLabel(lang) + ': ' + fmt(packMonthlyTotal()) + t('per_month') + '  |  ' + t('annual_sub') + ': ' + fmt(packAnnualTotal()) + t('per_year') +
+      (d > 0 ? ' (-' + d + '%)' : '') + warn;
+    return;
+  }
   const cw = lang === 'pt' ? (packQty() === 1 ? 'carregador' : 'carregadores') : (packQty() === 1 ? 'charger' : 'chargers');
   el.textContent = t('annual_sub') + ': ' + fmt(packAnnualPerCharger()) + ' ' + t('per_charger') + t('per_year') +
     (d > 0 ? ' (-' + d + '%)' : '') + '  |  ' + packQty() + ' ' + cw + ': ' + fmt(packAnnualTotal()) + t('per_year');
@@ -1082,7 +1128,7 @@ function roiBasis() {
   const ov = parseFloat(document.getElementById('roiNumChargers').value);
   const n = ov > 0 ? ov : (r.qty || 1);
   const perM = packActive() ? (packOffer() === 'annual' ? packAnnualPerCharger() / 12 : mgmtPack.price) : 0;
-  return { row: r, n, hw: (rowNetC(r) / 100 / rateNow() / (r.qty || 1)) * n, pack: perM * n };
+  return { row: r, n, hw: (rowNetC(r) / 100 / rateNow() / (r.qty || 1)) * n, pack: packPlan() ? perM : perM * n };
 }
 function calcROI() {
   const rb = roiBasis();
@@ -1193,9 +1239,9 @@ function fmtC(c, L, ui) {
   if (ui && dec === 0) return (neg ? '-' : '') + ws;
   return (neg ? '-' : '') + ws + (L === 'pt' ? ',' : '.') + String(dec).padStart(2, '0');
 }
-function packMonthlyC() { return D(mgmtPack.price) * packQty(); }
+function packMonthlyC() { return D(mgmtPack.price) * packUnits(); }
 function packAnnualPerC() { return D(packAnnualPerCharger()); }
-function packAnnualC() { return packAnnualPerC() * packQty(); }
+function packAnnualC() { return packAnnualPerC() * packUnits(); }
 function onceTotals() {
   let req = chargerRows.reduce((a, r) => a + rowNetC(r), 0), opt = 0;
   extraRows.forEach(r => { if (!(r.desc || r.price)) return; if (r.opt) opt += D(r.price); else req += D(r.price); });
@@ -1499,7 +1545,8 @@ function updateSummary() {
   if (packActive()) {
     const featLabel = mgmtPack.features.map(id => featureName(id, lang)).join(', ');
     const val = offer === 'annual' ? cf(packAnnualC()) + t('per_year') : cf(packMonthlyC()) + t('per_month');
-    lines.push({ label:`${t('pack_title')}: ${featLabel} (${packQty()} ${lang === 'pt' ? (packQty() === 1 ? 'carregador' : 'carregadores') : (packQty() === 1 ? 'charger' : 'chargers')})`, val, cls:'pack' });
+    const unitTxt = packPlan() ? planLabel(lang) : `${packQty()} ${lang === 'pt' ? (packQty() === 1 ? 'carregador' : 'carregadores') : (packQty() === 1 ? 'charger' : 'chargers')}`;
+    lines.push({ label:`${t('pack_title')}: ${featLabel} (${unitTxt})`, val, cls:'pack' });
   }
 
   // Extras (required, then optional)
@@ -1718,14 +1765,16 @@ function generatePDF(pdfLang) {
     const featLabel = mgmtPack.features.map(id => featureName(id, L)).join(', ');
     para(`${P('Includes','Inclui')}: ${featLabel}`, 8.5, ink, 'normal', M, CW, 4.6);
     y += 1.5;
-    const offer = packOffer(), qty = packQty(), disc = packDiscount();
+    const offer = packOffer(), qty = packUnits(), disc = packDiscount();
     const perM = L === 'pt' ? '/ mês' : '/ month', perY = L === 'pt' ? '/ ano' : '/ year';
+    const plan = packPlan();
+    const base = plan ? planLabel(L) : P('OCPP platform','Plataforma OCPP');
     const rows = [];
-    if (offer !== 'annual') rows.push([P('OCPP platform, monthly billing','Plataforma OCPP, faturação mensal'), `${money(D(mgmtPack.price))} ${perM}`, String(qty), `${money(packMonthlyC())} ${perM}`]);
-    if (offer !== 'monthly') rows.push([P('OCPP platform, annual billing','Plataforma OCPP, faturação anual') + (disc > 0 ? ` (${P('save','poupe')} ${pctStr(disc)})` : ''), `${money(packAnnualPerC())} ${perY}`, String(qty), `${money(packAnnualC())} ${perY}`]);
+    if (offer !== 'annual') rows.push([base + P(', monthly billing',', faturação mensal'), `${money(D(mgmtPack.price))} ${perM}`, String(qty), `${money(packMonthlyC())} ${perM}`]);
+    if (offer !== 'monthly') rows.push([base + P(', annual billing',', faturação anual') + (disc > 0 ? ` (${P('save','poupe')} ${pctStr(disc)})` : ''), `${money(packAnnualPerC())} ${perY}`, String(qty), `${money(packAnnualC())} ${perY}`]);
     const boxes = offer === 'both';
     doc.autoTable(Object.assign({}, tbl, {
-      head: [[boxes ? P('Choose one','Escolha uma') : P('Billing','Faturação'), P('Price per charger','Preço por carregador'), tl.qty, P('Total','Total')]],
+      head: [[boxes ? P('Choose one','Escolha uma') : P('Billing','Faturação'), plan ? P('Price','Preço') : P('Price per charger','Preço por carregador'), tl.qty, P('Total','Total')]],
       body: rows, startY: y,
       columnStyles: { 0:{ cellPadding: boxes ? { top:2.8, bottom:2.8, left:9, right:2.8 } : 2.8 } },
       didParseCell: d => { if (d.column.index >= 1) d.cell.styles.halign = 'right'; if (d.column.index === 3 && d.section === 'body') d.cell.styles.fontStyle = 'bold'; },
@@ -2191,8 +2240,8 @@ function cmpCols() {
     row: r,
     label: String(r.name || '').trim() || rowLabel(r),
     eq: rowNetC(r), gross: rowGrossC(r),
-    pm: D(mgmtPack.price) * r.qty,
-    py: packAnnualPerC() * r.qty
+    pm: D(mgmtPack.price) * (packPlan() ? 1 : r.qty),
+    py: packAnnualPerC() * (packPlan() ? 1 : r.qty)
   }));
 }
 
@@ -2325,15 +2374,23 @@ function generateComparePDF(pdfLang) {
   // platform: stated once, per charger
   if (act) {
     ensure(52);
+    const cPlan = packPlan();
+    if (cPlan) {
+      section(P('OCPP MANAGEMENT PLATFORM','PLATAFORMA DE GESTÃO OCPP'));
+      para(P(`Every charger connects to our OCPP management platform. The ${planLabel('en')} below is one flat price for all chargers on the site and applies to every option above.`,
+             `Cada carregador liga-se à nossa plataforma de gestão OCPP. O ${planLabel('pt')} abaixo é um preço único para todos os carregadores do local e aplica-se a todas as opções acima.`), 8.5, ink, 'normal', M, CW, 4.6);
+    } else {
     section(P('OCPP MANAGEMENT PLATFORM, PER CHARGER','PLATAFORMA DE GESTÃO OCPP, POR CARREGADOR'));
     para(P('Every charger connects to our OCPP management platform. The platform price below is per charger and applies to every option above.',
            'Cada carregador liga-se à nossa plataforma de gestão OCPP. O preço da plataforma abaixo é por carregador e aplica-se a todas as opções acima.'), 8.5, ink, 'normal', M, CW, 4.6);
+    }
     y += 1.5;
     para(`${P('Includes','Inclui')}: ${mgmtPack.features.map(id => featureName(id, L)).join(', ')}`, 8.5, ink, 'normal', M, CW, 4.6);
     y += 1.5;
     const prow = [];
-    if (offer !== 'annual') prow.push([P('Monthly billing','Faturação mensal'), `${money(D(mgmtPack.price))} ${P('per charger','por carregador')} ${perM}`]);
-    if (offer !== 'monthly') prow.push([P('Annual billing','Faturação anual') + (disc > 0 ? ` (${P('save','poupe')} ${pctStr(disc)})` : ''), `${money(packAnnualPerC())} ${P('per charger','por carregador')} ${perY}`]);
+    const perCh = cPlan ? '' : ` ${P('per charger','por carregador')}`;
+    if (offer !== 'annual') prow.push([P('Monthly billing','Faturação mensal'), `${money(D(mgmtPack.price))}${perCh} ${perM}`]);
+    if (offer !== 'monthly') prow.push([P('Annual billing','Faturação anual') + (disc > 0 ? ` (${P('save','poupe')} ${pctStr(disc)})` : ''), `${money(packAnnualPerC())}${perCh} ${perY}`]);
     doc.autoTable(Object.assign({}, tbl, {
       head: [[P('Billing','Faturação'), P('Price','Preço')]], body: prow, startY: y,
       columnStyles: { 1:{ halign:'right', fontStyle:'bold' } },
@@ -2595,7 +2652,7 @@ function qApply(s) {
     if (el.type === 'checkbox') el.checked = !!s.fields[id]; else el.value = s.fields[id];
   });
   chargerRows = s.chargerRows || []; extraRows = s.extraRows || []; rowId = s.rowId || 0;
-  mgmtPack = s.mgmtPack || { features: [], price: 0 };
+  mgmtPack = Object.assign({ features: [], price: 0, plan: '' }, s.mgmtPack || {});
   (s.usedCustom || []).forEach(c => { if (!customFeatures.find(x => x.id === c.id)) customFeatures.push(c); });
   saveCustomFeatures();
   rsRows = (s.rsRows && s.rsRows.length) ? s.rsRows.map(r => Object.assign({}, r, { rate: (r.rate === null ? NaN : r.rate) })) : [{ id: 1, rate: 5, kind: 'ongoing', val: '' }];
@@ -2611,7 +2668,7 @@ function qApply(s) {
 }
 
 // Project value = what the client buys: the hardware, the platform (first 12 months), or both.
-function qYearPlatformC(n) { return packOffer() === 'monthly' ? D(mgmtPack.price) * 12 * n : packAnnualPerC() * n; }
+function qYearPlatformC(n) { if (packPlan()) n = 1; return packOffer() === 'monthly' ? D(mgmtPack.price) * 12 * n : packAnnualPerC() * n; }
 function qTotalCents() { try { if (quoteMode === 'compare') { const c = cmpCols(); if (!c.length) return 0; const best = c.reduce((m, x) => x.eq < m.eq ? x : m, c[0]); return vatBreakdown(best.eq + (packActive() ? qYearPlatformC(best.row.qty || 1) : 0)).total; } return vatBreakdown(onceTotals().req + (packActive() ? qYearPlatformC(packQty()) : 0)).total; } catch (e) { return 0; } }
 
 function qUi() {
