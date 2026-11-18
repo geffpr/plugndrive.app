@@ -1539,6 +1539,10 @@ body.member-mode #bell-btn{display:none !important;}
             <label>On-site contact email</label>
             <input type="email" id="ss-contact-email">
           </div>
+          <div class="form-row" id="ss-ocpi-row" style="display:none;">
+            <label style="display:flex;gap:8px;align-items:center;font-weight:600;"><input type="checkbox" id="ss-ocpi" style="width:auto;"> Publish in OCPI feed</label>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">Shares this site and its public chargers (name, address, position, plugs, power, status) with Open Charge Map and partners under the CC0 open licence. Only chargers marked public are included. Leave it off for demo and test sites. Only Plug n Drive admins see this setting.</div>
+          </div>
           <button class="btn btn-primary btn-block" onclick="saveSiteSettings()">Save settings</button>
           <div id="site-settings-error" style="color:var(--red, #c0392b);font-size:12px;margin-top:8px;"></div>
         </div>
@@ -4340,7 +4344,7 @@ let users = [];
 let tariffs = [];
 let clients = [];
 
-function mapLocation(l){ return {id:l.id, name:l.name, type:l.type, parentId:l.parent_id, city:l.city, address:l.address, capacityKVA:l.capacity_kva, currency:l.currency, clientId:l.client_id, timezone:l.timezone, contactName:l.contact_name, contactPhone:l.contact_phone, contactEmail:l.contact_email, status:l.status, code:l.code, loadManagementEnabled:l.load_management_enabled, latitude:l.latitude, longitude:l.longitude, siteDescription:l.site_description, accessMode:l.access_mode, hostPhone:l.host_phone, openingHours:l.opening_hours||null}; }
+function mapLocation(l){ return {id:l.id, name:l.name, type:l.type, parentId:l.parent_id, city:l.city, address:l.address, capacityKVA:l.capacity_kva, currency:l.currency, clientId:l.client_id, timezone:l.timezone, contactName:l.contact_name, contactPhone:l.contact_phone, contactEmail:l.contact_email, status:l.status, code:l.code, loadManagementEnabled:l.load_management_enabled, latitude:l.latitude, longitude:l.longitude, siteDescription:l.site_description, accessMode:l.access_mode, hostPhone:l.host_phone, openingHours:l.opening_hours||null, ocpiPublish:!!l.ocpi_publish}; }
 function mapCharger(c){ return {id:c.id, locationId:c.location_id, name:c.name, ocppId:c.ocpp_id, vendor:c.vendor, connector:c.connector, powerKW:c.power_kw, ocpp:c.ocpp_version, status:c.status, currentKW:c.current_kw, ocppPassword:c.ocpp_password, lastSeenAt:c.last_seen_at, ocppStatus:c.ocpp_status, listedPublicly:c.listed_publicly, loadPriority:!!c.load_priority}; }
 function isWebSession(s){ return !!s && s.payment === 'QR code'; }   // started from the charge page by a web customer
 function mapSession(s){ return {id:s.id, chargerId:s.charger_id, userId:s.user_id, rfidCardId:s.rfid_card_id, kwh:s.kwh, cost:s.cost, currency:s.currency, startedAt:s.started_at, endedAt:s.ended_at, paymentStatus:s.payment_status, payment:s.payment_method, groupId:s.access_group_id, groupMode:s.group_pricing_mode, groupPercent:s.group_discount_percent, offered:s.offered_value, liveKwh:s.live_kwh, liveCost:s.live_cost}; }
@@ -5874,6 +5878,9 @@ function openSiteSettings(id){
   document.getElementById('ss-access').value = loc.accessMode || '';
   document.getElementById('ss-hostphone').value = loc.hostPhone || '';
   ssHoursFill(loc.openingHours);
+  const ocpiRow = document.getElementById('ss-ocpi-row');
+  ocpiRow.style.display = (currentStaff && currentStaff.role === 'plugndrive_admin' && !loc.parentId) ? '' : 'none';
+  document.getElementById('ss-ocpi').checked = !!loc.ocpiPublish;
   document.getElementById('site-settings-error').textContent = '';
 
   const currencySel = document.getElementById('ss-currency');
@@ -5933,6 +5940,7 @@ async function saveSiteSettings(){
     access_mode: document.getElementById('ss-access').value || null,
     host_phone: document.getElementById('ss-hostphone').value.trim() || null,
   };
+  if(document.getElementById('ss-ocpi-row').style.display !== 'none') payload.ocpi_publish = document.getElementById('ss-ocpi').checked;
   const codeEl = document.getElementById('ss-code');
   if(document.getElementById('ss-code-row').style.display !== 'none' && !codeEl.disabled && curLoc && codeEl.value !== (curLoc.code || '')){
     if(!/^[A-Z0-9]{4}$/.test(codeEl.value)){ errEl.textContent = 'The site code must be exactly 4 letters or digits.'; return; }
