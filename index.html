@@ -1088,6 +1088,7 @@ body.member-mode #bell-btn{display:none !important;}
     <a class="navitem" data-page="fleet" id="fleet-nav" onclick="showPage('fleet')" style="display:none;"><span class="ic">◩</span>Fleet Control</a>
     <div class="nav-section-label" id="nav-lbl-account" style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:rgba(255,255,255,.45);padding:14px 10px 4px;">Account</div>
     <a class="navitem" data-page="myoperators" id="myoperators-nav" onclick="showPage('myoperators')" style="display:none;"><span class="ic">◉</span>My operators</a>
+    <a class="navitem" data-page="team" id="team-nav" onclick="showPage('team')" style="display:none;"><span class="ic">◉</span>Team</a>
     <a class="navitem" data-page="apikeys" id="apikeys-nav" onclick="showPage('apikeys')" style="display:none;"><span class="ic">&lt;/&gt;</span>API &amp; Keys</a>
     <a class="navitem" data-page="campaigns" id="campaigns-nav" onclick="showPage('campaigns')" style="display:none;"><span class="ic">✉</span>Campaigns</a>
     <a class="navitem" data-page="settings" id="settings-nav" onclick="showPage('settings')" style="display:none;"><span class="ic">⚙</span>Settings</a>
@@ -2330,6 +2331,33 @@ body.member-mode #bell-btn{display:none !important;}
           <table>
             <thead><tr><th>Name</th><th>Email</th><th>Site</th><th>Added</th><th id="operators-guest-th">Can add guests</th><th></th></tr></thead>
             <tbody id="operators-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- TEAM (client admin only): colleagues with their own login and limited rights -->
+      <div class="page" id="page-team">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+          <div class="section-title" style="margin:0;">Team</div>
+          <button class="btn btn-primary" onclick="openTeamForm()">+ Add team member</button>
+        </div>
+        <div style="color:var(--text-muted);font-size:12px;margin:6px 0 12px;max-width:680px;">Give a colleague their own login and choose what they can see or manage. Billing, bank details, API keys and the team itself always stay with you.</div>
+        <div id="team-form" class="card card-pad" style="display:none;max-width:560px;margin:12px 0;">
+          <div class="form-row"><label>Name</label><input type="text" id="team-name" maxlength="100"></div>
+          <div class="form-row"><label>E-mail (used to sign in)</label><input type="email" id="team-email" autocapitalize="none"></div>
+          <div class="form-row"><label>Site</label><select id="team-site"></select></div>
+          <div style="font-weight:600;margin:12px 0 6px;">What they can do</div>
+          <div id="team-rights-grid"></div>
+          <div style="display:flex;gap:8px;margin-top:14px;">
+            <button class="btn btn-primary" id="team-save" onclick="submitTeamForm()">Send invitation</button>
+            <button class="btn" onclick="closeTeamForm()">Cancel</button>
+          </div>
+          <div id="team-error" style="color:var(--red, #c0392b);font-size:12px;margin-top:8px;"></div>
+        </div>
+        <div class="card">
+          <table>
+            <thead><tr><th>Name</th><th>E-mail</th><th>Access</th><th>Site</th><th>Added</th><th></th></tr></thead>
+            <tbody id="team-body"></tbody>
           </table>
         </div>
       </div>
@@ -3671,6 +3699,7 @@ async function enterAppInner(){
   applyRoleBasedNav();
   document.getElementById('app-root').style.display = '';
   await loadAll();
+  if(isTeam()) await loadTeamContext();
   await loadMyFeatures();   // also re-applies the menu
   updateSidebarIdentity();
   routeFromLocation();
@@ -4165,6 +4194,7 @@ function updateSidebarIdentity(){
   const el = document.getElementById('sidebar-identity');
   if(!el) return;
   if(currentMember){ el.textContent = currentMember.name + ' · ' + currentMember.client_name; return; }
+  if(isTeam()){ el.textContent = (currentStaff.name || 'Team') + (clients[0] ? ' · ' + clients[0].name : ''); return; }
   if(currentStaff && currentStaff.role === 'client_admin'){
     const cl = clients.find(c=>c.id===currentStaff.client_id);
     el.textContent = cl ? cl.name : 'Client account';
@@ -4215,6 +4245,7 @@ function applyRoleBasedNav(){
     document.querySelectorAll('.navitem, #bottom-nav .bn-item').forEach(n => { if(n.dataset.page !== 'billing'){ n.style.display = 'none'; n.setAttribute('data-lock-hidden', '1'); } });
   }
   if(isClientAdmin) ensurePlanLimits();
+  applyTeamNav();
   updateNavSections();
   updateTrialBar();
 }
@@ -4944,6 +4975,7 @@ const ROUTES = {
   clientDetail: (id) => `/clients/${id}`,
   addclient: () => '/addclient',
   myoperators: () => '/myoperators',
+  team: () => '/team',
   apikeys: () => '/apikeys',
   campaigns: () => '/campaigns',
   settings: () => '/settings',
@@ -4964,6 +4996,8 @@ function navigate(path){
 function showPage(id, opts){
   opts = opts || {};
   if(currentMember) id = 'campaigns';   // an invited person has no other page
+  if(isTeam() && !teamPageAllowed(id)) id = 'dashboard';   // a team member only reaches the sections they were given
+  if(id === 'team' && !(currentStaff && currentStaff.role === 'client_admin')) id = 'dashboard';
   if(id === 'fleet' && !fleetAllowed()) id = 'dashboard';   // Fleet Control only where the option is on
   if(isLockedAccount() && id !== 'billing') id = 'billing';   // a locked trial can only reach the billing page
   // A page the plan does not include opens the "available from plan X" message instead.
@@ -4984,7 +5018,7 @@ function showPage(id, opts){
   const parentNav = { addsite:'sites', addcharger:'chargers', addclient:'clients' };
   const navEl = document.querySelector(`.navitem[data-page="${parentNav[id] || id}"]`);
   if(navEl) navEl.classList.add('active');
-  const titles={billing:'Billing',dashboard:'Dashboard',sites:'Sites',addsite:'Add site',chargers:'Chargers',addcharger:'Add charger',sessions:'Sessions',rfid:'RFID cards',load:'Load management',tariffs:'Tariffs',clients:'Clients',addclient:'Add client',myoperators:'My operators',apikeys:'API & Keys',campaigns:'Campaigns',walletactivity:'Wallet activity',payments:'Payments',shop:'Shop',proshop:'Shop',photos:'Site photos',settings:'Settings',exchangerates:'Exchange rates',datafeeds:'Data feeds',reporting:'Reporting',access:'Access',fleet:'Fleet Control'};
+  const titles={billing:'Billing',dashboard:'Dashboard',sites:'Sites',addsite:'Add site',chargers:'Chargers',addcharger:'Add charger',sessions:'Sessions',rfid:'RFID cards',load:'Load management',tariffs:'Tariffs',clients:'Clients',addclient:'Add client',myoperators:'My operators',team:'Team',apikeys:'API & Keys',campaigns:'Campaigns',walletactivity:'Wallet activity',payments:'Payments',shop:'Shop',proshop:'Shop',photos:'Site photos',settings:'Settings',exchangerates:'Exchange rates',datafeeds:'Data feeds',reporting:'Reporting',access:'Access',fleet:'Fleet Control'};
   document.getElementById('topbar-title').textContent = titles[id];
   if(!opts.skipNav) navigate(ROUTES[id] ? ROUTES[id]() : '/'+id);
   if(id==='sites') renderSites();
@@ -5001,6 +5035,7 @@ function showPage(id, opts){
   if(id==='clients') renderClients();
   if(id==='addclient') renderAddClient();
   if(id==='myoperators') renderMyOperators();
+  if(id==='team') renderTeam();
   if(id==='apikeys') renderApiKeys();
   if(id==='campaigns') renderCampaigns();
   if(id==='walletactivity') renderWalletActivity();
@@ -5022,7 +5057,7 @@ function routeFromLocation(){
   if(currentMember){ showPage('campaigns', {skipNav:true}); return; }
   const parts = location.pathname.split('/').filter(Boolean); // e.g. ['sites','<id>']
   const page = parts[0] || 'dashboard';
-  const knownPages = ['dashboard','sites','addsite','chargers','addcharger','sessions','rfid','load','tariffs','clients','addclient','myoperators','apikeys','campaigns','walletactivity','payments','shop','proshop','photos','settings','exchangerates','datafeeds','reporting','access','billing','fleet'];
+  const knownPages = ['dashboard','sites','addsite','chargers','addcharger','sessions','rfid','load','tariffs','clients','addclient','myoperators','team','apikeys','campaigns','walletactivity','payments','shop','proshop','photos','settings','exchangerates','datafeeds','reporting','access','billing','fleet'];
   if(!knownPages.includes(page)){ showPage('dashboard'); return; }
 
   showPage(page, {skipNav:true});
@@ -9691,6 +9726,120 @@ async function archiveCampaignDraft(btn){
   await loadCampaignDrafts();
 }
 
+
+// ---------------- TEAM ACCESS ----------------
+// A team member is a colleague of the client admin with their own login and a list of rights per section
+// (hidden / view / view and manage). The database enforces every one of them; the menu below only avoids
+// showing pages that would be empty. Team management itself, billing, bank details and API keys are never delegated.
+let teamRights = {};     // this team member's own rights: { section: 'view' | 'manage' }
+let teamList = [], teamEditing = null;
+const TEAM_SECTIONS = [
+  { key:'sites',    label:'Sites',            canManage:false },
+  { key:'chargers', label:'Chargers',         canManage:false },
+  { key:'tariffs',  label:'Tariffs',          canManage:true  },
+  { key:'sessions', label:'Sessions',         canManage:false },
+  { key:'users',    label:'Users and cards',  canManage:true  },
+  { key:'finance',  label:'Finance (wallet activity)', canManage:false },
+];
+const TEAM_PAGE_SECTION = { sites:'sites', addsite:'sites', chargers:'chargers', addcharger:'chargers', tariffs:'tariffs', rfid:'users', sessions:'sessions', walletactivity:'finance' };
+function isTeam(){ return !!(currentStaff && currentStaff.role === 'team_member'); }
+function teamPageAllowed(id){ if(id === 'dashboard') return true; const sec = TEAM_PAGE_SECTION[id]; return !!(sec && teamRights[sec]); }
+async function loadTeamContext(){
+  teamRights = {};
+  try {
+    const [r, c] = await Promise.all([ sb.from('team_rights').select('section, level').eq('staff_id', currentStaff.id), sb.rpc('team_client_info') ]);
+    (r.data || []).forEach(x => { teamRights[x.section] = x.level; });
+    if(c && c.data) clients = [mapClient(c.data)];
+  } catch(e){ /* the menu then shows only the dashboard */ }
+}
+function applyTeamNav(){
+  const tn = document.getElementById('team-nav');
+  if(tn) tn.style.display = (currentStaff && currentStaff.role === 'client_admin' && !isLockedAccount()) ? '' : 'none';
+  if(!isTeam()) return;
+  document.querySelectorAll('.navitem, #bottom-nav .bn-item').forEach(n => { n.style.display = teamPageAllowed(n.dataset.page) ? '' : 'none'; });
+  // Adding sites or chargers is never part of a team member's rights.
+  document.querySelectorAll('#sites-list-view button.btn-primary, #chargers-list-view button.btn-primary').forEach(b => { b.style.display = 'none'; });
+}
+function teamSummary(rows){
+  const lv = {}; (rows || []).forEach(r => { lv[r.section] = r.level; });
+  const parts = TEAM_SECTIONS.filter(x => lv[x.key]).map(x => x.label + (lv[x.key] === 'manage' ? ' (manage)' : ''));
+  return parts.length ? parts.join(', ') : '-';
+}
+async function renderTeam(){
+  closeTeamForm();
+  const body = document.getElementById('team-body');
+  const [st, rt] = await Promise.all([
+    sb.from('staff').select('*').eq('role', 'team_member').order('created_at', {ascending:false}),
+    sb.from('team_rights').select('staff_id, section, level'),
+  ]);
+  if(st.error){ body.innerHTML = `<tr><td colspan="6" class="empty">${escHtml(st.error.message)}</td></tr>`; return; }
+  const byStaff = {}; (rt.data || []).forEach(r => { (byStaff[r.staff_id] = byStaff[r.staff_id] || []).push(r); });
+  teamList = (st.data || []).map(m => Object.assign({}, m, { rights: byStaff[m.id] || [] }));
+  body.innerHTML = teamList.map(m => {
+    const site = m.location_id ? (locations.find(l => l.id === m.location_id) || {}).name : 'All sites';
+    return `<tr><td>${escHtml(m.name)}</td><td>${escHtml(m.email || '-')}</td><td>${escHtml(teamSummary(m.rights))}</td><td>${escHtml(site || '-')}</td><td>${(m.created_at || '').slice(0,10)}</td>
+      <td style="white-space:nowrap;"><button class="btn btn-sm" onclick="openTeamForm('${m.id}')">Edit</button> <button class="btn btn-sm" onclick="resendTeamInvite('${m.id}', this)">Resend invite</button> <button class="btn btn-sm" onclick="removeTeamMember('${m.id}')">Remove</button></td></tr>`;
+  }).join('') || '<tr><td colspan="6" class="empty">No team members yet.</td></tr>';
+}
+function teamGridHtml(current){
+  return TEAM_SECTIONS.map(x => {
+    const v = current[x.key] || 'hidden';
+    return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border);">
+      <span>${x.label}</span>
+      <select data-team-section="${x.key}"><option value="hidden"${v==='hidden'?' selected':''}>Hidden</option><option value="view"${v==='view'?' selected':''}>View</option>${x.canManage ? `<option value="manage"${v==='manage'?' selected':''}>View and manage</option>` : ''}</select>
+    </div>`;
+  }).join('');
+}
+function openTeamForm(staffId){
+  teamEditing = staffId ? teamList.find(m => m.id === staffId) : null;
+  const cur = {}; if(teamEditing) teamEditing.rights.forEach(r => { cur[r.section] = r.level; });
+  document.getElementById('team-name').value = teamEditing ? teamEditing.name : '';
+  const em = document.getElementById('team-email'); em.value = teamEditing ? (teamEditing.email || '') : ''; em.disabled = !!teamEditing;
+  document.getElementById('team-site').innerHTML = '<option value="">All sites</option>' + activeRoots().map(l => `<option value="${l.id}"${teamEditing && teamEditing.location_id === l.id ? ' selected' : ''}>${escHtml(l.name)}</option>`).join('');
+  document.getElementById('team-rights-grid').innerHTML = teamGridHtml(cur);
+  document.getElementById('team-save').textContent = teamEditing ? 'Save changes' : 'Send invitation';
+  document.getElementById('team-error').textContent = '';
+  document.getElementById('team-form').style.display = 'block';
+}
+function closeTeamForm(){ const f = document.getElementById('team-form'); if(f) f.style.display = 'none'; teamEditing = null; }
+async function teamCall(body){
+  const { data, error } = await sb.functions.invoke('manage-team', { body });
+  if(error || (data && data.error)){
+    let msg = data && data.error;
+    if(!msg && error && error.context){ try { msg = (await error.context.json()).error; } catch(e){} }
+    return { error: msg || (error && error.message) || 'Something went wrong.' };
+  }
+  return { data };
+}
+async function submitTeamForm(){
+  const err = document.getElementById('team-error'); err.textContent = '';
+  const name = document.getElementById('team-name').value.trim();
+  const email = document.getElementById('team-email').value.trim();
+  const locationId = document.getElementById('team-site').value || null;
+  const rights = {}; document.querySelectorAll('[data-team-section]').forEach(sel => { if(sel.value !== 'hidden') rights[sel.dataset.teamSection] = sel.value; });
+  if(!name || (!teamEditing && !email)){ err.textContent = 'A name and an e-mail address are required.'; return; }
+  if(!Object.keys(rights).length){ err.textContent = 'Choose at least one section.'; return; }
+  const btn = document.getElementById('team-save'); btn.disabled = true;
+  const r = await teamCall(teamEditing ? { action:'update', staffId: teamEditing.id, name, rights, locationId } : { action:'invite', name, email, rights, locationId });
+  btn.disabled = false;
+  if(r.error){ err.textContent = r.error; return; }
+  if(!teamEditing && r.data && r.data.mail === 'failed') alert('The team member was created, but the invitation e-mail could not be sent. Use "Resend invite" to try again.');
+  closeTeamForm(); renderTeam();
+}
+async function resendTeamInvite(staffId, btn){
+  if(btn) btn.disabled = true;
+  const r = await teamCall({ action:'resend', staffId });
+  if(btn) btn.disabled = false;
+  alert(r.error ? r.error : 'Invitation sent again.');
+}
+async function removeTeamMember(staffId){
+  const m = teamList.find(x => x.id === staffId);
+  if(!confirm('Remove ' + (m ? m.name : 'this person') + '? Their access ends immediately.')) return;
+  const r = await teamCall({ action:'remove', staffId });
+  if(r.error){ alert(r.error); return; }
+  renderTeam();
+}
+
 async function renderMyOperators(){
   // Real enforcement is server-side (the staff policy and the manage-operators
   // function); this just avoids showing a broken page if a client_admin
@@ -11136,6 +11285,7 @@ async function submitActivation(){
     walletactivity:'<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M16 14.5h2"/>',
     reporting:'<path d="M5 20V10M12 20V4M19 20v-7"/>',
     fleet:'<path d="M5 16v-4l2-5h10l2 5v4M3 16h18M7 16v2M17 16v2"/>',
+    team:'<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M16 11a3 3 0 0 0 0-6M18 14c2 .6 3 2.5 3 6"/>',
     myoperators:'<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M16 11a3 3 0 0 0 0-6M18 14c2 .6 3 2.5 3 6"/>',
     apikeys:'<circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 6l3 3M14 8l2 2"/>',
     campaigns:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
