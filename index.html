@@ -1099,6 +1099,7 @@ body.member-mode #bell-btn{display:none !important;}
     <a class="navitem" data-page="shop" id="shop-nav" onclick="showPage('shop')" style="display:none;"><span class="ic">▣</span>Shop</a>
     <a class="navitem" id="quotes-nav" href="/quote" style="display:none;"><span class="ic">▤</span>Quotes</a>
     <a class="navitem" data-page="exchangerates" onclick="showPage('exchangerates')"><span class="ic">⇄</span>Exchange rates</a>
+    <a class="navitem" data-page="datafeeds" id="datafeeds-nav" onclick="showPage('datafeeds')" style="display:none;"><span class="ic">⇢</span>Data feeds</a>
     <div style="margin-top:auto;padding-top:14px;border-top:1px solid rgba(255,255,255,.12);">
       <div id="sidebar-identity" style="font-size:12px;color:rgba(255,255,255,.7);margin-bottom:8px;"></div>
       <a href="#" onclick="handleSignOut();return false;" style="font-size:13px;color:#fff;display:flex;align-items:center;gap:6px;"><span class="ic">⏻</span>Sign out</a>
@@ -1946,6 +1947,23 @@ body.member-mode #bell-btn{display:none !important;}
             <thead><tr><th>Currency</th><th>1 unit =</th><th>Last updated</th><th></th></tr></thead>
             <tbody id="fx-rates-body"></tbody>
           </table>
+        </div>
+      </div>
+
+      <!-- DATA FEEDS (Plug n Drive admin only): public OCPI feed used by Open Charge Map and partners -->
+      <div class="page" id="page-datafeeds">
+        <div class="section-title" style="margin:0 0 14px;">Public OCPI feed</div>
+        <div class="card card-pad" style="max-width:680px;">
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Read-only list of the public sites and chargers that Plug n Drive shares with Open Charge Map and partners (OCPI 2.2.1, Locations). Give this address to a partner; it needs no key.</div>
+          <div class="form-row"><label>Locations endpoint</label>
+            <div class="pay-ref" id="df-ocpi-url" style="padding:10px;background:var(--surface, #f7f9fb);border:1px solid var(--border);border-radius:8px;word-break:break-all;">https://ocpi.plugndrive.co.za/2.2.1/locations</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;">
+            <button class="btn btn-primary" id="df-copy-btn" onclick="copyDataFeedUrl()">Copy</button>
+            <a class="btn" href="https://ocpi.plugndrive.co.za/2.2.1/locations" target="_blank" rel="noopener" style="text-decoration:none;">Open &#8599;</a>
+          </div>
+          <div style="font-size:13px;margin-top:16px;" id="df-ocpi-count"></div>
+          <div style="font-size:12px;color:var(--text-muted);margin-top:6px;">A site appears in the feed only when it is switched on for publication. Demo, inactive and neighbour sites are never published. The data is shared under the CC0 licence, so keep customer and pricing details out of it.</div>
         </div>
       </div>
 
@@ -4159,6 +4177,8 @@ function applyRoleBasedNav(){
   if(clientsNav) clientsNav.style.display = isPndAdmin ? '' : 'none';
   const ratesNav = document.querySelector('.navitem[data-page="exchangerates"]');
   if(ratesNav) ratesNav.style.display = isPndAdmin ? '' : 'none';
+  const feedsNav = document.getElementById('datafeeds-nav');
+  if(feedsNav) feedsNav.style.display = isPndAdmin ? '' : 'none';
   const adminLabel = document.getElementById('admin-section-label');
   if(adminLabel) adminLabel.style.display = isPndAdmin ? '' : 'none';
   // Reporting, Load management, Access, My operators and API & Keys follow the plan (self-serve) or the manual
@@ -4927,6 +4947,7 @@ const ROUTES = {
   proshop: () => '/proshop',
   photos: () => '/photos',
   exchangerates: () => '/exchangerates',
+  datafeeds: () => '/datafeeds',
   reporting: () => '/reporting',
   fleet: () => '/fleet',
   access: () => '/access',
@@ -4959,7 +4980,7 @@ function showPage(id, opts){
   const parentNav = { addsite:'sites', addcharger:'chargers', addclient:'clients' };
   const navEl = document.querySelector(`.navitem[data-page="${parentNav[id] || id}"]`);
   if(navEl) navEl.classList.add('active');
-  const titles={billing:'Billing',dashboard:'Dashboard',sites:'Sites',addsite:'Add site',chargers:'Chargers',addcharger:'Add charger',sessions:'Sessions',rfid:'RFID cards',load:'Load management',tariffs:'Tariffs',clients:'Clients',addclient:'Add client',myoperators:'My operators',apikeys:'API & Keys',campaigns:'Campaigns',walletactivity:'Wallet activity',payments:'Payments',shop:'Shop',proshop:'Shop',photos:'Site photos',settings:'Settings',exchangerates:'Exchange rates',reporting:'Reporting',access:'Access',fleet:'Fleet Control'};
+  const titles={billing:'Billing',dashboard:'Dashboard',sites:'Sites',addsite:'Add site',chargers:'Chargers',addcharger:'Add charger',sessions:'Sessions',rfid:'RFID cards',load:'Load management',tariffs:'Tariffs',clients:'Clients',addclient:'Add client',myoperators:'My operators',apikeys:'API & Keys',campaigns:'Campaigns',walletactivity:'Wallet activity',payments:'Payments',shop:'Shop',proshop:'Shop',photos:'Site photos',settings:'Settings',exchangerates:'Exchange rates',datafeeds:'Data feeds',reporting:'Reporting',access:'Access',fleet:'Fleet Control'};
   document.getElementById('topbar-title').textContent = titles[id];
   if(!opts.skipNav) navigate(ROUTES[id] ? ROUTES[id]() : '/'+id);
   if(id==='sites') renderSites();
@@ -4985,6 +5006,7 @@ function showPage(id, opts){
   if(id==='photos') renderPhotos();
   if(id==='settings') renderSettings();
   if(id==='exchangerates') renderExchangeRates();
+  if(id==='datafeeds') renderDataFeeds();
   if(id==='reporting') renderReporting();
   if(id==='access') renderAccess();
   if(id==='fleet') fleetTab(fleetTabNow);
@@ -4996,7 +5018,7 @@ function routeFromLocation(){
   if(currentMember){ showPage('campaigns', {skipNav:true}); return; }
   const parts = location.pathname.split('/').filter(Boolean); // e.g. ['sites','<id>']
   const page = parts[0] || 'dashboard';
-  const knownPages = ['dashboard','sites','addsite','chargers','addcharger','sessions','rfid','load','tariffs','clients','addclient','myoperators','apikeys','campaigns','walletactivity','payments','shop','proshop','photos','settings','exchangerates','reporting','access','billing','fleet'];
+  const knownPages = ['dashboard','sites','addsite','chargers','addcharger','sessions','rfid','load','tariffs','clients','addclient','myoperators','apikeys','campaigns','walletactivity','payments','shop','proshop','photos','settings','exchangerates','datafeeds','reporting','access','billing','fleet'];
   if(!knownPages.includes(page)){ showPage('dashboard'); return; }
 
   showPage(page, {skipNav:true});
@@ -7900,6 +7922,27 @@ async function accRemoveMember(memberId){
   await loadAccessMembers(); await loadAccessGroups();
 }
 
+const OCPI_FEED_URL = 'https://ocpi.plugndrive.co.za/2.2.1/locations';
+async function renderDataFeeds(){
+  const el = document.getElementById('df-ocpi-count');
+  if(!el) return;
+  el.textContent = '';
+  try{
+    const { count, error } = await sb.from('locations').select('id', { count: 'exact', head: true }).eq('ocpi_publish', true);
+    if(error) throw error;
+    el.textContent = count ? `Sites in the feed: ${count}` : 'No site is published in the feed yet.';
+  }catch(e){ el.textContent = ''; }
+}
+async function copyDataFeedUrl(){
+  const btn = document.getElementById('df-copy-btn');
+  try{ await navigator.clipboard.writeText(OCPI_FEED_URL); }
+  catch(e){
+    const r = document.createRange(); r.selectNodeContents(document.getElementById('df-ocpi-url'));
+    const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+    try{ document.execCommand('copy'); }catch(_){}
+  }
+  if(btn){ const t = btn.textContent; btn.textContent = 'Copied'; setTimeout(()=>{ btn.textContent = t; }, 1500); }
+}
 async function renderExchangeRates(){
   if(!(currentStaff && currentStaff.role === 'plugndrive_admin')){
     showPage('dashboard');
@@ -11090,6 +11133,7 @@ async function submitActivation(){
     clients:'<path d="M4 21V5l8-2v18M12 9h8v12M7 9h2M7 13h2M7 17h2M15 13h2M15 17h2"/>',
     payments:'<circle cx="12" cy="12" r="9"/><path d="M12 7v10M14.5 9.5c0-1-1-1.6-2.5-1.6S9.5 8.6 9.5 9.6c0 2.4 5 1.2 5 3.8 0 1-1 1.7-2.5 1.7s-2.5-.6-2.5-1.6"/>',
     exchangerates:'<path d="M4 8h14l-3-3M20 16H6l3 3"/>',
+    datafeeds:'<path d="M5 12h12M13 7l5 5-5 5"/><circle cx="5" cy="12" r="1.5"/>',
     quotes:'<path d="M7 3h8l4 4v14H7z"/><path d="M15 3v4h4M10 12h6M10 16h6"/>',
     signout:'<path d="M9 4H5v16h4M16 8l4 4-4 4M20 12H9"/>'
   };
