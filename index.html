@@ -5138,6 +5138,16 @@ function renderSites(){
 }
 
 let currentSiteId = null;
+// Brings the Sites page itself back on screen (other screens such as a charger opened from a site, or the site
+// settings, live on other pages): without this, going "back to site" shows an empty page.
+function showSitesPage(){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('page-sites').classList.add('active');
+  document.querySelectorAll('.navitem').forEach(n=>n.classList.remove('active'));
+  const nav = document.querySelector('.navitem[data-page="sites"]');
+  if(nav) nav.classList.add('active');
+  document.getElementById('topbar-title').textContent = 'Sites';
+}
 function openSite(id, opts){
   opts = opts || {};
   currentSiteId = id;
@@ -5296,7 +5306,7 @@ function renderChargerDetail(){
   if(chargerDetailOrigin.type === 'site'){
     const site = locations.find(l=>l.id===chargerDetailOrigin.id);
     backLink.textContent = `← Back to ${site ? site.name : 'site'}`;
-    backLink.onclick = () => { stopChargerLivePolling(); document.getElementById('charger-detail-view').style.display='none'; openSite(chargerDetailOrigin.id); };
+    backLink.onclick = () => { stopChargerLivePolling(); document.getElementById('charger-detail-view').style.display='none'; showSitesPage(); openSite(chargerDetailOrigin.id); };
   } else {
     backLink.textContent = '← Back to all chargers';
     backLink.onclick = backToChargers;
@@ -5900,13 +5910,8 @@ function openSiteSettings(id){
   navigate(`/sites/${id}/settings`);
 }
 function cancelSiteSettings(){
-  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
-  document.getElementById('page-chargers'); // no-op guard
-  openSite(siteSettingsTargetId, {skipNav:true});
-  navigate(ROUTES.siteDetail(siteSettingsTargetId));
-  document.querySelectorAll('.navitem').forEach(n=>n.classList.remove('active'));
-  document.querySelector(`.navitem[data-page="sites"]`).classList.add('active');
-  document.getElementById('topbar-title').textContent = 'Sites';
+  showSitesPage();
+  openSite(siteSettingsTargetId);
 }
 async function saveSiteSettings(){
   const errEl = document.getElementById('site-settings-error');
