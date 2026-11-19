@@ -7077,9 +7077,11 @@ async function deleteClientAdminLogin(staffId, clientId){
   const { data, error } = await sb.functions.invoke('manage-operators', { body: { action: 'delete', staffId } });
   if(error || data?.error){
     toastErr(data?.error || await extractInvokeError(error) || 'Failed to remove login.');
+    renderClientAdminLoginPanel(clientId);
     return;
   }
   renderClientAdminLoginPanel(clientId);
+  toast('Login removed');
 }
 function backToClients(){
   document.getElementById('clients-list-view').style.display = 'block';
