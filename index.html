@@ -747,7 +747,8 @@ body.member-mode #bell-btn{display:none !important;}
 .rc-row.drop-before{box-shadow:0 -2px 0 0 #3a8fd4;}
 .rc-row.drop-after{box-shadow:0 2px 0 0 #3a8fd4;}
 @media (min-width:1100px){
-  #rpt-customize-panel{max-width:760px !important;}
+  #rpt-customize-panel{position:fixed !important;top:0;right:0;bottom:0;z-index:60;width:440px;max-width:440px !important;margin:0 !important;border-radius:0 !important;overflow-y:auto;box-shadow:-12px 0 32px rgba(26,50,96,.18);padding-top:22px !important;}
+  #rpt-customize-panel > div:last-child{position:sticky;bottom:-16px;background:#fff;padding:12px 0 6px;margin-top:8px !important;border-top:1px solid var(--border);}
   .rc-hint{display:block;}
   .rc-row .rc-handle{display:block;}
   .rc-row .rc-arrows{display:none;}
