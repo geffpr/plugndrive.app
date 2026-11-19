@@ -766,6 +766,11 @@ body.member-mode #bell-btn{display:none !important;}
   #page-sitesettings > .card > .btn-block,#page-sitesettings #site-settings-error{column-span:all;}
   #page-sitesettings > .card > .btn-block{max-width:260px;}
 }
+/* Tariff editor: the fields spread over a few columns on desktop (one card on phones, as before). */
+@media (min-width:1100px){
+  #tariff-edit-view > .card{max-width:none !important;column-width:380px;column-gap:44px;}
+  #tariff-edit-view .tf-group{break-inside:avoid;}
+}
 </style>
 
 <link rel="icon" href="/favicon.ico" sizes="48x48">
@@ -2979,6 +2984,7 @@ body.member-mode #bell-btn{display:none !important;}
           <div class="back-link" onclick="backToTariffs()">← Back to tariffs</div>
           <h2 id="tariff-edit-title"></h2>
           <div class="card card-pad" style="max-width:560px;">
+            <div class="tf-group">
             <div class="form-row">
               <label>Currency</label>
               <select id="tf-currency">
@@ -3010,6 +3016,8 @@ body.member-mode #bell-btn{display:none !important;}
             <div class="form-row" style="margin-top:-6px;color:var(--text-secondary);font-size:12px;">
               Night hours are read in the site's local time. The price in force when a charge starts applies to the whole charge, even if it runs past the change.
             </div>
+            </div>
+            <div class="tf-group">
             <div class="form-row">
               <label>Idle fee (per minute, once charge is done but vehicle stays plugged in)</label>
               <input type="number" step="0.01" id="tf-idle-fee">
@@ -3018,6 +3026,8 @@ body.member-mode #bell-btn{display:none !important;}
               <label>Idle grace period (minutes before idle fee starts)</label>
               <input type="number" id="tf-idle-grace">
             </div>
+            </div>
+            <div class="tf-group">
             <div class="form-row">
               <label>Monthly subscription fee</label>
               <input type="number" step="0.01" id="tf-monthly-fee">
@@ -3035,6 +3045,7 @@ body.member-mode #bell-btn{display:none !important;}
               <button class="btn btn-danger" id="tf-remove-override-btn" onclick="removeChargerOverride()" style="display:none;">Remove override</button>
             </div>
             <div id="tariff-edit-error" style="color:var(--red, #c0392b);font-size:12px;margin-top:8px;"></div>
+            </div>
           </div>
         </div>
       </div>
