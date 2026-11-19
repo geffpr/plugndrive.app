@@ -766,10 +766,38 @@ body.member-mode #bell-btn{display:none !important;}
   #page-sitesettings > .card > .btn-block,#page-sitesettings #site-settings-error{column-span:all;}
   #page-sitesettings > .card > .btn-block{max-width:260px;}
 }
-/* Tariff editor: the fields spread over a few columns on desktop (one card on phones, as before). */
+/* Tariff editor: titled blocks with related fields side by side, and a live preview of what a driver pays. */
+.tfx{display:block;}
+.tfx-card{margin-bottom:16px;}
+.tfx-card h3{font-size:14px;margin:0 0 2px;color:var(--navy);}
+.tfx-sub{font-size:12.5px;color:var(--text-secondary);margin:0 0 14px;line-height:1.45;}
+.tfx-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;}
+.tfx-head .tfx-sub{margin-bottom:0;}
+.tfx-head + div{margin-top:14px;}
+.tfx-row2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.tfx-row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;}
+.tfx .form-row{margin-bottom:0;}
+.tfx .form-row label{display:block;font-size:12.5px;font-weight:600;margin-bottom:5px;}
+.tfx-unit{position:relative;}
+.tfx-unit input{padding-right:70px;}
+.tfx-unit span{position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:12px;color:var(--text-muted);pointer-events:none;}
+.tf-sw{position:relative;width:38px;height:22px;flex:none;margin-top:2px;}
+.tf-sw input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer;z-index:1;}
+.tf-sw i{position:absolute;inset:0;border-radius:12px;background:#cbd5e1;transition:background .15s;}
+.tf-sw i:after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left .15s;}
+.tf-sw input:checked + i{background:#1fa463;}
+.tf-sw input:checked + i:after{left:19px;}
+.tf-sw input:disabled{cursor:not-allowed;}
+.tf-sw input:disabled + i{opacity:.5;}
+.tfx-pv-big{font-size:22px;font-weight:700;margin:4px 0 2px;font-variant-numeric:tabular-nums;}
+.tfx-pv-tag{font-size:11.5px;color:var(--text-muted);margin-bottom:8px;}
+.tfx-pv-line{display:flex;justify-content:space-between;gap:12px;font-size:13px;padding:9px 0;border-top:1px solid var(--border);}
+.tfx-pv-line b{font-variant-numeric:tabular-nums;white-space:nowrap;}
+.tfx-actions{display:flex;gap:8px;flex-wrap:wrap;}
+@media (max-width:560px){ .tfx-row2,.tfx-row3{grid-template-columns:1fr;} }
 @media (min-width:1100px){
-  #tariff-edit-view > .card{max-width:none !important;column-width:380px;column-gap:44px;}
-  #tariff-edit-view .tf-group{break-inside:avoid;}
+  .tfx{display:grid;grid-template-columns:minmax(0,680px) 340px;gap:24px;align-items:start;}
+  .tfx-side{position:sticky;top:16px;}
 }
 </style>
 
@@ -2983,68 +3011,65 @@ body.member-mode #bell-btn{display:none !important;}
         <div id="tariff-edit-view" style="display:none;">
           <div class="back-link" onclick="backToTariffs()">← Back to tariffs</div>
           <h2 id="tariff-edit-title"></h2>
-          <div class="card card-pad" style="max-width:560px;">
-            <div class="tf-group">
-            <div class="form-row">
-              <label>Currency</label>
-              <select id="tf-currency">
-                <option value="ZAR">ZAR — South African Rand</option>
-                <option value="MZN">MZN — Mozambican Metical</option>
-                <option value="NAD">NAD — Namibian Dollar</option>
-                <option value="BWP">BWP — Botswana Pula</option>
-                <option value="USD">USD — US Dollar</option>
-                <option value="EUR">EUR — Euro</option>
-              </select>
+          <div id="tf-adv-note" class="card card-pad" style="display:none;margin-bottom:16px;"></div>
+          <div class="tfx">
+            <div>
+              <div class="card card-pad tfx-card">
+                <h3>Energy price</h3>
+                <p class="tfx-sub">What a driver pays for each kWh delivered.</p>
+                <div class="tfx-row2">
+                  <div class="form-row"><label for="tf-price-day">Day price</label><div class="tfx-unit"><input type="number" step="0.01" id="tf-price-day" oninput="renderTariffPreview()"><span id="tf-unit-kwh-day">/ kWh</span></div></div>
+                  <div class="form-row"><label for="tf-currency">Currency</label>
+                    <select id="tf-currency" onchange="renderTariffPreview()">
+                      <option value="ZAR">ZAR — South African Rand</option>
+                      <option value="MZN">MZN — Mozambican Metical</option>
+                      <option value="NAD">NAD — Namibian Dollar</option>
+                      <option value="BWP">BWP — Botswana Pula</option>
+                      <option value="USD">USD — US Dollar</option>
+                      <option value="EUR">EUR — Euro</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+              <div class="card card-pad tfx-card">
+                <div class="tfx-head"><div><h3>Night rate</h3><p class="tfx-sub">A different price during the night. Read in the site's local time.</p></div>
+                  <label class="tf-sw"><input type="checkbox" id="tf-night-on" aria-label="Use a night rate" onchange="tfToggle('night')"><i></i></label></div>
+                <div id="tf-night-fields" style="display:none;">
+                  <div class="tfx-row3">
+                    <div class="form-row"><label for="tf-price-night">Night price</label><div class="tfx-unit"><input type="number" step="0.01" id="tf-price-night" oninput="renderTariffPreview()"><span id="tf-unit-kwh-night">/ kWh</span></div></div>
+                    <div class="form-row"><label for="tf-night-start">From</label><input type="time" id="tf-night-start" oninput="renderTariffPreview()"></div>
+                    <div class="form-row"><label for="tf-night-end">Until</label><input type="time" id="tf-night-end" oninput="renderTariffPreview()"></div>
+                  </div>
+                  <p class="tfx-sub" style="margin:10px 0 0;">The price in force when a charge starts applies to the whole charge, even if it runs past the change.</p>
+                </div>
+              </div>
+              <div class="card card-pad tfx-card">
+                <h3>Idle fee</h3>
+                <p class="tfx-sub">Charged once the charge is done and the car stays plugged in. Leave empty for no idle fee.</p>
+                <div class="tfx-row2">
+                  <div class="form-row"><label for="tf-idle-fee">Fee</label><div class="tfx-unit"><input type="number" step="0.01" id="tf-idle-fee" oninput="renderTariffPreview()"><span id="tf-unit-min">/ min</span></div></div>
+                  <div class="form-row"><label for="tf-idle-grace">Free time first</label><div class="tfx-unit"><input type="number" id="tf-idle-grace" oninput="renderTariffPreview()"><span>minutes</span></div></div>
+                </div>
+              </div>
+              <div class="card card-pad tfx-card">
+                <div class="tfx-head"><div><h3>Subscription</h3><p class="tfx-sub">Optional. A monthly fee that includes some energy.</p></div>
+                  <label class="tf-sw"><input type="checkbox" id="tf-sub-on" aria-label="Use a subscription" onchange="tfToggle('sub')"><i></i></label></div>
+                <div id="tf-sub-fields" style="display:none;">
+                  <div class="tfx-row3">
+                    <div class="form-row"><label for="tf-monthly-fee">Monthly fee</label><div class="tfx-unit"><input type="number" step="0.01" id="tf-monthly-fee" oninput="renderTariffPreview()"><span id="tf-unit-month">/ month</span></div></div>
+                    <div class="form-row"><label for="tf-monthly-kwh">kWh included</label><div class="tfx-unit"><input type="number" step="0.01" id="tf-monthly-kwh" oninput="renderTariffPreview()"><span>kWh</span></div></div>
+                    <div class="form-row"><label for="tf-overage-price">Price beyond that</label><div class="tfx-unit"><input type="number" step="0.01" id="tf-overage-price" oninput="renderTariffPreview()"><span id="tf-unit-kwh-over">/ kWh</span></div></div>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div class="form-row">
-              <label>Day price (per kWh)</label>
-              <input type="number" step="0.01" id="tf-price-day">
-            </div>
-            <div class="form-row" id="tf-adv-note" style="display:none;"></div>
-            <div class="form-row">
-              <label>Night price (per kWh) — leave blank for no night rate</label>
-              <input type="number" step="0.01" id="tf-price-night">
-            </div>
-            <div class="form-row">
-              <label>Night start</label>
-              <input type="time" id="tf-night-start">
-            </div>
-            <div class="form-row">
-              <label>Night end</label>
-              <input type="time" id="tf-night-end">
-            </div>
-            <div class="form-row" style="margin-top:-6px;color:var(--text-secondary);font-size:12px;">
-              Night hours are read in the site's local time. The price in force when a charge starts applies to the whole charge, even if it runs past the change.
-            </div>
-            </div>
-            <div class="tf-group">
-            <div class="form-row">
-              <label>Idle fee (per minute, once charge is done but vehicle stays plugged in)</label>
-              <input type="number" step="0.01" id="tf-idle-fee">
-            </div>
-            <div class="form-row">
-              <label>Idle grace period (minutes before idle fee starts)</label>
-              <input type="number" id="tf-idle-grace">
-            </div>
-            </div>
-            <div class="tf-group">
-            <div class="form-row">
-              <label>Monthly subscription fee</label>
-              <input type="number" step="0.01" id="tf-monthly-fee">
-            </div>
-            <div class="form-row">
-              <label>kWh included in subscription</label>
-              <input type="number" step="0.01" id="tf-monthly-kwh">
-            </div>
-            <div class="form-row">
-              <label>Overage price (per kWh beyond included volume)</label>
-              <input type="number" step="0.01" id="tf-overage-price">
-            </div>
-            <div style="display:flex;gap:8px;">
-              <button class="btn btn-primary" onclick="saveTariff()">Save</button>
-              <button class="btn btn-danger" id="tf-remove-override-btn" onclick="removeChargerOverride()" style="display:none;">Remove override</button>
-            </div>
-            <div id="tariff-edit-error" style="color:var(--red, #c0392b);font-size:12px;margin-top:8px;"></div>
+            <div class="tfx-side">
+              <div class="card card-pad tfx-card" id="tf-preview"></div>
+              <div class="tfx-actions">
+                <button class="btn btn-primary" onclick="saveTariff()">Save tariff</button>
+                <button class="btn btn-danger" id="tf-remove-override-btn" onclick="removeChargerOverride()" style="display:none;">Remove override</button>
+              </div>
+              <div id="tariff-edit-error" style="color:var(--red, #c0392b);font-size:12px;margin-top:8px;"></div>
             </div>
           </div>
         </div>
@@ -11472,7 +11497,11 @@ function openTariffEdit(kind, id, opts){
   document.getElementById('tf-monthly-kwh').value = existing?.monthlyKwhIncluded ?? '';
   document.getElementById('tf-overage-price').value = existing?.overagePrice ?? '';
 
+  document.getElementById('tf-night-on').checked = !!(existing && (existing.priceNight != null || existing.nightStart || existing.nightEnd));
+  document.getElementById('tf-sub-on').checked = !!(existing && (existing.monthlyFee != null || existing.monthlyKwhIncluded != null || existing.overagePrice != null));
+  tfToggle('night', true); tfToggle('sub', true);
   applyTariffGating();
+  renderTariffPreview();
   // Currency only makes sense to edit at site level — a charger inherits its site's currency.
   document.getElementById('tf-currency').disabled = (kind === 'charger');
   document.getElementById('tf-remove-override-btn').style.display = (kind === 'charger' && existing) ? 'inline-block' : 'none';
@@ -11480,7 +11509,7 @@ function openTariffEdit(kind, id, opts){
 }
 // Night rate and idle fee follow the plan: when they are not included, the fields are greyed out with the reason.
 function applyTariffGating(){
-  const ids = ['tf-price-night','tf-night-start','tf-night-end','tf-idle-fee','tf-idle-grace'];
+  const ids = ['tf-night-on','tf-price-night','tf-night-start','tf-night-end','tf-idle-fee','tf-idle-grace'];
   const locked = !!(currentStaff && currentStaff.role === 'client_admin') && featState('tariff_advanced') !== 'on';
   ids.forEach(i => { const el = document.getElementById(i); el.disabled = locked; el.style.opacity = locked ? '.5' : ''; });
   const note = document.getElementById('tf-adv-note');
@@ -11492,6 +11521,42 @@ function applyTariffGating(){
     : 'Night price and idle fee are not included in your current setup. Contact hello@plugndrive.co.za.';
   note.style.display = '';
   note.innerHTML = `<span class="prem-badge" style="margin:0 8px 0 0;">Premium</span><span style="font-size:13px;">${txt}</span>` + (f.mode === 'plan' ? ` <a href="#" onclick="event.preventDefault();showPage('billing')">See plans</a>` : '');
+}
+// ---- Tariff editor: switches and live preview ----
+function tfToggle(which, keep){
+  const on = document.getElementById(which === 'night' ? 'tf-night-on' : 'tf-sub-on').checked;
+  document.getElementById(which === 'night' ? 'tf-night-fields' : 'tf-sub-fields').style.display = on ? '' : 'none';
+  if(!on && !keep){
+    (which === 'night' ? ['tf-price-night','tf-night-start','tf-night-end'] : ['tf-monthly-fee','tf-monthly-kwh','tf-overage-price'])
+      .forEach(id => { document.getElementById(id).value = ''; });
+  }
+  renderTariffPreview();
+}
+function tfSymbol(cur){ return fmtMoney(0, cur).replace(/[\d\s.,\u00a0]+/g, '').trim() || cur; }
+function renderTariffPreview(){
+  const box = document.getElementById('tf-preview'); if(!box) return;
+  const cur = document.getElementById('tf-currency').value, sym = tfSymbol(cur);
+  const num = id => { const v = document.getElementById(id).value; return v === '' ? null : Number(v); };
+  [['tf-unit-kwh-day','/ kWh'],['tf-unit-kwh-night','/ kWh'],['tf-unit-kwh-over','/ kWh'],['tf-unit-min','/ min'],['tf-unit-month','/ month']]
+    .forEach(([id, suffix]) => { const el = document.getElementById(id); if(el) el.textContent = sym + ' ' + suffix; });
+  const day = num('tf-price-day'), night = num('tf-price-night'), nStart = document.getElementById('tf-night-start').value, nEnd = document.getElementById('tf-night-end').value;
+  const fee = num('tf-idle-fee'), grace = num('tf-idle-grace') || 0, mFee = num('tf-monthly-fee'), mKwh = num('tf-monthly-kwh'), over = num('tf-overage-price');
+  const money = n => fmtMoney(n, cur), KWH = 30, IDLE = 45;
+  let h = '<h3>What a driver pays</h3><p class="tfx-sub">Updates as you type.</p>';
+  if(day == null || !isFinite(day)){
+    h += '<p class="tfx-sub" style="margin:0;">Enter a day price to see an example.</p>';
+  } else {
+    h += '<div class="tfx-pv-tag">' + KWH + ' kWh, daytime</div><div class="tfx-pv-big">' + money(KWH * day) + '</div>';
+    if(night != null && isFinite(night) && nStart && nEnd && nStart !== nEnd)
+      h += '<div class="tfx-pv-line"><span>' + KWH + ' kWh, starting at ' + nStart.slice(0,5) + '</span><b>' + money(KWH * night) + '</b></div>';
+    if(fee != null && isFinite(fee) && fee > 0)
+      h += '<div class="tfx-pv-line"><span>Idle for ' + IDLE + ' min after the charge</span><b>' + money(Math.max(0, IDLE - grace) * fee) + '</b></div>' +
+           (grace > 0 ? '<div class="tfx-pv-tag" style="margin-top:6px;">The first ' + grace + ' min of idle time are free.</div>' : '');
+    if(mFee != null || mKwh != null)
+      h += '<div class="tfx-pv-line"><span>Subscription' + (mKwh != null ? ', ' + mKwh + ' kWh included' : '') + '</span><b>' + (mFee != null ? money(mFee) + ' / month' : '-') + '</b></div>' +
+           (mKwh != null ? '<div class="tfx-pv-tag" style="margin-top:6px;">Beyond the included energy: ' + money(over != null ? over : day) + ' / kWh.</div>' : '');
+  }
+  box.innerHTML = h;
 }
 function backToTariffs(){
   document.getElementById('tariffs-list-view').style.display = 'block';
