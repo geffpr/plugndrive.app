@@ -3050,6 +3050,7 @@ const LOGIN_I18N = {
     errCaptcha: 'Security check failed. Wait for the check above to finish, or reload the page, then try again.',
     errMismatch: "Passwords don't match.",
     errInvalidCode: 'That code is incorrect or has expired.',
+    linkExpired: 'This link has expired or was already used. Choose "Forgot password?" to get a new code.',
     codeResent: 'A new code has been sent. Earlier codes no longer work.',
     inactiveNotice: 'You were signed out after 15 minutes of inactivity.',
     trialLink: 'Own an OCPP 1.6J charger? Start a free 14-day trial',
@@ -3103,6 +3104,7 @@ const LOGIN_I18N = {
     errCaptcha: 'A verificação de segurança falhou. Aguarde que a verificação acima termine, ou recarregue a página, e tente novamente.',
     errMismatch: 'As palavras-passe não coincidem.',
     errInvalidCode: 'Código incorreto ou expirado.',
+    linkExpired: 'Este link expirou ou já foi usado. Escolha "Esqueceu a palavra-passe?" para receber um novo código.',
     codeResent: 'Novo código enviado. Os códigos anteriores deixam de funcionar.',
     inactiveNotice: 'A sessão foi terminada após 15 minutos de inatividade.',
     trialLink: 'Tem um carregador OCPP 1.6J? Comece um teste gratuito de 14 dias',
@@ -11159,6 +11161,18 @@ async function submitActivation(){
     try { const qc = new URLSearchParams(location.search).get('code'); if(qc && /^\d{4,10}$/.test(qc)) document.getElementById('activate-code').value = qc; } catch(e) {}
     return;
   }
+  // Link from an invitation e-mail: one click opens "Choose a password" (no code to type).
+  try {
+    const sp = new URLSearchParams(location.search).get('set_password');
+    if(sp){
+      history.replaceState(null, '', location.pathname);
+      const { data: vd, error: ve } = await sb.auth.verifyOtp({ token_hash: sp, type: 'recovery' });
+      if(!ve && vd && vd.session){ showLoginScreen('reset'); return; }
+      tsMount('signin');
+      document.getElementById('auth-error').textContent = lt('linkExpired');
+      return;
+    }
+  } catch(e) { /* falls through to the normal login */ }
   const { data: { session } } = await sb.auth.getSession();
   if(session){ await enterApp(); }
   else if(/[?&](signup|invite)=/.test(location.search) || savedStart()){ applyStartCopy(); showLoginScreen('signup'); }
