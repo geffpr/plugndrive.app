@@ -4565,7 +4565,7 @@ async function answerChargeReq(id, accept){
   }catch(e){ err = 'network'; }
   delete chargeReqBusy[id];
   await loadChargeRequests();
-  if(err) alert(/no longer open/.test(err) ? 'This request is no longer open.' : 'Could not send your answer. Please try again.');
+  if(err) toastErr(/no longer open/.test(err) ? 'This request is no longer open.' : 'Could not send your answer. Please try again.');
 }
 // Catch-up read (used when the live link is down, and when a hidden tab comes back).
 async function rtRefresh(){
@@ -5506,7 +5506,7 @@ async function toggleChargerListing(checked){
   if(!c) return;
   const { data, error } = await sb.from('chargers').update({ listed_publicly: checked }).eq('id', c.id).select();
   if(error || !data || !data.length){
-    alert(/tariff_required/.test(error?.message || '') ? 'Set a tariff for this charger or its site first (Tariffs page), then turn this on.' : (error?.message || 'Could not change the visibility.'));
+    toastErr(/tariff_required/.test(error?.message || '') ? 'Set a tariff for this charger or its site first (Tariffs page), then turn this on.' : (error?.message || 'Could not change the visibility.'));
   }
   await loadAll();
   renderChargerDetail();   // shows what is really saved, so a failed change never looks applied
@@ -5582,7 +5582,7 @@ async function toggleRemote(){
   });
 
   if(error || data?.error){
-    alert('Could not reach the charger: ' + (data?.error || error.message));
+    toastErr('Could not reach the charger: ' + (data?.error || error.message));
     btn.textContent = originalLabel;
     btn.disabled = false;
     return;
@@ -5697,13 +5697,13 @@ function testChargerConnection(){
     const c = chargers.find(x=>x.id===currentChargerId);
     const { data, error } = await sb.functions.invoke('remote-control', { body: { chargerId: c.id, action: 'ping' } });
     if(error || data?.error){
-      alert('Test failed: ' + (data?.error || error?.message || 'unknown error'));
+      toastErr('Test failed: ' + (data?.error || error?.message || 'unknown error'));
       return;
     }
     if(data.connected){
-      alert(`Connected — charger responded in ${data.rttMs}ms.`);
+      toast(`Connected. The charger responded in ${data.rttMs} ms.`);
     } else {
-      alert('Not connected — the charger has no open connection to the server right now' + (data.error ? ` (${data.error})` : '.'));
+      toastErr('Not connected. The charger has no open connection to the server right now' + (data.error ? ` (${data.error})` : '.'));
     }
   }, 'Run test');
 }
@@ -6020,7 +6020,7 @@ async function toggleClientCashRecharges(checked){
   const box = document.getElementById('cl-cash-recharges');
   const { data, error } = await sb.from('clients').update({ cash_recharges_enabled: checked }).eq('id', currentClientId).select();
   if(error || !data || !data.length){
-    alert(error?.message || 'Could not change this setting.');
+    toastErr(error?.message || 'Could not change this setting.');
     box.checked = !checked;   // a failed change must never look applied
     return;
   }
@@ -6031,7 +6031,7 @@ async function toggleClientGuestAccess(checked){
   const box = document.getElementById('cl-guest-access');
   const { data, error } = await sb.from('clients').update({ guest_access_enabled: checked }).eq('id', currentClientId).select();
   if(error || !data || !data.length){
-    alert(error?.message || 'Could not change this setting.');
+    toastErr(error?.message || 'Could not change this setting.');
     box.checked = !checked;   // a failed change must never look applied
     return;
   }
@@ -6042,7 +6042,7 @@ async function toggleClientBillingDemo(checked){
   const box = document.getElementById('cl-billing-demo');
   const { data, error } = await sb.from('clients').update({ billing_demo: checked }).eq('id', currentClientId).select();
   if(error || !data || !data.length){
-    alert(error?.message || 'Could not change this setting.');
+    toastErr(error?.message || 'Could not change this setting.');
     box.checked = !checked;   // a failed change must never look applied
     return;
   }
@@ -6147,7 +6147,7 @@ async function renderClientPayoutBox(clientId){
 async function togglePayoutPaused(){
   const box = document.getElementById('cl-payout-paused');
   const { error } = await sb.rpc('payout_set_client_paused', { p_client: currentClientId, p_paused: box.checked });
-  if(error){ box.checked = !box.checked; alert(error.message); return; }
+  if(error){ box.checked = !box.checked; toastErr(error.message); return; }
   await loadAll();
   renderClientPayoutBox(currentClientId);
 }
@@ -6424,10 +6424,10 @@ async function activateSelfServe(){
   btn.disabled = true;
   const { data, error } = await sb.rpc('activate_self_serve_client', { p_client: cl.id, p_plan: plan });
   btn.disabled = false;
-  if(error){ alert(error.message); return; }
+  if(error){ toastErr(error.message); return; }
   if(!data || !data.ok){
     const msgs = {too_many_chargers:`This client has ${data&&data.chargers} chargers, more than this plan allows (${data&&data.max}). Pick a bigger plan.`, too_many_cards:'This client has more RFID cards than this plan allows. Pick a bigger plan.', invalid_plan:'Invalid plan.', not_self_serve:'Not a self-serve account.'};
-    alert((data && msgs[data.error]) || 'Could not activate this account.');
+    toastErr((data && msgs[data.error]) || 'Could not activate this account.');
     return;
   }
   await loadAll();
@@ -6480,7 +6480,7 @@ function openClient(id, opts){
 }
 async function removeSiteFromClient(siteId){
   const { error } = await sb.from('locations').update({ client_id: null }).eq('id', siteId);
-  if(error){ alert(error.message); return; }
+  if(error){ toastErr(error.message); return; }
   await loadAll();
   openClient(currentClientId, {skipNav:true});
 }
@@ -6489,7 +6489,7 @@ function openDeleteClient(){
   showModal('Delete client', `Delete "${cl.name}"? Its sites will not be deleted — they'll just become unassigned.`, async ()=>{
     const { error } = await sb.from('clients').delete().eq('id', currentClientId);
     closeModal();
-    if(error){ alert(error.message); return; }
+    if(error){ toastErr(error.message); return; }
     await loadAll();
     backToClients();
   }, 'Delete');
@@ -6562,7 +6562,7 @@ async function extractInvokeError(error){
 async function deleteClientAdminLogin(staffId, clientId){
   const { data, error } = await sb.functions.invoke('manage-operators', { body: { action: 'delete', staffId } });
   if(error || data?.error){
-    alert(data?.error || await extractInvokeError(error) || 'Failed to remove login.');
+    toastErr(data?.error || await extractInvokeError(error) || 'Failed to remove login.');
     return;
   }
   renderClientAdminLoginPanel(clientId);
@@ -6784,7 +6784,7 @@ async function reviewPayment(id, reviewed){
     if(note === null) return;
   }
   const { error } = await sb.rpc('admin_review_payment', { p_id: id, p_note: note, p_reviewed: !!reviewed });
-  if(error){ alert(error.message); return; }
+  if(error){ toastErr(error.message); return; }
   await renderPayments();
   refreshPaymentAlerts();
 }
@@ -7258,7 +7258,7 @@ async function shopToggle(id, field){
   if(field !== 'active' && field !== 'active_pro') return;
   const p = shopProducts.find(x => x.id === id); if(!p) return;
   const { error } = await sb.from('shop_products').update({ [field]: !p[field] }).eq('id', id);
-  if(error){ alert(error.message); return; }
+  if(error){ toastErr(error.message); return; }
   await renderShop();
 }
 
@@ -7331,7 +7331,7 @@ async function saveRptCustomize(){
   const kept = (rptLayout || []).filter(b => RPT_ALL_BLOCKS.includes(b) && !available.includes(b));
   const toSave = [...order, ...kept];
   const { error } = await sb.rpc('save_reporting_layout', { p_blocks: toSave });
-  if(error){ alert('Could not save: ' + error.message); return; }
+  if(error){ toastErr('Could not save: ' + error.message); return; }
   rptLayout = toSave;
   document.getElementById('rpt-customize-panel').style.display = 'none';
   applyRptLayout();
@@ -8036,9 +8036,9 @@ async function saveFxMargin(){
 async function saveFxRate(code){
   const input = document.getElementById('fx-rate-'+code);
   const val = Number(input.value);
-  if(!(val > 0)){ alert('Enter a rate greater than zero.'); return; }
+  if(!(val > 0)){ toastErr('Enter a rate greater than zero.'); return; }
   const { error } = await sb.from('currency_rates').upsert({ currency: code, rate_to_zar: val, updated_at: new Date().toISOString() });
-  if(error){ alert(error.message); return; }
+  if(error){ toastErr(error.message); return; }
   await renderExchangeRates();
 }
 
@@ -8136,7 +8136,7 @@ async function revokeApiKey(btn){
   if(!confirm(`Revoke the key "${k.name}"? Any tool using it will stop working immediately. This cannot be undone.`)) return;
   btn.disabled = true;
   const { error } = await sb.rpc('revoke_api_key', { p_id: id });
-  if(error){ btn.disabled = false; alert(akCleanMessage(error.message)); return; }
+  if(error){ btn.disabled = false; toastErr(akCleanMessage(error.message)); return; }
   const list = await sb.rpc('list_api_keys');
   if(!list.error && Array.isArray(list.data)){ apiKeysList = list.data; renderApiKeysTable(); refreshQuotaButtons(); }
 }
@@ -8382,7 +8382,7 @@ async function revokeCampaignKey(btn){
   if(!confirm(`Revoke the key "${k.name}"? Any tool using it will stop working immediately. This cannot be undone.`)) return;
   btn.disabled = true;
   const { error } = await sb.rpc('revoke_campaign_subaccount_key', { p_id: k.id });
-  if(error){ btn.disabled = false; alert(csCleanMessage(error.message)); return; }
+  if(error){ btn.disabled = false; toastErr(csCleanMessage(error.message)); return; }
   await loadCampaignKeys();
 }
 async function renderCampaigns(){
@@ -8479,7 +8479,7 @@ async function setCampaignSubStatus(btn){
   if(st === 'archived' && !confirm(`Archive "${s.name}"? It will stop working and can no longer be changed. This cannot be undone.`)) return;
   btn.disabled = true;
   const { error } = await sb.rpc('update_campaign_subaccount', { p_id: id, p_status: st });
-  if(error){ btn.disabled = false; alert(csCleanMessage(error.message)); return; }
+  if(error){ btn.disabled = false; toastErr(csCleanMessage(error.message)); return; }
   await renderCampaigns();
 }
 
@@ -9641,7 +9641,7 @@ async function submitCampaignDraft(){
 async function duplicateCampaignDraft(btn){
   btn.disabled = true;
   const { error } = await sb.rpc('duplicate_campaign', { p_id: btn.dataset.cid });
-  if(error){ btn.disabled = false; alert(csCleanMessage(error.message)); return; }
+  if(error){ btn.disabled = false; toastErr(csCleanMessage(error.message)); return; }
   await loadCampaignDrafts();
 }
 async function csRunAction(btn){
@@ -9654,7 +9654,7 @@ async function csRunAction(btn){
   if(ask && !confirm(ask)) return;
   btn.disabled = true;
   const { error } = await sb.rpc('set_campaign_status', { p_id: c.id, p_action: act });
-  if(error){ btn.disabled = false; alert(/not_active/i.test(error.message || '') ? 'The sub-account must be active.' : csCleanMessage(error.message)); return; }
+  if(error){ btn.disabled = false; toastErr(/not_active/i.test(error.message || '') ? 'The sub-account must be active.' : csCleanMessage(error.message)); return; }
   document.getElementById('cc-run').style.display = 'none';
   await loadCampaignDrafts();
 }
@@ -9728,7 +9728,7 @@ async function archiveCampaignDraft(btn){
   if(!confirm(`Archive "${c.name}"? It will no longer appear among your active campaigns.`)) return;
   btn.disabled = true;
   const { error } = await sb.rpc('archive_campaign', { p_id: c.id });
-  if(error){ btn.disabled = false; alert(csCleanMessage(error.message)); return; }
+  if(error){ btn.disabled = false; toastErr(csCleanMessage(error.message)); return; }
   await loadCampaignDrafts();
 }
 
@@ -9736,6 +9736,7 @@ async function archiveCampaignDraft(btn){
 
 // Small confirmation or error message at the bottom of the screen (replaces the browser pop-up).
 let toastTimer = null;
+function toastErr(msg){ toast(msg || 'Something went wrong. Please try again.', 'error'); }
 function toast(msg, kind){
   let el = document.getElementById('pnd-toast');
   if(!el){ el = document.createElement('div'); el.id = 'pnd-toast'; el.setAttribute('role', 'status'); el.setAttribute('aria-live', 'polite'); document.body.appendChild(el); }
@@ -9893,7 +9894,7 @@ async function renderMyOperators(){
 }
 async function setOperatorGuestRight(staffId, enabled, box){
   const { error } = await sb.rpc('set_operator_guest_right', { p_staff_id: staffId, p_enabled: enabled });
-  if(error){ alert(error.message || 'Could not change this right.'); if(box) box.checked = !enabled; }
+  if(error){ toastErr(error.message || 'Could not change this right.'); if(box) box.checked = !enabled; }
 }
 function openAddOperator(){
   if(quotaReached('operator_accounts')){ showUpgrade('operator_accounts'); return; }
@@ -9928,7 +9929,7 @@ async function submitAddOperator(){
 async function deleteOperator(staffId){
   const { data, error } = await sb.functions.invoke('manage-operators', { body: { action: 'delete', staffId } });
   if(error || data?.error){
-    alert(data?.error || await extractInvokeError(error) || 'Failed to remove operator.');
+    toastErr(data?.error || await extractInvokeError(error) || 'Failed to remove operator.');
     return;
   }
   renderMyOperators();
@@ -10373,7 +10374,7 @@ async function toggleOwnerCard(){
   const on = ownerCardIds.has(card.id);
   btn.disabled = true;
   const { error } = await sb.rpc('set_owner_card', { p_card: card.id, p_on: !on });
-  if(error){ alert('Could not change this card: ' + error.message); btn.disabled = false; return; }
+  if(error){ toastErr('Could not change this card: ' + error.message); btn.disabled = false; return; }
   ownerGroupsLoaded = false;   // the first "my vehicle" creates the owner group: sessions must learn about it
   await refreshOwnerCardIds();
   updateOwnerCardButton();
@@ -10417,7 +10418,7 @@ function openAdminCredit(uid){
   const card = rfidCards.find(r=>r.uid===uid);
   const user = card ? users.find(u=>u.id===card.userId) : null;
   const site = card ? locations.find(l=>l.id===card.complexId) : null;
-  if(!card || !user){ alert('Could not find this card\'s cardholder.'); return; }
+  if(!card || !user){ toastErr('Could not find this card\'s cardholder.'); return; }
   acrCard = card; acrUser = user; acrSite = site;
 
   document.getElementById('acr-name').textContent = user.name;
@@ -10699,10 +10700,10 @@ async function submitAssignCard(mode){
 async function resendActivation(cardId){
   const card = rfidCards.find(r=>r.id===cardId);
   const u = users.find(x=>x.id===card.userId);
-  if(!u || !u.phone){ alert('No phone number on file for this card\'s resident.'); return; }
+  if(!u || !u.phone){ toastErr('No phone number on file for this card\'s resident.'); return; }
   const auto = canAutoSms();
   const { data, error } = await sb.rpc('regenerate_card_code', { p_card: cardId, p_valid_minutes: auto ? 15 : 1440 });
-  if(error){ alert(cardErrMsg(error)); return; }
+  if(error){ toastErr(cardErrMsg(error)); return; }
   let note = auto ? 'Valid for 15 minutes.' : 'Valid for 24 hours.';
   if(auto){
     const { error: smsError } = await sendActivationSms(cardId, data.phone);
@@ -10954,14 +10955,14 @@ function renderLoad(){
 }
 async function toggleChargerPriority(chargerId, checked){
   const { data, error } = await sb.from('chargers').update({ load_priority: checked }).eq('id', chargerId).select();
-  if(error || !data || !data.length) alert(error ? error.message : 'You cannot change this setting on this account. Ask Plug n Drive.');
+  if(error || !data || !data.length) toastErr(error ? error.message : 'You cannot change this setting on this account. Ask Plug n Drive.');
   await loadAll();
   renderLoad();   // shows what is really saved
 }
 async function toggleLoadManagement(locationId, enabled){
   const { data: lmData, error: lmErr } = await sb.from('locations').update({ load_management_enabled: enabled }).eq('id', locationId).select();
-  if(lmErr){ if(!handleFeatureError(lmErr.message)) alert(lmErr.message); }
-  else if(!lmData || !lmData.length) alert('This account cannot change the load management settings. Ask Plug n Drive to do it for you.');
+  if(lmErr){ if(!handleFeatureError(lmErr.message)) toastErr(lmErr.message); }
+  else if(!lmData || !lmData.length) toastErr('This account cannot change the load management settings. Ask Plug n Drive to do it for you.');
   await loadAll();
   renderLoad();
 }
