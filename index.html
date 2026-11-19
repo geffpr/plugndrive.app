@@ -3066,7 +3066,7 @@ body.member-mode #bell-btn{display:none !important;}
             <div class="tfx-side">
               <div class="card card-pad tfx-card" id="tf-preview"></div>
               <div class="tfx-actions">
-                <button class="btn btn-primary" onclick="saveTariff()">Save tariff</button>
+                <button class="btn btn-primary" id="tf-save-btn" onclick="saveTariff()">Save tariff</button>
                 <button class="btn btn-danger" id="tf-remove-override-btn" onclick="removeChargerOverride()" style="display:none;">Remove override</button>
               </div>
               <div id="tariff-edit-error" style="color:var(--red, #c0392b);font-size:12px;margin-top:8px;"></div>
@@ -11592,23 +11592,30 @@ async function saveTariff(){
     ? tariffs.find(t=>t.locationId===tariffEditTarget.id)
     : tariffs.find(t=>t.chargerId===tariffEditTarget.id);
 
+  const btn = document.getElementById('tf-save-btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
   const { error } = existing
     ? await sb.from('tariffs').update(payload).eq('id', existing.id)
     : await sb.from('tariffs').insert(payload);
+  btn.disabled = false; btn.textContent = 'Save tariff';
 
-  if(error){ if(handleFeatureError(error.message)){ errEl.textContent = ''; return; } errEl.textContent = error.message; return; }
+  if(error){ if(handleFeatureError(error.message)){ errEl.textContent = ''; return; } errEl.textContent = error.message; toastErr('The tariff could not be saved.'); return; }
+  const label = (document.getElementById('tariff-edit-title').textContent || '').replace(/^Tariff\s*—\s*/, '');
   await loadAll();
   backToTariffs();
   renderTariffs();
+  toast('Tariff saved' + (label ? ': ' + label : ''));
 }
 
 async function removeChargerOverride(){
   const existing = tariffs.find(t=>t.chargerId===tariffEditTarget.id);
   if(!existing) return;
-  await sb.from('tariffs').delete().eq('id', existing.id);
+  const { error } = await sb.from('tariffs').delete().eq('id', existing.id);
+  if(error){ toastErr('The override could not be removed.'); return; }
   await loadAll();
   backToTariffs();
   renderTariffs();
+  toast('Charger override removed. It now uses the site tariff.');
 }
 
 let modalConfirmCb = null;
