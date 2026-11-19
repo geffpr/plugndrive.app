@@ -736,6 +736,15 @@ body.member-mode #bell-btn{display:none !important;}
 .sm-title{display:none;padding:2px 14px 10px;font-weight:800;font-size:15px;color:var(--navy);}
 
 /* team rights: one row per section with a 3-way switch */
+#disp-bar{display:none;}
+@media(max-width:1099px){#disp-btn{display:none !important;}}
+body.display-mode #disp-bar{display:flex;position:fixed;top:14px;right:14px;z-index:90;gap:8px;opacity:0;pointer-events:none;transition:opacity .25s;}
+body.display-mode #disp-bar.show{opacity:1;pointer-events:auto;}
+body.display-mode .app{grid-template-columns:1fr !important;}
+body.display-mode .sidebar, body.display-mode .topbar, body.display-mode #bottom-nav, body.display-mode #mobile-menu-toggle, body.display-mode #sidebar-backdrop,
+body.display-mode #sup-fab, body.display-mode #sup-panel, body.display-mode #trial-bar, body.display-mode #req-banner, body.display-mode #bell-btn, body.display-mode #pnd-more-sheet{display:none !important;}
+body.display-mode .main{padding-top:0 !important;}
+body.display-mode .content{padding:26px 34px;pointer-events:none;user-select:none;}
 .rc-hint{display:none;font-size:12px;color:var(--text-muted);margin:-4px 0 8px;}
 .rc-row{display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid var(--border);background:#fff;}
 .rc-row:last-child{border-bottom:0;}
@@ -1190,6 +1199,7 @@ body.member-mode #bell-btn{display:none !important;}
     </div>
     <button type="button" id="sup-fab" aria-expanded="false" aria-controls="sup-panel" aria-label="Help"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.5-4.6A8 8 0 1 1 21 12z"/><path d="M9.5 10h5M9.5 13.5h3"/></svg><span>Help</span></button>
   </div>
+  <div id="disp-bar" aria-hidden="true"><button type="button" class="btn btn-sm" onclick="displayFullscreen()">Full screen</button><button type="button" class="btn btn-sm" onclick="exitDisplayMode()">Exit display mode (Esc)</button></div>
   <nav class="bottom-nav" id="bottom-nav" aria-label="Main navigation">
     <button type="button" class="bn-item" data-page="sites" onclick="showPage('sites')"><svg viewBox="0 0 24 24"><path d="M3 21V8l7-4 7 4v13"/><path d="M17 21V11l4 2v8"/><path d="M8 21v-5h4v5"/></svg>Sites</button>
     <button type="button" class="bn-item" data-page="chargers" onclick="showPage('chargers')"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg>Chargers</button>
@@ -1248,6 +1258,7 @@ body.member-mode #bell-btn{display:none !important;}
     <div class="topbar">
       <div class="topbar-left"><div class="topbar-title" id="topbar-title">Dashboard</div><span class="topbar-hello" id="topbar-hello"></span></div>
       <div class="topbar-right">
+        <button type="button" class="btn btn-sm" id="disp-btn" onclick="openDisplayMode()" style="display:none;" title="Open this page full screen, without the menu, updating by itself">Display mode</button>
         <div style="font-size:12px;color:var(--text-muted);">Amounts shown per site currency</div>
         <button type="button" class="bell" id="bell-btn" aria-label="Notifications" aria-haspopup="dialog" aria-expanded="false" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6.5 2 6.5H4S6 14 6 9z"/><path d="M10 19a2 2 0 0 0 4 0"/></svg><span class="bell-count" id="bell-count" hidden></span></button>
       </div>
@@ -3941,6 +3952,7 @@ async function enterAppInner(){
   updateSidebarIdentity();
   routeFromLocation();
   startRealtime();
+  if(DISPLAY_MODE) startDisplayMode();
 }
 
 // Invited person: the Campaigns page only, with the sub-accounts the client ticked. Nothing else of the account is loaded.
@@ -5290,6 +5302,7 @@ function showPage(id, opts){
   if(id==='team') renderTeam();
   if(id==='pndteam') renderPndTeam();
   applyPndReadOnly(id);
+  updateDisplayBtn(id);
   if(id==='apikeys') renderApiKeys();
   if(id==='campaigns') renderCampaigns();
   if(id==='walletactivity') renderWalletActivity();
@@ -10389,6 +10402,42 @@ function toast(msg, kind){
   el.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.remove('show'), kind === 'error' ? 6000 : 3500);
+}
+
+// ---------------- DISPLAY MODE ----------------
+// The same page without the menu, full width, updating by itself, for a wall screen or a second monitor.
+// Nothing can be clicked while it is on: leave with Esc or the button that appears when the mouse moves.
+const DISPLAY_MODE = new URLSearchParams(location.search).get('display') === '1';
+const DISPLAY_PAGES = ['dashboard','chargers','sessions','reporting'];
+if(DISPLAY_MODE) document.body.classList.add('display-mode');
+function updateDisplayBtn(id){
+  const b = document.getElementById('disp-btn'); if(!b) return;
+  const ok = !DISPLAY_MODE && !currentMember && currentStaff && currentStaff.role !== 'operator' && DISPLAY_PAGES.includes(id);
+  b.style.display = ok ? '' : 'none';
+}
+function openDisplayMode(){
+  const pg = document.querySelector('.page.active'); const id = pg ? pg.id.replace('page-', '') : 'dashboard';
+  window.open('/' + (DISPLAY_PAGES.includes(id) ? id : 'dashboard') + '?display=1', '_blank');
+}
+function exitDisplayMode(){ location.href = location.pathname; }
+function displayFullscreen(){
+  const d = document.documentElement;
+  if(document.fullscreenElement){ document.exitFullscreen(); return; }
+  if(d.requestFullscreen) d.requestFullscreen().catch(() => {});
+}
+function startDisplayMode(){
+  const bar = document.getElementById('disp-bar'); let t = null;
+  const wake = () => { bar.classList.add('show'); clearTimeout(t); t = setTimeout(() => bar.classList.remove('show'), 4000); };
+  ['mousemove','touchstart','click'].forEach(ev => document.addEventListener(ev, wake, { passive:true }));
+  document.addEventListener('keydown', e => { if(e.key === 'Escape' && !document.fullscreenElement) exitDisplayMode(); });
+  wake();
+  // chargers and sessions already update live; this also refreshes the figures and the reports once a minute
+  setInterval(() => {
+    if(document.hidden) return;
+    rtRefresh();
+    if(document.querySelector('.page.active')?.id === 'page-reporting') loadReporting();
+    else if(document.querySelector('.page.active')?.id === 'page-dashboard') renderDashboard();
+  }, 60000);
 }
 
 // ---------------- PLUG N DRIVE TEAM (owner / admin / limited) ----------------
