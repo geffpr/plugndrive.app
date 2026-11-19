@@ -2599,10 +2599,18 @@ body.member-mode #bell-btn{display:none !important;}
                 <button class="btn btn-primary btn-block" id="cd-remote-btn" onclick="toggleRemote()"></button>
                 <button class="btn btn-block" onclick="testChargerConnection()">Test connection</button>
                 <button class="btn btn-block" id="cd-refresh-btn" onclick="refreshChargerStatus()">Refresh status</button>
+                <div id="cd-oos-banner" style="display:none;font-size:12px;background:#fff4e5;color:#92400e;border-radius:8px;padding:8px 10px;"></div>
                 <div id="cd-maint" style="display:none;flex-direction:column;gap:8px;">
                   <button class="btn btn-block" onclick="chargerMaint('reset')">Restart charger</button>
                   <button class="btn btn-block" onclick="chargerMaint('unlock')">Release cable</button>
                   <button class="btn btn-block" id="cd-hard-btn" style="display:none;" onclick="chargerMaint('reset_hard')">Hard restart (Plug n Drive)</button>
+                  <button class="btn btn-block" id="cd-oos-btn" style="display:none;" onclick="openOosPanel()"></button>
+                  <div id="cd-oos-panel" style="display:none;flex-direction:column;gap:8px;">
+                    <select id="cd-oos-reason" class="input">
+                      <option>Hardware fault</option><option>Planned maintenance</option><option>Waiting for a part</option><option>Electrical work on site</option><option>Other</option>
+                    </select>
+                    <div style="display:flex;gap:8px;"><button class="btn btn-block" onclick="document.getElementById('cd-oos-panel').style.display='none'">Cancel</button><button class="btn btn-primary btn-block" onclick="confirmOos()">Take out of service</button></div>
+                  </div>
                 </div>
                 <button class="btn btn-danger btn-block" id="cd-unpair-btn" onclick="openUnpair()">Unpair charger</button>
               </div>
@@ -4412,7 +4420,7 @@ let tariffs = [];
 let clients = [];
 
 function mapLocation(l){ return {id:l.id, name:l.name, type:l.type, parentId:l.parent_id, city:l.city, address:l.address, capacityKVA:l.capacity_kva, currency:l.currency, clientId:l.client_id, timezone:l.timezone, contactName:l.contact_name, contactPhone:l.contact_phone, contactEmail:l.contact_email, status:l.status, code:l.code, loadManagementEnabled:l.load_management_enabled, latitude:l.latitude, longitude:l.longitude, siteDescription:l.site_description, accessMode:l.access_mode, hostPhone:l.host_phone, openingHours:l.opening_hours||null, ocpiPublish:!!l.ocpi_publish}; }
-function mapCharger(c){ return {id:c.id, locationId:c.location_id, name:c.name, ocppId:c.ocpp_id, vendor:c.vendor, connector:c.connector, powerKW:c.power_kw, ocpp:c.ocpp_version, status:c.status, currentKW:c.current_kw, ocppPassword:c.ocpp_password, lastSeenAt:c.last_seen_at, ocppStatus:c.ocpp_status, listedPublicly:c.listed_publicly, loadPriority:!!c.load_priority}; }
+function mapCharger(c){ return {id:c.id, locationId:c.location_id, name:c.name, ocppId:c.ocpp_id, vendor:c.vendor, connector:c.connector, powerKW:c.power_kw, ocpp:c.ocpp_version, status:c.status, currentKW:c.current_kw, ocppPassword:c.ocpp_password, lastSeenAt:c.last_seen_at, ocppStatus:c.ocpp_status, listedPublicly:c.listed_publicly, loadPriority:!!c.load_priority, outOfService:!!c.out_of_service, oosReason:c.out_of_service_reason||'', oosAt:c.out_of_service_at||null, oosBy:c.out_of_service_by||''}; }
 function isWebSession(s){ return !!s && s.payment === 'QR code'; }   // started from the charge page by a web customer
 function mapSession(s){ return {id:s.id, chargerId:s.charger_id, userId:s.user_id, rfidCardId:s.rfid_card_id, kwh:s.kwh, cost:s.cost, currency:s.currency, startedAt:s.started_at, endedAt:s.ended_at, paymentStatus:s.payment_status, payment:s.payment_method, groupId:s.access_group_id, groupMode:s.group_pricing_mode, groupPercent:s.group_discount_percent, offered:s.offered_value, liveKwh:s.live_kwh, liveCost:s.live_cost}; }
 // How a session was paid, in words. The stored payment_method stays 'QR code' / 'RFID card' (the reports count on it);
@@ -4532,7 +4540,7 @@ function rtRefreshSiteTree(){
 function refreshChargerDetailLive(){
   const c = chargers.find(x=>x.id===currentChargerId);
   if(!c) return;
-  const st = document.getElementById('cd-status'); if(st) st.innerHTML = statusBadge(c.status);
+  const st = document.getElementById('cd-status'); if(st) st.innerHTML = statusBadge(c.status, c);
   const os = document.getElementById('cd-ocpp-status'); if(os && c.ocppStatus) os.textContent = c.ocppStatus;
   const ls = document.getElementById('cd-last-seen'); if(ls && c.lastSeenAt) ls.textContent = fmtLastSeen(c.lastSeenAt);
   // The button is left alone while a remote command is in progress ("Sending command…").
@@ -4682,7 +4690,8 @@ function pathOf(locId){
 }
 function chargersAt(locId){ return chargers.filter(c=>c.locationId===locId); }
 function childrenOf(locId){ return locations.filter(l=>l.parentId===locId); }
-function statusBadge(status){
+function statusBadge(status, c){
+  if(c && c.outOfService) return '<span class="badge" style="background:#fff4e5;color:#b45309;"><span class="badge-dot" style="background:#e08a1e;"></span>Out of service</span>';
   const map={Available:'avail',Charging:'charging',Faulted:'faulted',Offline:'offline'};
   return `<span class="badge ${map[status]}"><span class="badge-dot"></span>${status}</span>`;
 }
@@ -5127,6 +5136,7 @@ function activeRoots(){ return locations.filter(l=>!l.parentId && l.status !== '
 // unplugged on purpose) or 'ok' (includes a short outage, which is normal life).
 const OFFLINE_RED_MS = 24*3600000, OFFLINE_DORMANT_MS = 7*86400000;
 function chargerState(c){
+  if(c.outOfService) return 'oos';
   if(c.status === 'Charging') return 'charging';
   if(isArchivedLoc(c.locationId)) return 'ok';
   if(c.status === 'Faulted') return 'red';
@@ -5176,21 +5186,21 @@ function renderDashboard(){
 
   // Charging first, then chargers that really need a look (red), then the rest,
   // and chargers offline for over a week at the very bottom.
-  const priority = c => ({charging:0, red:1, ok:2, dormant:3})[chargerState(c)];
+  const priority = c => ({charging:0, red:1, ok:2, oos:3, dormant:4})[chargerState(c)];
   const sortedChargers = chargers.slice().sort((a,b) => priority(a) - priority(b));
 
   document.getElementById('dash-chargers-body').innerHTML = sortedChargers.length ? sortedChargers.map(c=>{
     const root = rootOf(c.locationId);
     const client = root && root.clientId ? clients.find(cl=>cl.id===root.clientId) : null;
     const problem = chargerNeedsAttention(c);
-    const dormant = chargerState(c) === 'dormant';
+    const dormant = chargerState(c) === 'dormant' || chargerState(c) === 'oos';
     const activeSession = c.status === 'Charging' ? sessions.find(s=>s.chargerId===c.id && !s.endedAt) : null;
     const cardholder = activeSession ? users.find(u=>u.id===activeSession.userId) : null;
     return `<tr class="rowlink" style="${problem ? 'background:#fdecea;' : ''}${dormant ? 'opacity:.55;' : ''}" onclick="openCharger('${c.id}')">
       <td>${c.name}</td>
       <td class="path">${pathOf(c.locationId)}</td>
       <td>${client ? client.name : '-'}</td>
-      <td>${statusBadge(c.status)}</td>
+      <td>${statusBadge(c.status, c)}</td>
       <td>${livenessDot(c.lastSeenAt)}${fmtLastSeen(c.lastSeenAt)}</td>
       <td>${c.status==='Charging' && c.currentKW != null ? c.currentKW+' kW' : '-'}</td>
       <td>${cardholder ? cardholder.name : (activeSession && activeSession.userId ? '<span style="color:var(--text-muted);">Roaming driver</span>' : '-')}</td>
@@ -5272,7 +5282,7 @@ function renderTreeNode(id, depth){
   own.forEach(c=>{
     html += `<div class="tree-node rowlink" style="margin-left:${(depth+1)*18}px;" onclick="openChargerFromSite('${c.id}')">
       <div class="left"><span class="ic" style="width:14px;">⚡</span><span class="tree-label">${c.name}</span></div>
-      ${statusBadge(c.status)}
+      ${statusBadge(c.status, c)}
     </div>`;
   });
   kids.forEach(k=>{ html += renderTreeNode(k.id, depth+1); });
@@ -5344,7 +5354,7 @@ function renderChargers(){
     const res = residentFor(c.id);
     return `<tr class="rowlink" onclick="openCharger('${c.id}')">
       <td>${c.name}</td><td class="path">${pathOf(c.locationId)}</td>
-      <td>${statusBadge(c.status)}</td>
+      <td>${statusBadge(c.status, c)}</td>
       <td>${livenessDot(c.lastSeenAt)}${fmtLastSeen(c.lastSeenAt)}</td>
       <td>${c.powerKW} kW</td>
       <td style="color:${c.listedPublicly?'var(--text)':'var(--text-muted)'};">${c.listedPublicly?'Listed':'Hidden'}</td>
@@ -5415,7 +5425,7 @@ function fmtOutage(sec){
 // null = no verdict (no data, or a charger that is gone for good)
 function healthVerdict(c){
   const h = chargerHealth[c.id];
-  if(!h || chargerState(c) === 'dormant') return null;
+  if(!h || chargerState(c) === 'dormant' || chargerState(c) === 'oos') return null;
   return (h.outages > HEALTH_MAX_OUTAGES || h.offline_s > HEALTH_MAX_OFFLINE_S) ? 'unstable' : 'stable';
 }
 function healthBadge(c){
@@ -5450,7 +5460,7 @@ async function renderChargerHealth(){
       : 'No events recorded.';
     const { data: cmds } = await sb.from('charger_command_log').select('at,action,result,detail,staff_name,staff_role').eq('charger_id', id).order('at',{ascending:false}).limit(6);
     if(cmds && cmds.length && box && currentChargerId === id){
-      const label = {reset:'Restart', reset_hard:'Hard restart', unlock:'Release cable'};
+      const label = {reset:'Restart', reset_hard:'Hard restart', unlock:'Release cable', out_of_service:'Out of service', back_in_service:'Back in service'};
       box.insertAdjacentHTML('beforeend', '<div style="margin-top:10px;font-weight:600;color:var(--text-secondary);">Recent commands</div><table style="width:100%;font-size:12px;">' + cmds.map(e => `<tr><td style="color:var(--text-muted);white-space:nowrap;padding:2px 8px 2px 0;">${new Date(e.at).toLocaleString('en-ZA',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</td><td style="padding:2px 8px 2px 0;">${escHtml(label[e.action]||e.action)}</td><td style="padding:2px 8px 2px 0;">${escHtml(e.result)}</td><td style="color:var(--text-secondary);">${escHtml(e.staff_name||e.staff_role||'')}</td></tr>`).join('') + '</table>');
     }
   } else el.innerHTML = html;
@@ -5468,7 +5478,7 @@ function renderChargerDetail(){
   }
   document.getElementById('cd-name').textContent = c.name;
   document.getElementById('cd-path').textContent = pathOf(c.locationId);
-  document.getElementById('cd-status').innerHTML = statusBadge(c.status);
+  document.getElementById('cd-status').innerHTML = statusBadge(c.status, c);
   document.getElementById('cd-ocpp-status').textContent = c.ocppStatus || '-';
   document.getElementById('cd-last-seen').textContent = fmtLastSeen(c.lastSeenAt);
   document.getElementById('cd-live').innerHTML = isChargerFresh(c.lastSeenAt)
@@ -5537,8 +5547,8 @@ function startChargerLivePolling(){
       // so it could keep showing a stale value (e.g. "Charging") long after
       // the charger had actually finished. This keeps it in sync too.
       if(data.status){
-        document.getElementById('cd-status').innerHTML = statusBadge(data.status);
         const c = chargers.find(x=>x.id===currentChargerId);
+        document.getElementById('cd-status').innerHTML = statusBadge(data.status, c);
         if(c) c.status = data.status;
       }
     }
@@ -5873,7 +5883,49 @@ async function refreshChargerStatus(){
     refreshBusy = false; if(btn){ btn.disabled = false; btn.textContent = 'Refresh status'; }
   }
 }
+// Out of service is Plug n Drive's call: nobody can start a charge, and the dashboard stops treating it as a problem.
+function openOosPanel(){
+  const c = chargers.find(x=>x.id===currentChargerId); if(!c) return;
+  if(c.outOfService){
+    showModal('Put back in service', 'The charger accepts charges again.', async ()=>{ closeModal(); await oosCall('back_in_service'); }, 'Put back in service');
+    return;
+  }
+  document.getElementById('cd-oos-panel').style.display = 'flex';
+}
+function confirmOos(){
+  const reason = document.getElementById('cd-oos-reason').value;
+  document.getElementById('cd-oos-panel').style.display = 'none';
+  oosCall('out_of_service', reason);
+}
+async function oosCall(action, reason){
+  const c = chargers.find(x=>x.id===currentChargerId); if(!c) return;
+  const { data, error } = await sb.functions.invoke('remote-control', { body: { chargerId: c.id, action, reason } });
+  let msg = data && data.error;
+  if(!msg && error){ try { const b = await error.context.json(); msg = b && b.error; } catch(e) { msg = error.message; } }
+  if(msg){
+    toastErr(msg === 'charge in progress' ? 'A charge is running on this charger. Stop it first.' :
+             msg === 'charger did not respond' ? 'The charger did not answer in time.' :
+             msg === 'charger refused' ? 'The charger refused the command.' : msg);
+    return;
+  }
+  const pending = data && data.status === 'Pending';
+  toast(action === 'out_of_service'
+    ? (pending ? 'Recorded. The charger is offline and will be put out of service when it reconnects.' : 'The charger is out of service.')
+    : (pending ? 'Recorded. The charger is offline and will be put back in service when it reconnects.' : 'The charger is back in service.'));
+  await loadAll(); renderChargerDetail(); renderChargerMaint();
+  if(isPndAdmin()) renderChargerHealth();
+}
 function renderChargerMaint(){
+  const c0 = chargers.find(x=>x.id===currentChargerId);
+  const ban = document.getElementById('cd-oos-banner');
+  if(ban){
+    if(c0 && c0.outOfService){
+      ban.style.display = 'block';
+      ban.innerHTML = '<b>Out of service</b>' + (c0.oosReason ? ': ' + escHtml(c0.oosReason) : '') + (c0.oosAt ? '<br>Since ' + new Date(c0.oosAt).toLocaleDateString('en-ZA',{day:'2-digit',month:'short'}) : '');
+    } else ban.style.display = 'none';
+  }
+  const ob = document.getElementById('cd-oos-btn');
+  if(ob){ ob.style.display = isPndAdmin() ? '' : 'none'; ob.textContent = (c0 && c0.outOfService) ? 'Put back in service' : 'Take out of service'; }
   const box = document.getElementById('cd-maint'); if(!box) return;
   const ok = !!currentStaff && (currentStaff.role === 'plugndrive_admin' || currentStaff.role === 'client_admin');
   box.style.display = ok ? 'flex' : 'none';
