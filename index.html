@@ -6365,7 +6365,10 @@ function ssHoursRead(){
   return { hours };
 }
 
-function openSiteSettings(id){
+function openSiteSettings(id, from){
+  siteSettingsFrom = from === 'list' ? 'list' : 'site';
+  const backEl = document.querySelector('#page-sitesettings .back-link');
+  if(backEl) backEl.textContent = siteSettingsFrom === 'list' ? '← Back to sites' : '← Back to site';
   siteSettingsTargetId = id;
   const loc = locations.find(l=>l.id===id);
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
@@ -6426,8 +6429,11 @@ function openSiteSettings(id){
 
   navigate(`/sites/${id}/settings`);
 }
+// Where the settings page was opened from: the site page (Settings button) or the list of sites (Edit in the ⋯ menu).
+let siteSettingsFrom = 'site';
 function cancelSiteSettings(){
   showSitesPage();
+  if(siteSettingsFrom === 'list'){ backToSites(); return; }
   openSite(siteSettingsTargetId);
 }
 async function saveSiteSettings(){
@@ -12067,7 +12073,7 @@ async function submitActivation(){
     var loc=locations.find(function(l){return l.id===id;}); if(!loc) return;
     close(); panel.innerHTML='';
     var t=document.createElement('div'); t.className='sm-title'; t.textContent=loc.name; panel.appendChild(t);
-    panel.appendChild(item('Edit','',function(){ openSiteSettings(id); }));
+    panel.appendChild(item('Edit','',function(){ openSiteSettings(id, 'list'); }));
     if(canArchive()){
       if(loc.status==='Archived') panel.appendChild(item('Restore','',function(){ setArchived(id,false); }));
       else panel.appendChild(item('Archive','danger',function(){
