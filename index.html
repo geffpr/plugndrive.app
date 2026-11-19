@@ -755,6 +755,11 @@ body.member-mode #bell-btn{display:none !important;}
 /* Desktop only: cards that used to stack in a narrow column spread over the width of the screen. Phones and tablets are untouched. */
 @media (min-width:1100px){
   .content{max-width:1700px;}
+  #page-shop > .card, #page-shop > div[style*="max-width:1000px"]{max-width:none !important;}
+  #page-shop .shop-grid{display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:28px;align-items:start;}
+  #page-shop .shop-main{grid-column:1;grid-row:1;}
+  #page-shop .shop-side{grid-column:2;grid-row:1;}
+  #page-shop .shop-main > .card, #page-shop .shop-main > div, #page-shop .shop-side > .card{max-width:none !important;}
   .cols-auto{column-width:440px;column-gap:20px;}
   .cols-auto > .card,.cols-auto > div[class*="card"]{max-width:none !important;break-inside:avoid;}
   .cols-auto > .section-title{break-after:avoid-column;}
@@ -1702,6 +1707,8 @@ body.member-mode #bell-btn{display:none !important;}
           </table>
         </div>
 
+        <div class="shop-grid">
+        <div class="shop-side">
         <div class="section-title" style="margin:0 0 14px;">Delivery &amp; e-mail</div>
         <div class="card card-pad" style="max-width:520px;margin-bottom:24px;">
           <div class="form-row"><label>Delivery price (R)</label><input type="number" id="shop-fee" min="0" step="0.01" inputmode="decimal"></div>
@@ -1710,7 +1717,9 @@ body.member-mode #bell-btn{display:none !important;}
           <button class="btn btn-primary" id="shop-settings-btn" onclick="saveShopSettings()">Save</button>
           <span id="shop-settings-msg" style="font-size:12.5px;margin-left:10px;"></span>
         </div>
+        </div>
 
+        <div class="shop-main">
         <div style="display:flex;align-items:center;justify-content:space-between;margin:0 0 14px;max-width:900px;">
           <div class="section-title" style="margin:0;">Products</div>
           <button class="btn btn-primary" onclick="shopNew()">Add a product</button>
@@ -1743,6 +1752,8 @@ body.member-mode #bell-btn{display:none !important;}
             <thead><tr><th></th><th>Product</th><th>Price</th><th>Pro price</th><th>Stock</th><th>Visible to</th><th></th></tr></thead>
             <tbody id="shop-body"></tbody>
           </table>
+        </div>
+        </div>
         </div>
       </div>
 
