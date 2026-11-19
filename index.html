@@ -98,6 +98,7 @@ input,select{font-family:'Inter',sans-serif;font-size:13px;}
 .topbar-left{display:flex;align-items:baseline;gap:14px;min-width:0;}
 .topbar-hello{font-size:14px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .topbar-hello:empty{display:none;}
+body.team-mode .cd-actions{display:none !important;}   /* a team member can look at a charger, never control it */
 .topbar-right{display:flex;align-items:center;gap:14px;}
 .avatar{width:30px;height:30px;border-radius:50%;background:var(--blue-light);color:var(--blue-dark);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;}
 
@@ -2563,7 +2564,7 @@ body.member-mode #bell-btn{display:none !important;}
                   </td></tr>
                 </table>
               </div>
-              <div class="card card-pad" id="cd-password-actions" style="margin-top:10px;display:flex;gap:8px;">
+              <div class="card card-pad cd-actions" id="cd-password-actions" style="margin-top:10px;display:flex;gap:8px;">
                 <button class="btn btn-sm" onclick="clearChargerPassword()">Clear password (for browser testing)</button>
                 <button class="btn btn-sm" onclick="regenerateChargerPassword()">Regenerate password</button>
               </div>
@@ -2579,13 +2580,13 @@ body.member-mode #bell-btn{display:none !important;}
             <div>
               <div class="section-title">Location</div>
               <div id="cd-map" style="width:100%;height:150px;border-radius:10px;overflow:hidden;margin-bottom:16px;"></div>
-              <div class="section-title">Actions</div>
-              <div class="card card-pad" style="display:flex;flex-direction:column;gap:8px;">
+              <div class="section-title cd-actions">Actions</div>
+              <div class="card card-pad cd-actions" style="display:flex;flex-direction:column;gap:8px;">
                 <button class="btn btn-primary btn-block" id="cd-remote-btn" onclick="toggleRemote()"></button>
                 <button class="btn btn-block" onclick="testChargerConnection()">Test connection</button>
                 <button class="btn btn-danger btn-block" id="cd-unpair-btn" onclick="openUnpair()">Unpair charger</button>
               </div>
-              <div id="remote-start-panel" class="card card-pad" style="display:none;margin-top:10px;">
+              <div id="remote-start-panel" class="card card-pad cd-actions" style="display:none;margin-top:10px;">
                 <div style="font-weight:600;margin-bottom:8px;">Start a charge for a cardholder</div>
                 <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">Works for any active Plug n Drive card, from any client or site — enter the UID printed on the card.</div>
                 <div style="display:flex;gap:6px;margin-bottom:10px;">
@@ -9789,6 +9790,7 @@ async function loadTeamContext(){
 function applyTeamNav(){
   const tn = document.getElementById('team-nav');
   if(tn) tn.style.display = (currentStaff && currentStaff.role === 'client_admin' && !isLockedAccount()) ? '' : 'none';
+  document.body.classList.toggle('team-mode', isTeam());
   if(!isTeam()) return;
   document.querySelectorAll('.navitem, #bottom-nav .bn-item').forEach(n => { n.style.display = teamPageAllowed(n.dataset.page) ? '' : 'none'; });
   // Adding sites or chargers is never part of a team member's rights.
