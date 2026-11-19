@@ -774,6 +774,14 @@ body.member-mode #bell-btn{display:none !important;}
   #acc-group-form[style*="display: block"], #acc-group-form[style*="display:block"]{display:grid !important;grid-template-columns:minmax(0,420px) minmax(0,1fr);column-gap:48px;align-items:start;}
   #acc-group-form .ag-actions, #acc-group-form #acc-g-error{grid-column:1 / -1;}
   .acc-groups-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(520px,1fr));column-gap:12px;}
+  #fleet-edit{max-width:none !important;}
+  #fleet-edit[style*="display: block"], #fleet-edit[style*="display:block"]{display:grid !important;grid-template-columns:repeat(4,minmax(0,1fr));column-gap:16px;align-items:end;}
+  #fleet-edit > div:not(.form-row){grid-column:1 / -1;}
+  #fleet-sched-body{max-width:none !important;display:grid;grid-template-columns:minmax(0,520px) minmax(0,1fr);column-gap:32px;align-items:start;}
+  #fleet-sched-body > .card:nth-child(1), #fleet-sched-body > .card:nth-child(2), #fleet-sched-body > div:nth-child(3){grid-column:1;}
+  #fleet-sched-body > .section-title{grid-column:2;grid-row:1;align-self:start;margin-top:0 !important;}
+  #fleet-sched-body > .card:last-child{grid-column:2;grid-row:1 / span 3;margin-top:34px;}
+  #fleet-search{min-width:360px;}
   .cols-auto{column-width:440px;column-gap:20px;}
   .cols-auto > .card,.cols-auto > div[class*="card"]{max-width:none !important;break-inside:avoid;}
   .cols-auto > .section-title{break-after:avoid-column;}
