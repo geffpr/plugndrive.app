@@ -2598,6 +2598,11 @@ body.member-mode #bell-btn{display:none !important;}
               <div class="card card-pad cd-actions" style="display:flex;flex-direction:column;gap:8px;">
                 <button class="btn btn-primary btn-block" id="cd-remote-btn" onclick="toggleRemote()"></button>
                 <button class="btn btn-block" onclick="testChargerConnection()">Test connection</button>
+                <div id="cd-maint" style="display:none;flex-direction:column;gap:8px;">
+                  <button class="btn btn-block" onclick="chargerMaint('reset')">Restart charger</button>
+                  <button class="btn btn-block" onclick="chargerMaint('unlock')">Release cable</button>
+                  <button class="btn btn-block" id="cd-hard-btn" style="display:none;" onclick="chargerMaint('reset_hard')">Hard restart (Plug n Drive)</button>
+                </div>
                 <button class="btn btn-danger btn-block" id="cd-unpair-btn" onclick="openUnpair()">Unpair charger</button>
               </div>
               <div id="remote-start-panel" class="card card-pad cd-actions" style="display:none;margin-top:10px;">
@@ -5363,6 +5368,7 @@ function openCharger(id, opts){
   document.getElementById('charger-detail-view').style.display='block';
   renderChargerDetail();
   renderChargerHealth();
+  renderChargerMaint();
   if(!opts.skipNav) navigate(ROUTES.chargerDetail(id));
 }
 // Opened by clicking a charger inside a site's Structure tree — keeps the
@@ -5380,6 +5386,7 @@ function openChargerFromSite(id){
   document.getElementById('charger-detail-view').style.display='block';
   renderChargerDetail();
   renderChargerHealth();
+  renderChargerMaint();
   navigate(ROUTES.chargerDetail(id));
 }
 // ---- Connection health (last 7 days, from the charger connection journal) ----
@@ -5440,6 +5447,11 @@ async function renderChargerHealth(){
     box.innerHTML = (data && data.length)
       ? '<table style="width:100%;font-size:12px;">' + data.map(e => `<tr><td style="color:var(--text-muted);white-space:nowrap;padding:2px 8px 2px 0;">${new Date(e.at).toLocaleString('en-ZA',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</td><td style="padding:2px 8px 2px 0;">${escHtml(e.event.replace('_',' '))}</td><td style="color:var(--text-secondary);">${escHtml(e.detail||'')}</td></tr>`).join('') + '</table>'
       : 'No events recorded.';
+    const { data: cmds } = await sb.from('charger_command_log').select('at,action,result,detail,staff_name,staff_role').eq('charger_id', id).order('at',{ascending:false}).limit(6);
+    if(cmds && cmds.length && box && currentChargerId === id){
+      const label = {reset:'Restart', reset_hard:'Hard restart', unlock:'Release cable'};
+      box.insertAdjacentHTML('beforeend', '<div style="margin-top:10px;font-weight:600;color:var(--text-secondary);">Recent commands</div><table style="width:100%;font-size:12px;">' + cmds.map(e => `<tr><td style="color:var(--text-muted);white-space:nowrap;padding:2px 8px 2px 0;">${new Date(e.at).toLocaleString('en-ZA',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</td><td style="padding:2px 8px 2px 0;">${escHtml(label[e.action]||e.action)}</td><td style="padding:2px 8px 2px 0;">${escHtml(e.result)}</td><td style="color:var(--text-secondary);">${escHtml(e.staff_name||e.staff_role||'')}</td></tr>`).join('') + '</table>');
+    }
   } else el.innerHTML = html;
 }
 function renderChargerDetail(){
@@ -5807,6 +5819,39 @@ function testChargerConnection(){
       toastErr('Not connected. The charger has no open connection to the server right now' + (data.error ? ` (${data.error})` : '.'));
     }
   }, 'Run test');
+}
+// Restart (soft or hard) and cable release, with a clear warning before and a clear answer after.
+const MAINT_TEXT = {
+  reset: ['Restart charger', 'The charger restarts its software and comes back in 1 to 2 minutes. Nobody can start a charge until it is back. Use it when the charger is frozen or stuck.', 'Restart'],
+  reset_hard: ['Hard restart', 'A full restart of the charger, harsher than the normal restart. Only use it when the normal restart did not help.', 'Hard restart'],
+  unlock: ['Release cable', 'Asks the charger to release the plug locked in its socket, so the cable can be pulled out. Make sure nobody is charging.', 'Release cable'],
+};
+function chargerMaint(action){
+  const c = chargers.find(x=>x.id===currentChargerId); if(!c) return;
+  const t = MAINT_TEXT[action];
+  const busy = c.status === 'Charging';
+  const extra = (busy && action !== 'unlock') ? ' A charge is running on this charger right now, so it cannot be restarted until it is stopped.' : '';
+  showModal(t[0], t[1] + extra, async ()=>{
+    closeModal();
+    const { data, error } = await sb.functions.invoke('remote-control', { body: { chargerId: c.id, action } });
+    let msg = data && data.error;
+    if(!msg && error){ try { const b = await error.context.json(); msg = b && b.error; } catch(e) { msg = error.message; } }
+    if(msg){
+      toastErr(msg === 'charge in progress' ? 'A charge is running on this charger. Stop it first.' :
+               msg === 'charger not connected' ? 'The charger is not connected right now, so it cannot receive the command.' :
+               msg === 'charger did not respond' ? 'The charger did not answer in time.' :
+               msg === 'charger refused' ? 'The charger refused the command.' : msg);
+    } else {
+      toast(action === 'unlock' ? 'The charger released the cable.' : 'The charger accepted the restart. It will be back in 1 to 2 minutes.');
+    }
+    if(isPndAdmin()) renderChargerHealth();
+  }, t[2]);
+}
+function renderChargerMaint(){
+  const box = document.getElementById('cd-maint'); if(!box) return;
+  const ok = !!currentStaff && (currentStaff.role === 'plugndrive_admin' || currentStaff.role === 'client_admin');
+  box.style.display = ok ? 'flex' : 'none';
+  const hb = document.getElementById('cd-hard-btn'); if(hb) hb.style.display = isPndAdmin() ? '' : 'none';
 }
 function openUnpair(){
   showModal('Unpair charger', 'This removes the charger from Plug n Drive and closes its WebSocket link. This cannot be undone.', async ()=>{
