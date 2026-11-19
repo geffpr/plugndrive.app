@@ -2780,7 +2780,8 @@ body.member-mode #bell-btn{display:none !important;}
                 </label>
                 <div class="check-hint" id="new-charger-public-hint">Off by default. A hidden charger stays reachable through its own QR code or link, handy for demos.</div>
               </div>
-              <button class="btn btn-primary btn-block" onclick="generateCharger()">Generate connection details</button>
+              <button class="btn btn-primary btn-block" id="gen-charger-btn" onclick="generateCharger()">Generate connection details</button>
+              <button class="btn btn-block" id="gen-another-btn" style="display:none;margin-top:8px;" onclick="renderAddCharger()">Add another charger</button>
             </div>
           </div>
           <div>
@@ -2789,13 +2790,13 @@ body.member-mode #bell-btn{display:none !important;}
               <div style="font-size:12px;color:var(--text-muted);margin:0 0 12px;">Not sure where to enter these in your charger? <a href="/faq#connect" target="_blank" rel="noopener" style="color:var(--blue-dark);font-weight:600;">Read the guide</a>.</div>
               <div class="form-row">
                 <label>WebSocket URL</label>
-                <div class="url-box"><code id="gen-ws-url">Not generated yet</code></div>
+                <div class="url-box" style="display:flex;align-items:center;gap:8px;"><code id="gen-ws-url" style="flex:1;min-width:0;">Not generated yet</code><button class="btn btn-sm" type="button" onclick="copyGenValue('gen-ws-url', this)">Copy</button></div>
               </div>
               <div class="form-row">
                 <label>Auth password (OCPP 1.6J basic auth)</label>
-                <div class="url-box"><code id="gen-auth">-</code></div>
+                <div class="url-box" style="display:flex;align-items:center;gap:8px;"><code id="gen-auth" style="flex:1;min-width:0;">-</code><button class="btn btn-sm" type="button" onclick="copyGenValue('gen-auth', this)">Copy</button></div>
               </div>
-              <button class="btn btn-block" id="test-conn-btn" onclick="runConnectionTest()" disabled>Save and test connection</button>
+              <button class="btn btn-block" id="test-conn-btn" onclick="runConnectionTest()" disabled>Test connection</button>
               <div class="steps" id="conn-steps"></div>
               <div class="conn-result" id="conn-result"></div>
             </div>
@@ -10503,12 +10504,26 @@ function renderAddCharger(){
   document.getElementById('new-charger-power-error').textContent = '';
   createdChargerId = null;
   pendingNewCharger = null;
+  setAddChargerLocked(false);
   resetConnTest();
+}
+function setAddChargerLocked(locked){
+  ['new-charger-location','new-charger-connector','new-charger-power','new-charger-ocpp','new-charger-public'].forEach(id => { const el = document.getElementById(id); if(el) el.disabled = locked; });
+  if(!locked) refreshNewChargerPublic();
+  const g = document.getElementById('gen-charger-btn'), a = document.getElementById('gen-another-btn');
+  if(g){ g.disabled = locked; g.textContent = locked ? 'Charger created' : 'Generate connection details'; }
+  if(a) a.style.display = locked ? '' : 'none';
+}
+async function copyGenValue(id, btn){
+  const t = document.getElementById(id).textContent;
+  try { await navigator.clipboard.writeText(t); btn.textContent = 'Copied'; setTimeout(() => { btn.textContent = 'Copy'; }, 1800); }
+  catch(e){ const r = document.createRange(); r.selectNodeContents(document.getElementById(id)); const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r); }
 }
 function slug(s){ return s.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,''); }
 let pendingNewCharger = null;
 let createdChargerId = null;   // set once the record exists, so "Test again" never inserts a second one
 let createdWasListed = false;
+let savedPassword = '';
 let connRunId = 0;             // bumping this cancels any connection test still running in the background
 const CONN_TEST = { pollMs: 3000, timeoutMs: 90000 };
 function connSleep(ms){ return new Promise(r=>setTimeout(r, ms)); }
@@ -10518,7 +10533,7 @@ function resetConnTest(){
   const res = document.getElementById('conn-result');
   res.className = 'conn-result';
   res.textContent = '';
-  document.getElementById('test-conn-btn').textContent = 'Save and test connection';
+  document.getElementById('test-conn-btn').textContent = 'Test connection';
 }
 // Any real charger power: 3.7 kW wallbox up to megawatt-class. Accepts "7.4" or "7,4".
 const POWER_MIN_KW = 1, POWER_MAX_KW = 1000;
@@ -10530,7 +10545,13 @@ function parsePowerKw(raw){
   if(!isFinite(n) || n < POWER_MIN_KW || n > POWER_MAX_KW) return null;
   return Math.round(n * 10) / 10;
 }
+let generating = false;
 async function generateCharger(){
+  if(generating) return;   // a double click must never create two chargers
+  generating = true;
+  try { await generateChargerInner(); } finally { generating = false; }
+}
+async function generateChargerInner(){
   const power = parsePowerKw(document.getElementById('new-charger-power').value);
   const powerErr = document.getElementById('new-charger-power-error');
   if(power === null){ powerErr.textContent = POWER_ERROR_TEXT; return; }
@@ -10559,14 +10580,54 @@ async function generateCharger(){
     ocpp_version: document.getElementById('new-charger-ocpp').value,
     ocpp_password: Math.random().toString(36).slice(2,10),
   };
-  document.getElementById('gen-ws-url').textContent = `wss://ocpp.plugndrive.co.za/${id}`;
-  document.getElementById('gen-auth').textContent = pendingNewCharger.ocpp_password;
-  document.getElementById('test-conn-btn').disabled = false;
-  createdChargerId = null;   // generating again means adding another charger
+  // The charger is saved right now (Offline), so the connection details can never be lost by leaving the page.
+  const genBtn = document.getElementById('gen-charger-btn'); genBtn.disabled = true; genBtn.textContent = 'Saving…';
   resetConnTest();
+  const saved = await saveNewChargerNow();
+  if(!saved){ genBtn.disabled = false; genBtn.textContent = 'Generate connection details'; return; }
+  document.getElementById('gen-ws-url').textContent = `wss://ocpp.plugndrive.co.za/${id}`;
+  document.getElementById('gen-auth').textContent = savedPassword;
+  document.getElementById('test-conn-btn').disabled = false;
+  setAddChargerLocked(true);
+  toast('Charger created: ' + name + '. It stays Offline until it connects.');
+}
+// Inserts the charger. Returns false (and says why on the page) when it could not be saved.
+async function saveNewChargerNow(){
+  const p = pendingNewCharger;
+  const resultEl = document.getElementById('conn-result');
+  const listedChoice = document.getElementById('new-charger-public').checked && siteHasTariff(p.location_id);
+  const { data, error } = await sb.from('chargers').insert({
+    location_id: p.location_id,
+    name: p.name,
+    ocpp_id: p.ocpp_id,
+    vendor: null,                    // the charger reports its real vendor itself
+    connector: p.connector,
+    power_kw: p.power_kw,
+    ocpp_version: p.ocpp_version,
+    ocpp_password: p.ocpp_password,
+    status: 'Offline',
+    current_kw: 0,
+    listed_publicly: listedChoice
+  }).select().single();
+  if(error || !data){
+    const m = error?.message || 'Unknown error';
+    resultEl.className = 'conn-result';
+    if(/plan_limit_chargers|account_locked|plan_required/.test(m)){
+      resultEl.textContent = m.replace(/^[a-z_]+:\s*/,'') + ' Open Billing to upgrade.';
+      const b = document.createElement('button'); b.className = 'btn btn-sm btn-primary'; b.textContent = 'Go to Billing'; b.onclick = () => showPage('billing');
+      resultEl.appendChild(document.createElement('br')); resultEl.appendChild(b);
+    } else resultEl.textContent = 'The charger could not be saved: ' + m;
+    return false;
+  }
+  createdChargerId = data.id;
+  savedPassword = p.ocpp_password;
+  pendingNewCharger = null;
+  createdWasListed = listedChoice;
+  await loadAll();
+  return true;
 }
 async function runConnectionTest(){
-  if(!pendingNewCharger && !createdChargerId) return;
+  if(!createdChargerId) return;
   const runId = ++connRunId;
   const live = () => runId === connRunId;   // false once the page was reset or new details were generated
   const btn = document.getElementById('test-conn-btn');
@@ -10574,7 +10635,7 @@ async function runConnectionTest(){
   btn.disabled = true;
   resultEl.className = 'conn-result';
   resultEl.textContent = '';
-  const labels = ['Saving the charger', 'Waiting for the charger to connect', 'Checking that the charger answers'];
+  const labels = ['Charger saved', 'Waiting for the charger to connect', 'Checking that the charger answers'];
   document.getElementById('conn-steps').innerHTML = labels.map((s,i)=>`<div class="step" id="step-${i}"><div class="dot"></div><span>${s}</span></div>`).join('');
   const mark = (i, state, text) => {
     const el = document.getElementById('step-'+i);
@@ -10599,39 +10660,6 @@ async function runConnectionTest(){
     // 1. The record has to exist BEFORE the charger connects: the server rejects unknown chargers.
     //    It starts as Offline; the server flips it to Available when the charger really boots.
     mark(0,'active');
-    if(!createdChargerId){
-      const p = pendingNewCharger;
-      const listedChoice = document.getElementById('new-charger-public').checked && siteHasTariff(p.location_id);
-      const { data, error } = await sb.from('chargers').insert({
-        location_id: p.location_id,
-        name: p.name,
-        ocpp_id: p.ocpp_id,
-        vendor: null,                    // the charger reports its real vendor itself
-        connector: p.connector,
-        power_kw: p.power_kw,
-        ocpp_version: p.ocpp_version,
-        ocpp_password: p.ocpp_password,
-        status: 'Offline',
-        current_kw: 0,
-        listed_publicly: listedChoice
-      }).select().single();
-      if(!live()) return;
-      if(error || !data){
-        const m = error?.message || 'Unknown error';
-        if(/plan_limit_chargers|account_locked|plan_required/.test(m)){
-          mark(0,'warn','Your plan does not allow another charger');
-          finish(m.replace(/^[a-z_]+:\s*/,'') + ' Open Billing to upgrade.', false);
-          const b = document.createElement('button'); b.className = 'btn btn-sm btn-primary'; b.textContent = 'Go to Billing'; b.onclick = () => showPage('billing');
-          document.getElementById('conn-result').appendChild(document.createElement('br')); document.getElementById('conn-result').appendChild(b);
-        } else { mark(0,'warn','Could not save the charger'); finish(m, false); }
-        return;
-      }
-      createdChargerId = data.id;
-      pendingNewCharger = null;
-      createdWasListed = listedChoice;
-      await loadAll();
-      if(!live()) return;
-    }
     mark(0,'done', createdWasListed ? 'Charger saved, Offline until it connects' : 'Charger saved (hidden from the public site), Offline until it connects');
 
     // 2. Wait for a REAL connection (checked on the OCPP server), never a timer.
@@ -10676,7 +10704,7 @@ async function runConnectionTest(){
   } finally {
     if(live()){
       btn.disabled = false;
-      btn.textContent = createdChargerId ? 'Test again' : 'Save and test connection';
+      btn.textContent = 'Test again';
     }
   }
 }
