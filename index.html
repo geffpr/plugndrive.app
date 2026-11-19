@@ -800,8 +800,10 @@ body.member-mode #bell-btn{display:none !important;}
 .tfx-unit{position:relative;}
 .tfx-unit input{padding-right:70px;}
 .tfx-unit span{position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:12px;color:var(--text-muted);pointer-events:none;}
-.copy-mini{border:1px solid var(--border);background:var(--surface,#fff);color:var(--text-secondary);border-radius:7px;font-size:11px;font-weight:600;padding:2px 8px;margin-left:8px;cursor:pointer;vertical-align:middle;line-height:1.5;}
+.copy-mini{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;padding:0;border:1px solid var(--border);background:var(--surface,#fff);color:var(--text-muted);border-radius:7px;margin-left:8px;cursor:pointer;vertical-align:middle;}
 .copy-mini:hover{color:var(--text);border-color:var(--text-muted);}
+.copy-mini svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;pointer-events:none;}
+.copy-mini.done{color:#1fa463;border-color:#1fa463;}
 .tf-sw{position:relative;width:38px;height:22px;flex:none;margin-top:2px;}
 .tf-sw input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer;z-index:1;}
 .tf-sw i{position:absolute;inset:0;border-radius:12px;background:#cbd5e1;transition:background .15s;}
@@ -2919,7 +2921,7 @@ body.member-mode #bell-btn{display:none !important;}
           <div class="back-link" onclick="backToRfid()">← Back to all cards</div>
           <div class="two-col">
             <div>
-              <h2 id="cad-uid" style="display:inline-block;margin-right:0;"></h2><button type="button" class="copy-mini" style="margin-left:12px;" onclick="copyUid(event, this, currentCardUid)">Copy</button>
+              <h2 id="cad-uid" style="display:inline-block;margin-right:0;"></h2><button type="button" class="copy-mini" style="margin-left:12px;" title="Copy the card code" aria-label="Copy the card code" onclick="copyUid(event, this, currentCardUid)"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg></button>
               <div style="font-size:12px;color:var(--text-muted);margin:4px 0 18px;" id="cad-sub"></div>
               <div class="card card-pad">
                 <table>
@@ -10834,11 +10836,14 @@ function cardBalanceLabel(u){
   if(!u.balanceCurrency) return '<span style="color:var(--text-muted);" title="No wallet set up yet — this card currently charges for free">Free</span>';
   return fmtMoney(u.balance||0, u.balanceCurrency);
 }
+const COPY_ICON = '<svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg>', COPY_DONE_ICON = '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 async function copyUid(ev, btn, uid){
   if(ev){ ev.stopPropagation(); ev.preventDefault(); }
-  try { await navigator.clipboard.writeText(uid); btn.textContent = 'Copied'; }
-  catch(e){ btn.textContent = 'Press Ctrl+C'; const r = document.createRange(); r.selectNodeContents(btn.previousElementSibling || btn); const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r); }
-  setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+  let ok = true;
+  try { await navigator.clipboard.writeText(uid); } catch(e){ ok = false; }
+  if(ok){ btn.innerHTML = COPY_DONE_ICON; btn.classList.add('done'); toast('Card code copied: ' + uid); }
+  else toastErr('Could not copy. Select the code and press Ctrl+C.');
+  setTimeout(() => { btn.innerHTML = COPY_ICON; btn.classList.remove('done'); }, 1500);
 }
 function renderRfid(){
   document.getElementById('rfid-list-view').style.display = 'block';
@@ -10866,7 +10871,7 @@ function renderRfid(){
   document.getElementById('rfid-body').innerHTML = rows.map(r=>{
     const u = users.find(x=>x.id===r.userId);
     const complexName = (locations.find(l=>l.id===r.complexId)||{}).name || '-';
-    return `<tr class="rowlink" onclick="openCardDetail('${r.uid}')"><td>${r.number ? r.number + ' <span style="color:var(--text-muted);font-size:12px;">' + r.uid + '</span>' : '<span>' + r.uid + '</span>'}<button type="button" class="copy-mini" onclick="copyUid(event, this, '${r.uid}')">Copy</button></td><td>${u?u.name:'-'}</td><td>${u?u.unit:'-'}</td><td>${complexName}</td>
+    return `<tr class="rowlink" onclick="openCardDetail('${r.uid}')"><td>${r.number ? r.number + ' <span style="color:var(--text-muted);font-size:12px;">' + r.uid + '</span>' : '<span>' + r.uid + '</span>'}<button type="button" class="copy-mini" title="Copy the card code" aria-label="Copy the card code" onclick="copyUid(event, this, '${r.uid}')">${COPY_ICON}</button></td><td>${u?u.name:'-'}</td><td>${u?u.unit:'-'}</td><td>${complexName}</td>
       <td><span class="badge ${r.status}">${RFID_STATUS_LABEL[r.status] || r.status}</span></td>
       <td>${cardBalanceLabel(u)}</td></tr>`;
   }).join('');
