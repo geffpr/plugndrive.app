@@ -1985,6 +1985,26 @@ body.display-mode .content{padding:26px 34px;pointer-events:none;user-select:non
             </div>
             <div class="hint" style="margin-top:8px;">0 = not included. Unlimited = no cap. Cash recharges and Guest access above still switch the My operators and Access menus on for contract clients.</div>
           </div>
+          <div id="cl-brand-panel" class="card card-pad" style="max-width:520px;margin-bottom:20px;display:none;">
+            <div class="section-title" style="margin-top:0;">Brand (white label)</div>
+            <div class="hint" style="margin-bottom:10px;">The driver site, and later the console, show this name, logo and colours when opened on the addresses below. Leave the addresses empty to keep Plug n Drive.</div>
+            <div class="form-row"><label>Brand name</label><input type="text" id="br-name" maxlength="60"></div>
+            <div class="form-row"><label>Logo address (https link to a PNG or SVG)</label><input type="url" id="br-logo" placeholder="https://" autocapitalize="none"></div>
+            <div style="display:flex;gap:14px;flex-wrap:wrap;">
+              <div class="form-row" style="flex:1 1 200px;"><label>Main colour</label><div style="display:flex;gap:8px;"><input type="color" id="br-c1" style="width:44px;padding:2px;" oninput="document.getElementById('br-c1t').value=this.value"><input type="text" id="br-c1t" maxlength="7" placeholder="#1a3260" oninput="brSyncColor('c1')"></div></div>
+              <div class="form-row" style="flex:1 1 200px;"><label>Accent colour (optional)</label><div style="display:flex;gap:8px;"><input type="color" id="br-c2" style="width:44px;padding:2px;" oninput="document.getElementById('br-c2t').value=this.value"><input type="text" id="br-c2t" maxlength="7" placeholder="#3a8fd4" oninput="brSyncColor('c2')"></div></div>
+            </div>
+            <div class="form-row"><label>Driver site address</label><input type="text" id="br-charge" placeholder="charge.theirbrand.com" autocapitalize="none"></div>
+            <div class="form-row"><label>Console address</label><input type="text" id="br-console" placeholder="console.theirbrand.com" autocapitalize="none"></div>
+            <div class="ft-row"><div class="ft-name">Show "Powered by Plug n Drive"</div><input type="checkbox" class="tg" id="br-powered" checked></div>
+            <div class="ft-row"><div class="ft-name">Brand is active</div><input type="checkbox" class="tg" id="br-active" checked></div>
+            <div style="display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap;">
+              <button class="btn btn-primary" id="br-save" onclick="saveBrand()">Save brand</button>
+              <button class="btn btn-sm" id="br-remove" onclick="removeBrand()" style="display:none;">Remove brand</button>
+              <span id="br-msg" class="hint"></span>
+            </div>
+            <div class="hint" style="margin-top:8px;">The client adds a CNAME for each address at their domain provider, and the address must also be added to the Vercel project by Plug n Drive. Saving here does not do either.</div>
+          </div>
           <div id="cl-selfserve-panel" class="card card-pad" style="max-width:420px;margin-bottom:20px;display:none;">
             <div class="section-title" style="margin-top:0;">Self-serve account</div>
             <table>
@@ -6852,6 +6872,61 @@ async function importClientCards(){
   const n = mine.filter(c=>c.status==='stock').length;
   document.getElementById('cl-cards-count').textContent = `${n} in stock, ${mine.length - n} assigned.`;
 }
+// ---------- Brand panel (Plug n Drive owner and admins, on the client page) ----------
+let brandRow = null;
+function brSyncColor(k){
+  const t = document.getElementById('br-' + k + 't').value.trim();
+  if(/^#[0-9a-fA-F]{6}$/.test(t)) document.getElementById('br-' + k).value = t;
+}
+async function renderBrandPanel(cl){
+  const box = document.getElementById('cl-brand-panel'); if(!box) return;
+  const canEdit = currentStaff && currentStaff.role === 'plugndrive_admin' && pndAccess && (pndAccess.level === 'owner' || pndAccess.level === 'admin');
+  if(!canEdit){ box.style.display = 'none'; return; }
+  box.style.display = '';
+  document.getElementById('br-msg').textContent = '';
+  const { data, error } = await sb.from('brands').select('*').eq('client_id', cl.id).maybeSingle();
+  if(cl.id !== currentClientId) return;
+  if(error){ document.getElementById('br-msg').textContent = error.message; return; }
+  brandRow = data || null;
+  const b = brandRow || {};
+  document.getElementById('br-name').value = b.name || cl.name || '';
+  document.getElementById('br-logo').value = b.logo_url || '';
+  ['c1','c2'].forEach((k, i) => { const v = (i ? b.accent_color : b.primary_color) || ''; document.getElementById('br-' + k + 't').value = v; document.getElementById('br-' + k).value = v || (i ? '#3a8fd4' : '#1a3260'); });
+  document.getElementById('br-charge').value = b.charge_host || '';
+  document.getElementById('br-console').value = b.console_host || '';
+  document.getElementById('br-powered').checked = b.show_powered_by !== false;
+  document.getElementById('br-active').checked = b.active !== false;
+  document.getElementById('br-remove').style.display = brandRow ? '' : 'none';
+}
+function brHost(v){ return String(v || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, ''); }
+async function saveBrand(){
+  const msg = document.getElementById('br-msg'); msg.textContent = '';
+  const name = document.getElementById('br-name').value.trim();
+  const logo = document.getElementById('br-logo').value.trim();
+  const c1 = document.getElementById('br-c1t').value.trim(), c2 = document.getElementById('br-c2t').value.trim();
+  const ch = brHost(document.getElementById('br-charge').value), co = brHost(document.getElementById('br-console').value);
+  if(!name){ msg.textContent = 'Enter the brand name.'; return; }
+  if(logo && !/^https:\/\/\S+$/i.test(logo)){ msg.textContent = 'The logo address must start with https://'; return; }
+  if((c1 && !/^#[0-9a-fA-F]{6}$/.test(c1)) || (c2 && !/^#[0-9a-fA-F]{6}$/.test(c2))){ msg.textContent = 'Colours look like #1a3260.'; return; }
+  const hostRe = /^[a-z0-9.-]+\.[a-z]{2,}$/;
+  if((ch && !hostRe.test(ch)) || (co && !hostRe.test(co))){ msg.textContent = 'Addresses look like charge.theirbrand.com (no https://, no path).'; return; }
+  if(ch && ch === co){ msg.textContent = 'The driver site and the console need two different addresses.'; return; }
+  const row = { client_id: currentClientId, name, logo_url: logo || null, primary_color: c1 || null, accent_color: c2 || null, charge_host: ch || null, console_host: co || null,
+    show_powered_by: document.getElementById('br-powered').checked, active: document.getElementById('br-active').checked };
+  const btn = document.getElementById('br-save'); btn.disabled = true;
+  const { data, error } = await sb.from('brands').upsert(row, { onConflict: 'client_id' }).select().maybeSingle();
+  btn.disabled = false;
+  if(error){ msg.textContent = /duplicate key|unique/i.test(error.message) ? 'That address is already used by another brand.' : error.message; toastErr('Brand not saved'); return; }
+  brandRow = data; document.getElementById('br-remove').style.display = '';
+  toast('Brand saved');
+}
+async function removeBrand(){
+  if(!brandRow || !confirm('Remove this brand? The client goes back to Plug n Drive branding.')) return;
+  const { error } = await sb.from('brands').delete().eq('client_id', currentClientId);
+  if(error){ toastErr(error.message); return; }
+  brandRow = null; document.getElementById('br-remove').style.display = 'none'; toast('Brand removed');
+  renderBrandPanel(clients.find(x => x.id === currentClientId) || { id: currentClientId, name: '' });
+}
 // ---------- Features panel (Plug n Drive admin, on the client page) ----------
 const FT_BOOLS = [['reporting','Reporting'],['load_management','Load management'],['tariff_advanced','Day and night tariffs, idle fee'],['sms_activation','Automatic SMS activation'],['resident_billing','Resident billing (coming soon)'],['white_label','White label (coming soon)'],['campaigns','Campaigns (needs API keys)'],['fleet_control','Fleet Control']];
 const FT_LIMITS = [['max_chargers','Chargers'],['api_keys','API keys'],['access_groups','Access groups'],['operator_accounts','Operator accounts']];
@@ -7077,6 +7152,7 @@ function openClient(id, opts){
   document.getElementById('cl-billing-demo-label').textContent = cl.billingDemo ? 'On' : 'Off';
   document.getElementById('cl-billing-demo-row').style.display = cl.accountType === 'self_serve' ? 'none' : '';
   renderFeaturesPanel(cl);
+  renderBrandPanel(cl);
   renderClientAdminLoginPanel(id);
   renderClientLedgerBalance(id);
   renderSelfServePanel(cl);
