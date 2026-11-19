@@ -736,6 +736,22 @@ body.member-mode #bell-btn{display:none !important;}
 .sm-title{display:none;padding:2px 14px 10px;font-weight:800;font-size:15px;color:var(--navy);}
 
 /* team rights: one row per section with a 3-way switch */
+.rc-hint{display:none;font-size:12px;color:var(--text-muted);margin:-4px 0 8px;}
+.rc-row{display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid var(--border);background:#fff;}
+.rc-row:last-child{border-bottom:0;}
+.rc-row .rc-handle{display:none;cursor:grab;color:#9aa8c2;font-size:16px;line-height:1;letter-spacing:-3px;user-select:none;padding:4px 6px;}
+.rc-row .rc-name{flex:1;min-width:0;}
+.rc-row .rc-group{font-size:11px;color:var(--text-muted);}
+.rc-row.off .rc-name{color:var(--text-muted);}
+.rc-row.dragging{opacity:.45;}
+.rc-row.drop-before{box-shadow:0 -2px 0 0 #3a8fd4;}
+.rc-row.drop-after{box-shadow:0 2px 0 0 #3a8fd4;}
+@media (min-width:1100px){
+  #rpt-customize-panel{max-width:760px !important;}
+  .rc-hint{display:block;}
+  .rc-row .rc-handle{display:block;}
+  .rc-row .rc-arrows{display:none;}
+}
 .pnd-ro .page.active .btn-primary, .pnd-ro .page.active [data-write]{display:none !important;}
 .team-row{display:flex;justify-content:space-between;align-items:center;gap:10px 16px;flex-wrap:wrap;padding:10px 0;border-bottom:1px solid var(--border);}
 .team-row-text{flex:1 1 220px;min-width:0;}
@@ -1294,7 +1310,11 @@ body.member-mode #bell-btn{display:none !important;}
           <button class="btn btn-sm" style="margin-left:auto;" onclick="openRptCustomize()">Customize</button>
         </div>
         <div id="rpt-customize-panel" class="card card-pad" style="display:none;max-width:420px;margin-bottom:20px;">
-          <div style="font-weight:600;margin-bottom:10px;">Choose what to show, and in what order</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+            <div style="font-weight:600;">Choose what to show, and in what order</div>
+            <div style="display:flex;gap:6px;"><button class="btn btn-sm" onclick="rptCustomizeAll(true)">Show all</button><button class="btn btn-sm" onclick="rptCustomizeAll(false)">Hide all</button><button class="btn btn-sm" onclick="rptCustomizeReset()">Reset</button></div>
+          </div>
+          <div class="rc-hint">Drag a report by its handle to move it. Switch it off to hide it.</div>
           <div id="rpt-customize-list"></div>
           <div style="display:flex;gap:8px;margin-top:12px;">
             <button class="btn btn-primary btn-sm" onclick="saveRptCustomize()">Save</button>
@@ -7874,21 +7894,54 @@ function applyRptLayout(){
     if(el) el.style.display = 'none';
   });
 }
+const RPT_BLOCK_GROUP = { kpis:'Revenue', fx_margin:'Revenue', revenue_chart:'Revenue', bysite_table:'Revenue', kwh_chart:'Usage', paymethod_chart:'Usage', weekday_chart:'Usage', cashenergy_chart:'Usage' };
+function rptBlockGroup(k){ return RPT_BLOCK_GROUP[k] || 'Fleet'; }
+function rptRowHtml(key, on){
+  return `<div class="rc-row${on?'':' off'}" data-key="${key}">
+      <span class="rc-handle" title="Drag to move" aria-hidden="true">&#8942;&#8942;</span>
+      <input type="checkbox" class="tg" ${on?'checked':''} onchange="this.closest('.rc-row').classList.toggle('off', !this.checked)" aria-label="Show ${RPT_BLOCK_LABELS[key]}">
+      <span class="rc-name">${RPT_BLOCK_LABELS[key]}</span><span class="rc-group">${rptBlockGroup(key)}</span>
+      <span class="rc-arrows"><button class="btn btn-sm" onclick="moveRptBlock('${key}',-1)" aria-label="Move up">↑</button> <button class="btn btn-sm" onclick="moveRptBlock('${key}',1)" aria-label="Move down">↓</button></span>
+    </div>`;
+}
+function renderRptCustomizeList(order, available){
+  const hidden = available.filter(b => !order.includes(b));
+  document.getElementById('rpt-customize-list').innerHTML = order.map(k => rptRowHtml(k, true)).join('') + hidden.map(k => rptRowHtml(k, false)).join('');
+  rptBindDrag();
+}
 function openRptCustomize(){
   const available = rptAvailableBlocks();
-  const order = (rptLayout || rptDefaultOrder()).filter(b => available.includes(b));
-  const hidden = available.filter(b => !order.includes(b));
-  const full = [...order, ...hidden];
-  document.getElementById('rpt-customize-list').innerHTML = full.map((key, i) => `
-    <div style="display:flex;align-items:center;gap:8px;padding:4px 0;" data-key="${key}">
-      <input type="checkbox" ${order.includes(key)?'checked':''} onchange="toggleRptBlockChecked('${key}')">
-      <span style="flex:1;">${RPT_BLOCK_LABELS[key]}</span>
-      <button class="btn btn-sm" onclick="moveRptBlock('${key}',-1)">↑</button>
-      <button class="btn btn-sm" onclick="moveRptBlock('${key}',1)">↓</button>
-    </div>`).join('');
+  renderRptCustomizeList((rptLayout || rptDefaultOrder()).filter(b => available.includes(b)), available);
   document.getElementById('rpt-customize-panel').style.display = 'block';
 }
-function toggleRptBlockChecked(key){ /* state read directly from DOM on save */ }
+function rptCustomizeAll(on){
+  document.querySelectorAll('#rpt-customize-list .rc-row').forEach(r => { r.querySelector('input').checked = on; r.classList.toggle('off', !on); });
+}
+function rptCustomizeReset(){ renderRptCustomizeList(rptDefaultOrder(), rptAvailableBlocks()); }
+// Drag and drop on desktop: a row can only be picked up by its handle.
+function rptBindDrag(){
+  const list = document.getElementById('rpt-customize-list');
+  let dragged = null;
+  const clear = () => list.querySelectorAll('.drop-before,.drop-after').forEach(r => r.classList.remove('drop-before','drop-after'));
+  list.querySelectorAll('.rc-row').forEach(row => {
+    row.querySelector('.rc-handle').addEventListener('mousedown', () => { row.draggable = true; });
+    row.addEventListener('dragstart', e => { dragged = row; row.classList.add('dragging'); if(e.dataTransfer){ e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', row.dataset.key); } });
+    row.addEventListener('dragend', () => { row.draggable = false; row.classList.remove('dragging'); clear(); dragged = null; });
+    row.addEventListener('dragover', e => {
+      if(!dragged || dragged === row) return;
+      e.preventDefault(); clear();
+      const r = row.getBoundingClientRect();
+      row.classList.add(e.clientY < r.top + r.height / 2 ? 'drop-before' : 'drop-after');
+    });
+    row.addEventListener('drop', e => {
+      if(!dragged || dragged === row) return;
+      e.preventDefault();
+      const r = row.getBoundingClientRect();
+      if(e.clientY < r.top + r.height / 2) list.insertBefore(dragged, row); else list.insertBefore(dragged, row.nextSibling);
+      clear();
+    });
+  });
+}
 function moveRptBlock(key, dir){
   const list = document.getElementById('rpt-customize-list');
   const rows = [...list.children];
@@ -7909,6 +7962,7 @@ async function saveRptCustomize(){
   if(error){ toastErr('Could not save: ' + error.message); return; }
   rptLayout = toSave;
   document.getElementById('rpt-customize-panel').style.display = 'none';
+  toast('Report layout saved');
   applyRptLayout();
   if(fleetWanted() && !rptFleetRows) loadReporting();   // fleet figures were not fetched until a fleet block was chosen
 }
