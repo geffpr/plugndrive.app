@@ -744,6 +744,24 @@ body.display-mode .app{grid-template-columns:1fr !important;}
 body.display-mode .sidebar, body.display-mode .topbar, body.display-mode #bottom-nav, body.display-mode #mobile-menu-toggle, body.display-mode #sidebar-backdrop,
 body.display-mode #sup-fab, body.display-mode #sup-panel, body.display-mode #trial-bar, body.display-mode #req-banner, body.display-mode #bell-btn, body.display-mode #pnd-more-sheet{display:none !important;}
 body.display-mode .main{padding-top:0 !important;}
+/* Live screen, dark theme: same page, night colours (the rest of the console stays light) */
+body.display-mode.ls-dark{--bg:#0b1426;--surface:#13203a;--border:#27375a;--text:#e6ecf7;--text-secondary:#a9b6cc;--text-muted:#8393ad;--blue-light:#16304f;--blue-mid:#24507c;--red-light:#3a1d22;--amber-light:#3a2c14;background:#0b1426;color:#e6ecf7;}
+body.display-mode.ls-dark .content{--navy:#e6ecf7;color:#e6ecf7;}
+body.display-mode.ls-dark .card, body.display-mode.ls-dark .kpi, body.display-mode.ls-dark .btn, body.display-mode.ls-dark input, body.display-mode.ls-dark select,
+body.display-mode.ls-dark [style*="background:#fff"], body.display-mode.ls-dark [style*="background: #fff"]{background:#13203a !important;color:#e6ecf7;border-color:#27375a;}
+body.display-mode.ls-dark .kpi{background:#13203a !important;}
+body.display-mode.ls-dark th{color:#8393ad;}
+body.display-mode.ls-dark td{color:#dbe4f3;}
+body.display-mode.ls-dark [style*="color:#1a3260"], body.display-mode.ls-dark [style*="color:var(--navy)"]{color:#e6ecf7 !important;}
+body.display-mode.ls-dark #disp-bar .btn{background:#13203a;color:#e6ecf7;border-color:#27375a;}
+body.display-mode.ls-dark [style*="background:#fdecea"]{background:#3a1d22 !important;}
+body.display-mode.ls-dark [style*="background:#fdecea"] td{color:#f1d5d8;}
+body.display-mode.ls-dark .badge.avail{background:#12363f !important;color:#6fd0df !important;}
+body.display-mode.ls-dark .badge.charging{background:#16304f !important;color:#7cc2f0 !important;}
+body.display-mode.ls-dark .badge.faulted{background:#4a2027 !important;color:#ff8a8a !important;}
+body.display-mode.ls-dark .badge.offline{background:#222d45 !important;color:#9aa8c2 !important;}
+body.display-mode.ls-dark .badge.active{background:#16304f !important;color:#7cc2f0 !important;}
+body.display-mode.ls-dark tr.rowlink:hover{background:#17274a;}
 body.display-mode .content{padding:26px 34px;pointer-events:none;user-select:none;}
 .rc-hint{display:none;font-size:12px;color:var(--text-muted);margin:-4px 0 8px;}
 .rc-row{display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid var(--border);background:#fff;}
@@ -1199,7 +1217,7 @@ body.display-mode .content{padding:26px 34px;pointer-events:none;user-select:non
     </div>
     <button type="button" id="sup-fab" aria-expanded="false" aria-controls="sup-panel" aria-label="Help"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.5-4.6A8 8 0 1 1 21 12z"/><path d="M9.5 10h5M9.5 13.5h3"/></svg><span>Help</span></button>
   </div>
-  <div id="disp-bar" aria-hidden="true"><button type="button" class="btn btn-sm" onclick="displayFullscreen()">Full screen</button><button type="button" class="btn btn-sm" onclick="exitDisplayMode()">Exit display mode (Esc)</button></div>
+  <div id="disp-bar" aria-hidden="true"><button type="button" class="btn btn-sm" id="disp-theme" onclick="toggleLiveTheme()">Dark</button><button type="button" class="btn btn-sm" onclick="displayFullscreen()">Full screen</button><button type="button" class="btn btn-sm" onclick="exitDisplayMode()">Exit live screen (Esc)</button></div>
   <nav class="bottom-nav" id="bottom-nav" aria-label="Main navigation">
     <button type="button" class="bn-item" data-page="sites" onclick="showPage('sites')"><svg viewBox="0 0 24 24"><path d="M3 21V8l7-4 7 4v13"/><path d="M17 21V11l4 2v8"/><path d="M8 21v-5h4v5"/></svg>Sites</button>
     <button type="button" class="bn-item" data-page="chargers" onclick="showPage('chargers')"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg>Chargers</button>
@@ -1258,7 +1276,7 @@ body.display-mode .content{padding:26px 34px;pointer-events:none;user-select:non
     <div class="topbar">
       <div class="topbar-left"><div class="topbar-title" id="topbar-title">Dashboard</div><span class="topbar-hello" id="topbar-hello"></span></div>
       <div class="topbar-right">
-        <button type="button" class="btn btn-sm" id="disp-btn" onclick="openDisplayMode()" style="display:none;" title="Open this page full screen, without the menu, updating by itself">Display mode</button>
+        <button type="button" class="btn btn-sm" id="disp-btn" onclick="openDisplayMode()" style="display:none;" title="Open this page full screen, without the menu, updating by itself">Live screen</button>
         <div style="font-size:12px;color:var(--text-muted);">Amounts shown per site currency</div>
         <button type="button" class="bell" id="bell-btn" aria-label="Notifications" aria-haspopup="dialog" aria-expanded="false" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6.5 2 6.5H4S6 14 6 9z"/><path d="M10 19a2 2 0 0 0 4 0"/></svg><span class="bell-count" id="bell-count" hidden></span></button>
       </div>
@@ -3950,6 +3968,7 @@ async function enterAppInner(){
   if(isTeam()) await loadTeamContext();
   await loadMyFeatures();   // also re-applies the menu
   updateSidebarIdentity();
+  applyLiveTheme();
   routeFromLocation();
   startRealtime();
   if(DISPLAY_MODE) startDisplayMode();
@@ -10410,6 +10429,21 @@ function toast(msg, kind){
 const DISPLAY_MODE = new URLSearchParams(location.search).get('display') === '1';
 const DISPLAY_PAGES = ['dashboard','chargers','sessions','reporting'];
 if(DISPLAY_MODE) document.body.classList.add('display-mode');
+let liveDark = false;
+try { liveDark = localStorage.getItem('pnd-live-theme') === 'dark'; } catch(e){}
+if(DISPLAY_MODE){ const q = new URLSearchParams(location.search).get('theme'); if(q === 'dark') liveDark = true; else if(q === 'light') liveDark = false; }
+function applyLiveTheme(){
+  if(!DISPLAY_MODE) return;
+  document.body.classList.toggle('ls-dark', liveDark);
+  const b = document.getElementById('disp-theme'); if(b) b.textContent = liveDark ? 'Light' : 'Dark';
+  if(window.Chart){ Chart.defaults.color = liveDark ? '#c7d2e6' : '#666'; Chart.defaults.borderColor = liveDark ? 'rgba(255,255,255,.12)' : 'rgba(0,0,0,.1)'; }
+}
+function toggleLiveTheme(){
+  liveDark = !liveDark;
+  try { localStorage.setItem('pnd-live-theme', liveDark ? 'dark' : 'light'); } catch(e){}
+  applyLiveTheme();
+  if(document.querySelector('.page.active')?.id === 'page-reporting') loadReporting();   // charts take their colours when drawn
+}
 function updateDisplayBtn(id){
   const b = document.getElementById('disp-btn'); if(!b) return;
   const ok = !DISPLAY_MODE && !currentMember && currentStaff && currentStaff.role !== 'operator' && DISPLAY_PAGES.includes(id);
@@ -10417,7 +10451,7 @@ function updateDisplayBtn(id){
 }
 function openDisplayMode(){
   const pg = document.querySelector('.page.active'); const id = pg ? pg.id.replace('page-', '') : 'dashboard';
-  window.open('/' + (DISPLAY_PAGES.includes(id) ? id : 'dashboard') + '?display=1', '_blank');
+  window.open('/' + (DISPLAY_PAGES.includes(id) ? id : 'dashboard') + '?display=1' + (liveDark ? '&theme=dark' : ''), '_blank');
 }
 function exitDisplayMode(){ location.href = location.pathname; }
 function displayFullscreen(){
@@ -10426,6 +10460,7 @@ function displayFullscreen(){
   if(d.requestFullscreen) d.requestFullscreen().catch(() => {});
 }
 function startDisplayMode(){
+  applyLiveTheme();
   const bar = document.getElementById('disp-bar'); let t = null;
   const wake = () => { bar.classList.add('show'); clearTimeout(t); t = setTimeout(() => bar.classList.remove('show'), 4000); };
   ['mousemove','touchstart','click'].forEach(ev => document.addEventListener(ev, wake, { passive:true }));
