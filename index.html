@@ -12253,7 +12253,54 @@ async function submitActivation(){
   }
 }
 
+// ---------------- WHITE LABEL (console) ----------------
+// Opened on a client's own console address, the console shows that client's name, logo and colours.
+// On plugndrive.co.za, a preview address or anywhere unknown it stays Plug n Drive.
+let BRAND = null;
+function brDarken(hex, f){ const n = parseInt(hex.slice(1), 16); const c = v => Math.max(0, Math.round(v * f)); return '#' + [(n >> 16) & 255, (n >> 8) & 255, n & 255].map(v => c(v).toString(16).padStart(2, '0')).join(''); }
+async function loadConsoleBrand(){
+  const override = new URLSearchParams(location.search).get('brandhost');
+  const host = (override || location.hostname).toLowerCase();
+  if(!override && (/(^|\.)plugndrive\.co\.za$/.test(host) || host === 'localhost' || /\.vercel\.app$/.test(host) || !host)) return;
+  try {
+    const r = await Promise.race([sb.rpc('brand_for_host', { p_host: host }), new Promise(res => setTimeout(() => res({ data: null }), 2500))]);
+    if(r && r.data && r.data.name && !/Plug n Drive/i.test(r.data.name)) applyConsoleBrand(r.data);
+  } catch(e) { /* no brand: stay on Plug n Drive */ }
+}
+function brReplaceText(root){
+  const name = BRAND.name;
+  const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, { acceptNode: n => {
+    if(!n.nodeValue.includes('Plug n Drive')) return NodeFilter.FILTER_REJECT;
+    const p = n.parentElement; if(!p || p.closest('script,style,textarea,.powered-by')) return NodeFilter.FILTER_REJECT;
+    return NodeFilter.FILTER_ACCEPT; } });
+  const hits = []; while(w.nextNode()) hits.push(w.currentNode);
+  hits.forEach(n => { n.nodeValue = n.nodeValue.replace(/Plug n Drive/g, name); });
+}
+function applyConsoleBrand(b){
+  BRAND = b;
+  const root = document.documentElement.style;
+  if(b.primary_color){ root.setProperty('--navy', b.primary_color); root.setProperty('--text', b.primary_color); }
+  if(b.accent_color){ root.setProperty('--blue', b.accent_color); root.setProperty('--blue-dark', brDarken(b.accent_color, .75)); }
+  document.title = b.name + ' | Console';
+  ['logo-loading','logo-login','logo-sidebar','logo-activate','logo-operator'].forEach(id => {
+    const img = document.getElementById(id); if(!img) return;
+    if(b.logo_url){ img.src = b.logo_url; img.alt = b.name; img.style.cssText += ';background:#fff;border-radius:12px;padding:8px 12px;max-width:180px;height:auto;'; }
+    else { const sp = document.createElement('div'); sp.id = id; sp.className = 'brand-name-text'; sp.textContent = b.name; img.replaceWith(sp); }
+  });
+  document.querySelectorAll('.brand-sub').forEach(el => { el.textContent = 'CONSOLE'; });
+  const dark = b.primary_color ? brDarken(b.primary_color, .72) : null;
+  const style = document.createElement('style');
+  style.textContent = (b.primary_color ? '.sidebar{background:' + dark + ' !important;}.login-brand{background:' + dark + ' !important;}.login-btn,.btn-primary{background:' + b.primary_color + ' !important;border-color:' + b.primary_color + ' !important;}.login-card::before{background:linear-gradient(90deg,' + b.primary_color + ',' + (b.accent_color || b.primary_color) + ') !important;}' : '') + '.brand-name-text{font-weight:800;font-size:20px;color:#fff;letter-spacing:-.01em;padding:4px 8px 16px;}#logo-loading.brand-name-text{color:var(--navy);font-size:26px;}.brand-pw{margin-top:8px;padding:0 8px;font-size:11px;color:rgba(255,255,255,.55);}';
+  document.head.appendChild(style);
+  const brandBox = document.querySelector('.sidebar .brand');
+  if(brandBox && b.show_powered_by){ const d = document.createElement('div'); d.className = 'brand-pw powered-by'; d.textContent = 'Powered by Plug n Drive'; brandBox.appendChild(d); }
+  brReplaceText(document.body);
+  new MutationObserver(muts => { muts.forEach(m => { m.addedNodes.forEach(n => { if(n.nodeType === 1) brReplaceText(n); else if(n.nodeType === 3 && n.parentElement) brReplaceText(n.parentElement); }); if(m.type === 'characterData' && m.target.parentElement) brReplaceText(m.target.parentElement); }); })
+    .observe(document.body, { childList: true, subtree: true, characterData: true });
+}
+
 (async function init(){
+  await loadConsoleBrand();
   if(location.pathname.startsWith('/activate')){
     document.getElementById('activate-screen').style.display = 'flex';
     try { const qc = new URLSearchParams(location.search).get('code'); if(qc && /^\d{4,10}$/.test(qc)) document.getElementById('activate-code').value = qc; } catch(e) {}
