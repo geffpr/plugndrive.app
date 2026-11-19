@@ -728,6 +728,12 @@ body.member-mode #bell-btn{display:none !important;}
   .rc-sit td.sm-cell{grid-column:4;grid-row:1/3;align-self:center;width:auto;}
 }
 .sm-title{display:none;padding:2px 14px 10px;font-weight:800;font-size:15px;color:var(--navy);}
+
+/* toast: short confirmation or error, bottom centre, disappears by itself */
+#pnd-toast{position:fixed;left:50%;width:max-content;bottom:28px;transform:translate(-50%,12px);max-width:min(440px,calc(100vw - 32px));background:#1a3260;color:#fff;font-size:14px;line-height:1.4;padding:11px 16px 11px 14px;border-radius:10px;box-shadow:0 8px 24px rgba(26,50,96,.28);display:flex;align-items:center;gap:10px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:10000;}
+#pnd-toast.show{opacity:1;transform:translate(-50%,0);}
+#pnd-toast.err{background:#a93226;}
+#pnd-toast svg{flex:none;width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;}
 </style>
 
 <link rel="icon" href="/favicon.ico" sizes="48x48">
@@ -9727,6 +9733,23 @@ async function archiveCampaignDraft(btn){
 }
 
 
+
+// Small confirmation or error message at the bottom of the screen (replaces the browser pop-up).
+let toastTimer = null;
+function toast(msg, kind){
+  let el = document.getElementById('pnd-toast');
+  if(!el){ el = document.createElement('div'); el.id = 'pnd-toast'; el.setAttribute('role', 'status'); el.setAttribute('aria-live', 'polite'); document.body.appendChild(el); }
+  const icon = kind === 'error'
+    ? '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/></svg>'
+    : '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+  el.className = kind === 'error' ? 'err' : '';
+  el.innerHTML = icon + '<span>' + escHtml(msg) + '</span>';
+  void el.offsetWidth;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), kind === 'error' ? 6000 : 3500);
+}
+
 // ---------------- TEAM ACCESS ----------------
 // A team member is a colleague of the client admin with their own login and a list of rights per section
 // (hidden / view / view and manage). The database enforces every one of them; the menu below only avoids
@@ -9823,20 +9846,23 @@ async function submitTeamForm(){
   const r = await teamCall(teamEditing ? { action:'update', staffId: teamEditing.id, name, rights, locationId } : { action:'invite', name, email, rights, locationId });
   btn.disabled = false;
   if(r.error){ err.textContent = r.error; return; }
-  if(!teamEditing && r.data && r.data.mail === 'failed') alert('The team member was created, but the invitation e-mail could not be sent. Use "Resend invite" to try again.');
+  if(!teamEditing && r.data && r.data.mail === 'sent') toast('Invitation sent to ' + email);
+  else if(teamEditing) toast('Changes saved');
+  if(!teamEditing && r.data && r.data.mail === 'failed') toast('Team member added, but the invitation e-mail could not be sent. Use Resend invite to try again.', 'error');
   closeTeamForm(); renderTeam();
 }
 async function resendTeamInvite(staffId, btn){
   if(btn) btn.disabled = true;
   const r = await teamCall({ action:'resend', staffId });
   if(btn) btn.disabled = false;
-  alert(r.error ? r.error : 'Invitation sent again.');
+  if(r.error) toast(r.error, 'error'); else toast('Invitation sent again');
 }
 async function removeTeamMember(staffId){
   const m = teamList.find(x => x.id === staffId);
   if(!confirm('Remove ' + (m ? m.name : 'this person') + '? Their access ends immediately.')) return;
   const r = await teamCall({ action:'remove', staffId });
-  if(r.error){ alert(r.error); return; }
+  if(r.error){ toast(r.error, 'error'); return; }
+  toast('Team member removed');
   renderTeam();
 }
 
