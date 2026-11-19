@@ -5395,7 +5395,8 @@ function renderChargers(){
       return { key, name: cl ? cl.name : 'No client', cs, hot: cs.filter(c => rank(c) === 1).length, live: cs.filter(c => c.status === 'Charging').length };
     }).sort((x, y) => (y.hot > 0) - (x.hot > 0) || (y.live > 0) - (x.live > 0) || x.name.localeCompare(y.name));
     list.forEach(g => {
-      const open = chgGroupOpen(g.key, g.hot > 0 || g.live > 0);
+      // A filter is on: the person is looking for something, so never hide the matches in a closed drawer.
+      const open = (cf !== 'all' || sf !== 'all' || vf !== 'all') ? true : chgGroupOpen(g.key, g.hot > 0 || g.live > 0);
       html += `<tr class="rowlink" style="background:var(--bg,#f5f7fa);" onclick="toggleChgGroup('${escHtml(g.key)}', ${open ? 'false' : 'true'})"><td colspan="7" style="font-weight:600;font-size:13px;padding:10px 16px;">` +
         `${open ? '▼' : '▶'} ${escHtml(g.name)} <span style="font-weight:400;color:var(--text-secondary);">· ${g.cs.length} charger${g.cs.length > 1 ? 's' : ''}` +
         `${g.live ? ', ' + g.live + ' charging' : ''}${g.hot ? ', <span style="color:var(--red);">' + g.hot + ' to deal with</span>' : ''}</span></td></tr>`;
