@@ -782,6 +782,10 @@ body.member-mode #bell-btn{display:none !important;}
   #fleet-sched-body > .section-title{grid-column:2;grid-row:1;align-self:start;margin-top:0 !important;}
   #fleet-sched-body > .card:last-child{grid-column:2;grid-row:1 / span 3;margin-top:34px;}
   #fleet-search{min-width:360px;}
+  #page-addclient .ac-card{max-width:none !important;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));column-gap:44px;align-items:start;}
+  #page-addclient .ac-title{display:block;font-weight:700;font-size:14px;margin:0 0 12px;padding-bottom:8px;border-bottom:1px solid var(--border);}
+  #page-addclient .ac-card > .btn, #page-addclient .ac-card > #new-client-error{grid-column:1 / -1;}
+  #page-addclient #addclient-submit-btn{width:auto;justify-self:start;margin-top:8px;}
   .cols-auto{column-width:440px;column-gap:20px;}
   .cols-auto > .card,.cols-auto > div[class*="card"]{max-width:none !important;break-inside:avoid;}
   .cols-auto > .section-title{break-after:avoid-column;}
@@ -812,6 +816,7 @@ body.member-mode #bell-btn{display:none !important;}
 .copy-mini:hover{color:var(--text);border-color:var(--text-muted);}
 .copy-mini svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;pointer-events:none;}
 .copy-mini.done{color:#1fa463;border-color:#1fa463;}
+.ac-title{display:none;}
 .tg{-webkit-appearance:none;appearance:none;position:relative;display:inline-block;width:36px !important;height:21px !important;flex:none !important;margin:0 !important;padding:0 !important;border:0 !important;border-radius:12px !important;background:#cbd5e1;cursor:pointer;vertical-align:middle;transition:background .15s;box-shadow:none !important;}
 .tg:after{content:"";position:absolute;top:3px;left:3px;width:15px;height:15px;border-radius:50%;background:#fff;transition:left .15s;box-shadow:0 1px 2px rgba(0,0,0,.25);}
 .tg:checked{background:#1fa463;}
@@ -2007,7 +2012,8 @@ body.member-mode #bell-btn{display:none !important;}
       <!-- ADD CLIENT -->
       <div class="page" id="page-addclient">
         <div class="section-title" id="addclient-title">New client details</div>
-        <div class="card card-pad" style="max-width:520px;">
+        <div class="card card-pad ac-card" style="max-width:520px;">
+          <div class="ac-group"><div class="ac-title">Company</div>
           <div class="form-row">
             <label>Company name</label>
             <input type="text" id="new-client-name" placeholder="e.g. Tafelsee Body Corporate">
@@ -2023,6 +2029,8 @@ body.member-mode #bell-btn{display:none !important;}
               <option>Other</option>
             </select>
           </div>
+          </div>
+          <div class="ac-group"><div class="ac-title">Contact and address</div>
           <div class="form-row">
             <label>Contact name</label>
             <input type="text" id="new-client-contact-name">
@@ -2039,12 +2047,14 @@ body.member-mode #bell-btn{display:none !important;}
             <label>Address (start typing for suggestions)</label>
             <input type="text" id="new-client-address">
           </div>
+          </div>
+          <div class="ac-group"><div class="ac-title">Contract and commission</div>
           <div class="form-row">
             <label>Contract start date</label>
             <input type="date" id="new-client-start-date">
           </div>
           <div class="form-row">
-            <label>Negotiated commission — the % Plug n Drive keeps (%)</label>
+            <label>Negotiated commission: the % Plug n Drive keeps (%)</label>
             <input type="number" id="new-client-commission-rate" placeholder="e.g. 5" value="0">
           </div>
           <div class="form-row">
@@ -2054,6 +2064,7 @@ body.member-mode #bell-btn{display:none !important;}
           <div class="form-row">
             <label>Commission duration, in months (leave blank for indefinite)</label>
             <input type="number" id="new-client-commission-duration" placeholder="e.g. 12">
+          </div>
           </div>
           <button class="btn btn-primary btn-block" id="addclient-submit-btn" onclick="submitNewClient()">Create client</button>
           <div id="new-client-error" style="color:var(--red, #c0392b);font-size:12px;margin-top:8px;"></div>
