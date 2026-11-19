@@ -1162,6 +1162,11 @@ body.member-mode #bell-btn{display:none !important;}
           <div class="kpi"><div class="kpi-label">Needs attention</div><div class="kpi-value red" id="kpi-attention">-</div></div>
         </div>
 
+        <div id="todo-block" style="display:none;">
+          <div class="section-title">To deal with</div>
+          <div class="card" id="todo-card"></div>
+        </div>
+
         <div class="section-title">All complexes</div>
         <div class="card">
           <table class="rc rc-dsi">
@@ -4487,7 +4492,7 @@ async function loadAll(){
   updateTariffAlerts();
   refreshPaymentAlerts();
   refreshPhotoAlerts();
-  refreshChargerHealth();
+  refreshChargerHealth(); refreshChargerTodo();
 }
 
 // ---------------- Live updates (Supabase Realtime) ----------------
@@ -5076,7 +5081,7 @@ function showPage(id, opts){
   if(id==='tariffs') renderTariffs();
   if(id==='addcharger') renderAddCharger();
   if(id==='addsite') renderAddSite();
-  if(id==='dashboard'){ renderDashboard(); renderOnboarding(); refreshChargerHealth(); }
+  if(id==='dashboard'){ renderDashboard(); renderOnboarding(); refreshChargerHealth(); refreshChargerTodo(); }
   if(id==='payments') loadPayoutAdmin();
   if(id==='billing') renderBilling();
   if(id==='clients') renderClients();
@@ -5173,6 +5178,7 @@ function renderDashboard(){
   document.getElementById('kpi-chargers').textContent = chargers.filter(c=>!isArchivedLoc(c.locationId)).length;
   document.getElementById('kpi-charging').textContent = chargers.filter(c=>c.status==='Charging').length;
   document.getElementById('kpi-attention').textContent = chargers.filter(chargerNeedsAttention).length;
+  renderTodo();
 
   const roots = activeRoots();
   document.getElementById('dash-sites-body').innerHTML = roots.map(r=>{
@@ -5412,6 +5418,56 @@ async function refreshChargerHealth(){
     if(rtPageIs('dashboard')) renderDashboard();
     if(currentChargerId && document.getElementById('charger-detail-view') && document.getElementById('charger-detail-view').style.display === 'block') renderChargerHealth();
   }catch(e){ /* health is informational only */ }
+}
+// ---- "To deal with": what the tool thinks needs a person, from the database (charger_attention) ----
+let chargerTodo = [];
+async function refreshChargerTodo(){
+  try{
+    const { data, error } = await sb.rpc('charger_attention');
+    if(error || !Array.isArray(data)) return;
+    chargerTodo = data;
+    if(rtPageIs('dashboard')) renderTodo();
+  }catch(e){ /* suggestions are informational only */ }
+}
+function todoAdvice(action){
+  const pnd = isPndAdmin();
+  switch(action){
+    case 'out_of_service': return pnd ? 'Take it out of service until it is repaired.' : 'Contact Plug n Drive: this charger needs a technician.';
+    case 'check_power_network': return 'Check the power supply and the internet connection at the charger.';
+    case 'refresh': return 'Refresh the status. If it stays wrong, restart the charger.';
+    case 'check_session': return 'Check this charge and stop it if the car has left.';
+    case 'restart_or_cable': return 'Check the cable, then restart the charger.';
+    case 'check_cable': return 'Check the cable and the car connection, then try a charge.';
+    case 'set_tariff': return 'Set a price so customers can charge.';
+    default: return '';
+  }
+}
+function renderTodo(){
+  const box = document.getElementById('todo-block'), card = document.getElementById('todo-card');
+  if(!box || !card) return;
+  const mine = chargerTodo.filter(r => chargers.some(c => c.id === r.charger_id));
+  if(!mine.length){ box.style.display = 'none'; return; }
+  const rank = { high: 0, medium: 1, low: 2 };
+  const by = new Map();
+  mine.forEach(r => {
+    let g = by.get(r.charger_id);
+    if(!g){ g = { id: r.charger_id, name: r.charger_name, site: r.site_name, sev: r.severity, items: [], advice: [] }; by.set(r.charger_id, g); }
+    if(rank[r.severity] < rank[g.sev]) g.sev = r.severity;
+    g.items.push(r.detail);
+    const adv = todoAdvice(r.action);
+    if(adv && g.advice.indexOf(adv) < 0) g.advice.push(adv);
+  });
+  const groups = Array.from(by.values()).sort((x, y) => rank[x.sev] - rank[y.sev]);
+  const esc = v => String(v==null?'':v).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+  const dot = sev => '<span style="display:inline-block;width:9px;height:9px;border-radius:50%;margin-top:5px;flex:none;background:' + (sev === 'high' ? 'var(--red)' : sev === 'medium' ? 'var(--amber)' : '#9aa5b1') + ';"></span>';
+  card.innerHTML = groups.map((g, i) =>
+    '<div style="display:flex;gap:12px;align-items:flex-start;padding:12px 16px;' + (i ? 'border-top:1px solid var(--border);' : '') + '">' + dot(g.sev) +
+    '<div style="flex:1;min-width:0;"><div style="font-weight:600;font-size:13px;">' + esc(g.name) + (g.site ? ' <span style="font-weight:400;color:var(--text-secondary);">· ' + esc(g.site) + '</span>' : '') + '</div>' +
+    g.items.map(t => '<div style="font-size:12.5px;color:var(--text-secondary);margin-top:2px;">' + esc(t) + '</div>').join('') +
+    (g.advice.length ? '<div style="font-size:12.5px;margin-top:4px;">' + g.advice.map(esc).join(' ') + '</div>' : '') + '</div>' +
+    '<button class="btn btn-sm" onclick="openCharger(\'' + esc(g.id) + '\')">Open</button></div>'
+  ).join('');
+  box.style.display = '';
 }
 function fmtOutage(sec){
   sec = Math.max(0, Math.round(sec));
