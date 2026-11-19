@@ -752,6 +752,13 @@ body.member-mode #bell-btn{display:none !important;}
 @media(max-width:900px){#pnd-toast{bottom:calc(86px + env(safe-area-inset-bottom));}}
 #pnd-toast.err{background:#a93226;}
 #pnd-toast svg{flex:none;width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;}
+/* Desktop only: cards that used to stack in a narrow column spread over the width of the screen. Phones and tablets are untouched. */
+@media (min-width:1100px){
+  .content{max-width:1700px;}
+  .cols-auto{column-width:440px;column-gap:20px;}
+  .cols-auto > .card,.cols-auto > div[class*="card"]{max-width:none !important;break-inside:avoid;}
+  .cols-auto > .section-title{break-after:avoid-column;}
+}
 </style>
 
 <link rel="icon" href="/favicon.ico" sizes="48x48">
@@ -1780,6 +1787,7 @@ body.member-mode #bell-btn{display:none !important;}
               <button class="btn btn-danger" onclick="openDeleteClient()">Delete</button>
             </div>
           </div>
+          <div class="cols-auto">
           <div class="card card-pad" style="max-width:420px;margin-bottom:20px;">
             <table>
               <tr><td style="color:var(--text-muted);">Contact</td><td id="cl-contact" style="text-align:right;"></td></tr>
@@ -1886,6 +1894,7 @@ body.member-mode #bell-btn{display:none !important;}
           </div>
           <div class="section-title">Admin login</div>
           <div id="client-admin-login-panel" class="card card-pad" style="max-width:420px;margin-bottom:20px;"></div>
+          </div>
           <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">
             <span>Sites</span>
             <button class="btn btn-sm" onclick="openAssignSitesPanel()">+ Assign sites</button>
@@ -2464,6 +2473,7 @@ body.member-mode #bell-btn{display:none !important;}
 
       <!-- SETTINGS (client_admin only): read-only company profile + Paystack payout connection -->
       <div class="page" id="page-settings">
+        <div class="cols-auto">
         <div class="section-title" style="margin:0 0 14px;">Company profile</div>
         <div class="card card-pad" style="max-width:520px;margin-bottom:24px;">
           <table>
@@ -2500,6 +2510,7 @@ body.member-mode #bell-btn{display:none !important;}
             <button class="btn btn-primary" id="stg-connect-btn" onclick="submitPayoutConnect()">Connect</button>
             <div id="stg-connect-error" style="color:var(--red, #c0392b);font-size:12px;margin-top:8px;"></div>
           </div>
+        </div>
         </div>
       </div>
 
