@@ -733,6 +733,16 @@ body.member-mode #bell-btn{display:none !important;}
 }
 .sm-title{display:none;padding:2px 14px 10px;font-weight:800;font-size:15px;color:var(--navy);}
 
+/* team rights: one row per section with a 3-way switch */
+.team-row{display:flex;justify-content:space-between;align-items:center;gap:10px 16px;flex-wrap:wrap;padding:10px 0;border-bottom:1px solid var(--border);}
+.team-row-text{flex:1 1 220px;min-width:0;}
+.team-hint{font-size:12px;color:var(--text-muted);margin-top:2px;line-height:1.4;}
+.seg{display:inline-flex;border:1px solid var(--border);border-radius:10px;overflow:hidden;flex:0 0 auto;}
+.seg-btn{border:0;background:#fff;color:var(--navy, #1a3260);font:inherit;font-size:13px;font-weight:600;padding:8px 14px;cursor:pointer;border-left:1px solid var(--border);}
+.seg-btn:first-child{border-left:0;}
+.seg-btn.on{background:var(--navy, #1a3260);color:#fff;}
+.seg-btn.on[data-v="hidden"]{background:#6b7a9a;}
+@media(max-width:700px){.seg{width:100%;}.seg-btn{flex:1;}}
 /* toast: short confirmation or error, bottom centre, disappears by itself */
 #pnd-toast{position:fixed;left:50%;width:max-content;bottom:28px;transform:translate(-50%,12px);max-width:min(440px,calc(100vw - 32px));background:#1a3260;color:#fff;font-size:14px;line-height:1.4;padding:11px 16px 11px 14px;border-radius:10px;box-shadow:0 8px 24px rgba(26,50,96,.28);display:flex;align-items:center;gap:10px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:10000;}
 #pnd-toast.show{opacity:1;transform:translate(-50%,0);}
@@ -9827,14 +9837,28 @@ async function renderTeam(){
     </div>`;
   }).join('') || '<div class="card card-pad empty">No team members yet.</div>';
 }
+const TEAM_HINT = {
+  sites:    'See your sites and their details.',
+  chargers: 'See chargers and their status. Starting, stopping and testing a charger stay with you.',
+  tariffs:  'View: see the prices. Manage: change them.',
+  sessions: 'See charging sessions.',
+  users:    'View: see residents and cards. Manage: edit them, add residents and assign cards. Balances can never be changed.',
+  finance:  'See wallet activity and ledger entries.',
+};
 function teamGridHtml(current){
   return TEAM_SECTIONS.map(x => {
     const v = current[x.key] || 'hidden';
-    return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border);">
-      <span>${x.label}</span>
-      <select data-team-section="${x.key}" style="width:170px;padding:8px 10px;border:1px solid var(--border);border-radius:10px;background:var(--bg, #f5f8fc);color:inherit;font:inherit;font-size:14px;"><option value="hidden"${v==='hidden'?' selected':''}>Hidden</option><option value="view"${v==='view'?' selected':''}>View</option>${x.canManage ? `<option value="manage"${v==='manage'?' selected':''}>View and manage</option>` : ''}</select>
+    const opt = (val, label) => `<button type="button" class="seg-btn${v===val?' on':''}" data-v="${val}" onclick="teamSetLevel(this)">${label}</button>`;
+    return `<div class="team-row">
+      <div class="team-row-text"><div style="font-weight:600;">${x.label}</div><div class="team-hint">${TEAM_HINT[x.key] || ''}</div></div>
+      <div class="seg" data-team-section="${x.key}" data-value="${v}">${opt('hidden','Hidden')}${opt('view','View')}${x.canManage ? opt('manage','Manage') : ''}</div>
     </div>`;
   }).join('');
+}
+function teamSetLevel(btn){
+  const seg = btn.parentElement;
+  seg.dataset.value = btn.dataset.v;
+  seg.querySelectorAll('.seg-btn').forEach(b => b.classList.toggle('on', b === btn));
 }
 function openTeamForm(staffId){
   teamEditing = staffId ? teamList.find(m => m.id === staffId) : null;
@@ -9862,7 +9886,7 @@ async function submitTeamForm(){
   const name = document.getElementById('team-name').value.trim();
   const email = document.getElementById('team-email').value.trim();
   const locationId = document.getElementById('team-site').value || null;
-  const rights = {}; document.querySelectorAll('[data-team-section]').forEach(sel => { if(sel.value !== 'hidden') rights[sel.dataset.teamSection] = sel.value; });
+  const rights = {}; document.querySelectorAll('[data-team-section]').forEach(sel => { if(sel.dataset.value !== 'hidden') rights[sel.dataset.teamSection] = sel.dataset.value; });
   if(!name || (!teamEditing && !email)){ err.textContent = 'A name and an e-mail address are required.'; return; }
   if(!Object.keys(rights).length){ err.textContent = 'Choose at least one section.'; return; }
   const btn = document.getElementById('team-save'); btn.disabled = true;
