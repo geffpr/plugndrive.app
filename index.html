@@ -539,6 +539,8 @@ body.member-mode #sup-root,body.member-mode #trial-bar,body.member-mode #req-ban
   .rc-dch td:nth-child(3){grid-column:3;grid-row:3;text-align:right;font-size:12px;color:var(--text-muted);}
   .rc-dch td:nth-child(7){grid-column:1/-1;grid-row:4;font-size:12px;color:var(--text-secondary);}
   .rc-dch td:nth-child(8){grid-column:1/-1;grid-row:5;font-size:12px;color:var(--text-secondary);}
+  .rc-dch td:nth-child(9){grid-column:1/-1;grid-row:6;font-size:12px;color:var(--text-secondary);}
+  .rc-dch td:nth-child(9)::before{content:"Connection: ";color:var(--text-muted);}
   .rc-dch td:nth-child(7)::before,.rc-dch td:nth-child(8)::before{content:attr(data-label) ": ";color:var(--text-muted);}
 
   /* Chargers list */
@@ -1171,7 +1173,7 @@ body.member-mode #bell-btn{display:none !important;}
         <div class="section-title" style="margin-top:20px;">All chargers</div>
         <div class="card">
           <table class="rc rc-dch">
-            <thead><tr><th>Charger</th><th>Site</th><th>Client</th><th>Status</th><th>Live</th><th>Power</th><th>Cardholder</th><th>Session</th></tr></thead>
+            <thead><tr><th>Charger</th><th>Site</th><th>Client</th><th>Status</th><th>Live</th><th>Power</th><th>Cardholder</th><th>Session</th><th>Connection</th></tr></thead>
             <tbody id="dash-chargers-body"></tbody>
           </table>
         </div>
@@ -2579,6 +2581,8 @@ body.member-mode #bell-btn{display:none !important;}
                 <button class="btn btn-sm" onclick="regenerateChargerPassword()">Regenerate password</button>
               </div>
               <div id="cd-live-session"></div>
+              <div class="section-title">Connection health</div>
+              <div class="card card-pad" id="cd-health" style="margin-bottom:16px;"></div>
               <div class="section-title">Recent sessions</div>
               <div class="card">
                 <table class="rc rc-cds">
@@ -4469,6 +4473,7 @@ async function loadAll(){
   updateTariffAlerts();
   refreshPaymentAlerts();
   refreshPhotoAlerts();
+  refreshChargerHealth();
 }
 
 // ---------------- Live updates (Supabase Realtime) ----------------
@@ -5056,7 +5061,7 @@ function showPage(id, opts){
   if(id==='tariffs') renderTariffs();
   if(id==='addcharger') renderAddCharger();
   if(id==='addsite') renderAddSite();
-  if(id==='dashboard'){ renderDashboard(); renderOnboarding(); }
+  if(id==='dashboard'){ renderDashboard(); renderOnboarding(); refreshChargerHealth(); }
   if(id==='payments') loadPayoutAdmin();
   if(id==='billing') renderBilling();
   if(id==='clients') renderClients();
@@ -5184,8 +5189,9 @@ function renderDashboard(){
       <td>${c.status==='Charging' && c.currentKW != null ? c.currentKW+' kW' : '-'}</td>
       <td>${cardholder ? cardholder.name : (activeSession && activeSession.userId ? '<span style="color:var(--text-muted);">Roaming driver</span>' : '-')}</td>
       <td>${activeSession ? 'In progress' : '-'}</td>
+      <td>${healthBadge(c)}</td>
     </tr>`;
-  }).join('') : '<tr><td colspan="8" class="empty">No chargers yet.</td></tr>';
+  }).join('') : '<tr><td colspan="9" class="empty">No chargers yet.</td></tr>';
 }
 
 function renderSites(){
@@ -5356,6 +5362,7 @@ function openCharger(id, opts){
   document.getElementById('chargers-list-view').style.display='none';
   document.getElementById('charger-detail-view').style.display='block';
   renderChargerDetail();
+  renderChargerHealth();
   if(!opts.skipNav) navigate(ROUTES.chargerDetail(id));
 }
 // Opened by clicking a charger inside a site's Structure tree — keeps the
@@ -5372,7 +5379,68 @@ function openChargerFromSite(id){
   document.getElementById('chargers-list-view').style.display='none';
   document.getElementById('charger-detail-view').style.display='block';
   renderChargerDetail();
+  renderChargerHealth();
   navigate(ROUTES.chargerDetail(id));
+}
+// ---- Connection health (last 7 days, from the charger connection journal) ----
+let chargerHealth = {};
+const HEALTH_MAX_OUTAGES = 5, HEALTH_MAX_OFFLINE_S = 7200;
+async function refreshChargerHealth(){
+  try{
+    const { data, error } = await sb.rpc('charger_health_summary');
+    if(error || !Array.isArray(data)) return;
+    const m = {}; data.forEach(r => { m[r.charger_id] = r; });
+    chargerHealth = m;
+    if(rtPageIs('dashboard')) renderDashboard();
+    if(currentChargerId && document.getElementById('charger-detail-view') && document.getElementById('charger-detail-view').style.display === 'block') renderChargerHealth();
+  }catch(e){ /* health is informational only */ }
+}
+function fmtOutage(sec){
+  sec = Math.max(0, Math.round(sec));
+  const m = Math.round(sec/60);
+  if(m < 1) return 'under 1 min';
+  if(m < 60) return m + ' min';
+  const h = Math.floor(m/60);
+  if(h < 24) return h + 'h ' + String(m % 60).padStart(2,'0') + 'min';
+  return Math.floor(h/24) + 'd ' + (h % 24) + 'h';
+}
+// null = no verdict (no data, or a charger that is gone for good)
+function healthVerdict(c){
+  const h = chargerHealth[c.id];
+  if(!h || chargerState(c) === 'dormant') return null;
+  return (h.outages > HEALTH_MAX_OUTAGES || h.offline_s > HEALTH_MAX_OFFLINE_S) ? 'unstable' : 'stable';
+}
+function healthBadge(c){
+  const v = healthVerdict(c);
+  if(!v) return '<span style="color:var(--text-muted);">-</span>';
+  return v === 'unstable'
+    ? '<span style="color:#b45309;font-weight:600;" title="Several drops or a long time offline in the last 7 days">Unstable</span>'
+    : '<span style="color:var(--text-secondary);">Stable</span>';
+}
+async function renderChargerHealth(){
+  const el = document.getElementById('cd-health'); if(!el) return;
+  const c = chargers.find(x=>x.id===currentChargerId); if(!c) return;
+  const h = chargerHealth[c.id];
+  if(!h){ el.innerHTML = '<span style="color:var(--text-muted);">No connection data yet.</span>'; return; }
+  const v = healthVerdict(c);
+  let line;
+  if(v === null) line = 'Offline for more than a week.';
+  else if(v === 'unstable') line = `<b style="color:#b45309;">Unstable connection.</b> ${h.outages} drop${h.outages===1?'':'s'} in the last 7 days.`;
+  else line = `<b>Stable connection.</b> ${h.outages === 0 ? 'No drops' : h.outages + ' drop' + (h.outages===1?'':'s')} in the last 7 days.`;
+  const last = h.last_outage_at ? `Last drop ${fmtLastSeen(h.last_outage_at)}.` : '';
+  let html = `<div style="font-size:13px;">${line}</div>
+    <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Offline in total: ${h.offline_s > 0 ? fmtOutage(h.offline_s) : 'none'}. ${last}</div>`;
+  if(isPndAdmin()){
+    html += '<div id="cd-health-events" style="margin-top:10px;font-size:12px;color:var(--text-muted);">Loading events...</div>';
+    el.innerHTML = html;
+    const id = c.id;
+    const { data } = await sb.rpc('charger_health_events', { p_charger: id, p_limit: 12 });
+    const box = document.getElementById('cd-health-events');
+    if(!box || currentChargerId !== id) return;
+    box.innerHTML = (data && data.length)
+      ? '<table style="width:100%;font-size:12px;">' + data.map(e => `<tr><td style="color:var(--text-muted);white-space:nowrap;padding:2px 8px 2px 0;">${new Date(e.at).toLocaleString('en-ZA',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</td><td style="padding:2px 8px 2px 0;">${escHtml(e.event.replace('_',' '))}</td><td style="color:var(--text-secondary);">${escHtml(e.detail||'')}</td></tr>`).join('') + '</table>'
+      : 'No events recorded.';
+  } else el.innerHTML = html;
 }
 function renderChargerDetail(){
   const c = chargers.find(x=>x.id===currentChargerId);
