@@ -1167,8 +1167,8 @@ body.member-mode #bell-btn{display:none !important;}
           <div class="card" id="todo-card" style="display:none;"></div>
         </div>
 
-        <div class="section-title">All complexes</div>
-        <div class="card">
+        <div class="section-title" id="dash-sites-head"></div>
+        <div class="card" id="dash-sites-card" style="display:none;">
           <table class="rc rc-dsi">
             <thead><tr><th>Site</th><th>City</th><th>Chargers</th><th>Load</th></tr></thead>
             <tbody id="dash-sites-body"></tbody>
@@ -2528,6 +2528,7 @@ body.member-mode #bell-btn{display:none !important;}
             </div>
             <button class="btn btn-primary" data-quota="chargers" onclick="showPage('addcharger')">+ Add charger</button>
           </div>
+          <div id="chg-recent" style="display:none;margin:0 0 10px;"></div>
           <div class="card">
             <table class="rc rc-chg">
               <thead><tr><th>Charger</th><th>Location</th><th>Status</th><th>Live</th><th>Power</th><th>Public</th><th>Current user</th></tr></thead>
@@ -5181,6 +5182,7 @@ function renderDashboard(){
   renderTodo();
 
   const roots = activeRoots();
+  renderDashSitesHead(roots.length);
   document.getElementById('dash-sites-body').innerHTML = roots.map(r=>{
     const allChargersUnder = chargers.filter(c=>{ const root=rootOf(c.locationId); return root && root.id===r.id; });
     const used = allChargersUnder.filter(c=>c.status==='Charging').reduce((s,c)=>s+(c.currentKW||0),0);
@@ -5331,6 +5333,7 @@ function resetFilters(page){
   const s = sets[page]; if(!s) return;
   s.selects.forEach(id => { const el = document.getElementById(id); if(el) el.value = 'all'; });
   s.inputs.forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  if(page === 'chargers') chgShowInactive = false;
   s.render();
 }
 
@@ -5352,21 +5355,86 @@ function renderChargers(){
   if(vf==='listed') rows = rows.filter(c=>c.listedPublicly);
   else if(vf==='hidden') rows = rows.filter(c=>!c.listedPublicly);
   if(q) rows = rows.filter(c=>c.name.toLowerCase().includes(q));
+  renderRecentChargers(!q && cf==='all' && clf==='all' && sf==='all' && vf==='all');
   if(!rows.length){
     document.getElementById('chargers-body').innerHTML = `<tr><td colspan="7" class="empty">${chargers.length ? 'No chargers match these filters.' : 'No chargers yet.'}</td></tr>`;
     return;
   }
-  document.getElementById('chargers-body').innerHTML = rows.map(c=>{
+  // Most important first: charging, then what needs a look, then the rest; gone-for-good chargers last and hidden by default.
+  const todoIds = new Set((chargerTodo || []).filter(r => r.severity !== 'low').map(r => r.charger_id));
+  const rank = c => { const st = chargerState(c); return st === 'charging' ? 0 : (st === 'red' || todoIds.has(c.id)) ? 1 : st === 'ok' ? 2 : st === 'oos' ? 3 : 4; };
+  const isInactive = c => { const st = chargerState(c); return st === 'dormant' || st === 'oos'; };
+  const searching = !!q || sf !== 'all';
+  const inactiveCount = rows.filter(isInactive).length;
+  if(!chgShowInactive && !searching) rows = rows.filter(c => !isInactive(c));
+  rows.sort((x, y) => rank(x) - rank(y) || x.name.localeCompare(y.name, undefined, {numeric:true}));
+  const rowHtml = c => {
     const res = residentFor(c.id);
-    return `<tr class="rowlink" onclick="openCharger('${c.id}')">
-      <td>${c.name}</td><td class="path">${pathOf(c.locationId)}</td>
+    const dim = isInactive(c) ? 'opacity:.55;' : '';
+    const hot = rank(c) === 1 ? 'background:#fdecea;' : '';
+    return `<tr class="rowlink" style="${hot}${dim}" onclick="openCharger('${c.id}')">
+      <td>${escHtml(c.name)}</td><td class="path">${pathOf(c.locationId)}</td>
       <td>${statusBadge(c.status, c)}</td>
       <td>${livenessDot(c.lastSeenAt)}${fmtLastSeen(c.lastSeenAt)}</td>
       <td>${c.powerKW} kW</td>
       <td style="color:${c.listedPublicly?'var(--text)':'var(--text-muted)'};">${c.listedPublicly?'Listed':'Hidden'}</td>
       <td>${res?res.name+' · '+res.unit:'-'}</td>
     </tr>`;
-  }).join('');
+  };
+  let html = '';
+  // Plug n Drive sees every client's chargers: group them by client so the list stays readable.
+  if(isPndAdmin() && clf === 'all' && !q){
+    const groups = new Map();
+    rows.forEach(c => {
+      const root = rootOf(c.locationId), key = (root && root.clientId) || '_none';
+      if(!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(c);
+    });
+    const list = Array.from(groups.entries()).map(([key, cs]) => {
+      const cl = key === '_none' ? null : clients.find(x => x.id === key);
+      return { key, name: cl ? cl.name : 'No client', cs, hot: cs.filter(c => rank(c) === 1).length, live: cs.filter(c => c.status === 'Charging').length };
+    }).sort((x, y) => (y.hot > 0) - (x.hot > 0) || (y.live > 0) - (x.live > 0) || x.name.localeCompare(y.name));
+    list.forEach(g => {
+      const open = chgGroupOpen(g.key, g.hot > 0 || g.live > 0);
+      html += `<tr class="rowlink" style="background:var(--bg,#f5f7fa);" onclick="toggleChgGroup('${escHtml(g.key)}', ${open ? 'false' : 'true'})"><td colspan="7" style="font-weight:600;font-size:13px;padding:10px 16px;">` +
+        `${open ? '▼' : '▶'} ${escHtml(g.name)} <span style="font-weight:400;color:var(--text-secondary);">· ${g.cs.length} charger${g.cs.length > 1 ? 's' : ''}` +
+        `${g.live ? ', ' + g.live + ' charging' : ''}${g.hot ? ', <span style="color:var(--red);">' + g.hot + ' to deal with</span>' : ''}</span></td></tr>`;
+      if(open) html += g.cs.map(rowHtml).join('');
+    });
+  } else {
+    html = rows.map(rowHtml).join('');
+  }
+  if(!chgShowInactive && !searching && inactiveCount){
+    html += `<tr class="rowlink" onclick="chgShowInactive=true;renderChargers()"><td colspan="7" style="text-align:center;color:var(--text-secondary);font-size:12.5px;padding:12px;">Show ${inactiveCount} inactive charger${inactiveCount > 1 ? 's' : ''} (offline for over a week, or out of service)</td></tr>`;
+  } else if(chgShowInactive && inactiveCount){
+    html += `<tr class="rowlink" onclick="chgShowInactive=false;renderChargers()"><td colspan="7" style="text-align:center;color:var(--text-secondary);font-size:12.5px;padding:12px;">Hide inactive chargers</td></tr>`;
+  }
+  document.getElementById('chargers-body').innerHTML = html || `<tr><td colspan="7" class="empty">No active chargers. Use "Show inactive chargers" to see the others.</td></tr>`;
+}
+let chgShowInactive = false;
+let chgGroupState = {};
+try{ chgGroupState = JSON.parse(localStorage.getItem('pnd_chg_groups') || '{}') || {}; }catch(e){ chgGroupState = {}; }
+function chgGroupOpen(key, dflt){ return key in chgGroupState ? !!chgGroupState[key] : dflt; }
+function toggleChgGroup(key, open){
+  chgGroupState[key] = open;
+  try{ localStorage.setItem('pnd_chg_groups', JSON.stringify(chgGroupState)); }catch(e){ /* storage unavailable */ }
+  renderChargers();
+}
+// The last chargers this person opened, as shortcuts above the list.
+let recentChargers = [];
+try{ recentChargers = JSON.parse(localStorage.getItem('pnd_recent_chargers') || '[]') || []; }catch(e){ recentChargers = []; }
+function rememberCharger(id){
+  recentChargers = [id].concat(recentChargers.filter(x => x !== id)).slice(0, 4);
+  try{ localStorage.setItem('pnd_recent_chargers', JSON.stringify(recentChargers)); }catch(e){ /* storage unavailable */ }
+}
+function renderRecentChargers(show){
+  const box = document.getElementById('chg-recent'); if(!box) return;
+  const list = show ? recentChargers.map(id => chargers.find(c => c.id === id)).filter(Boolean) : [];
+  if(!list.length){ box.style.display = 'none'; box.innerHTML = ''; return; }
+  box.style.display = 'flex';
+  box.style.cssText += ';flex-wrap:wrap;gap:8px;align-items:center;';
+  box.innerHTML = '<span style="font-size:12px;color:var(--text-secondary);">Recent</span>' +
+    list.map(c => `<button type="button" class="btn btn-sm" onclick="openCharger('${c.id}')">${escHtml(c.name)}</button>`).join('');
 }
 
 let currentChargerId = null;
@@ -5374,6 +5442,7 @@ let chargerDetailOrigin = { type: 'chargers' };
 function openCharger(id, opts){
   opts = opts || {};
   currentChargerId = id;
+  rememberCharger(id);
   chargerPasswordVisible = false;
   chargerDetailOrigin = { type: 'chargers' };
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
@@ -5441,6 +5510,21 @@ function todoAdvice(action){
     case 'set_tariff': return 'Set a price so customers can charge.';
     default: return '';
   }
+}
+let dashSitesOpen = false;
+try{ dashSitesOpen = localStorage.getItem('pnd_dash_sites_open') === '1'; }catch(e){ /* storage unavailable */ }
+function toggleDashSites(){
+  dashSitesOpen = !dashSitesOpen;
+  try{ localStorage.setItem('pnd_dash_sites_open', dashSitesOpen ? '1' : '0'); }catch(e){ /* storage unavailable */ }
+  renderDashSitesHead(activeRoots().length);
+}
+function renderDashSitesHead(n){
+  const head = document.getElementById('dash-sites-head'), card = document.getElementById('dash-sites-card');
+  if(!head || !card) return;
+  head.innerHTML = '<button type="button" onclick="toggleDashSites()" aria-expanded="' + dashSitesOpen + '" style="all:unset;cursor:pointer;display:flex;align-items:center;gap:8px;">' +
+    '<span>All complexes</span><span style="font-weight:400;">· ' + n + ' site' + (n === 1 ? '' : 's') + '</span>' +
+    '<span style="font-size:11px;">' + (dashSitesOpen ? '▲ Hide' : '▼ Show') + '</span></button>';
+  card.style.display = dashSitesOpen ? '' : 'none';
 }
 let todoOpen = false;
 try{ todoOpen = localStorage.getItem('pnd_todo_open') === '1'; }catch(e){ /* storage unavailable */ }
