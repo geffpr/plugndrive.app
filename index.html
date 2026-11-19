@@ -770,6 +770,11 @@ body.member-mode #bell-btn{display:none !important;}
   #team-form .tm-title{margin-top:0 !important;}
   #team-form .tm-actions, #team-form #team-error{grid-column:1 / -1;}
   #team-list{grid-template-columns:repeat(auto-fill,minmax(520px,1fr));}
+  #acc-group-form{max-width:none !important;}
+  #acc-group-form[style*="display: block"], #acc-group-form[style*="display:block"]{display:grid !important;grid-template-columns:minmax(0,420px) minmax(0,1fr);column-gap:48px;align-items:start;}
+  #acc-group-form .ag-actions, #acc-group-form #acc-g-error{grid-column:1 / -1;}
+  #acc-group-form #acc-g-reception{width:auto;flex:none;}
+  .acc-groups-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(520px,1fr));column-gap:12px;}
   .cols-auto{column-width:440px;column-gap:20px;}
   .cols-auto > .card,.cols-auto > div[class*="card"]{max-width:none !important;break-inside:avoid;}
   .cols-auto > .section-title{break-after:avoid-column;}
@@ -2474,6 +2479,8 @@ body.member-mode #bell-btn{display:none !important;}
         <div style="color:var(--text-muted);font-size:12px;margin:6px 0 12px;max-width:640px;">A group gives its members free or discounted charging on your own chargers only (for example staff, guests or residents). It has no value on anyone else's chargers.</div>
         <div id="acc-group-form" class="card card-pad" style="display:none;max-width:480px;margin:12px 0;">
           <input type="hidden" id="acc-g-id">
+          <div id="acc-g-title" style="font-weight:700;font-size:15px;margin-bottom:8px;grid-column:1 / -1;"></div>
+          <div class="ag-left">
           <div class="form-row"><label>Group name</label><input type="text" id="acc-g-name" maxlength="60" placeholder="e.g. Staff, Guests"></div>
           <div class="form-row"><label>Tariff</label>
             <select id="acc-g-mode" onchange="accModeChanged()"><option value="free">Free</option><option value="discount">Discounted</option><option value="standard">Standard price</option></select></div>
@@ -2482,6 +2489,8 @@ body.member-mode #bell-btn{display:none !important;}
             <select id="acc-g-scope" onchange="accScopeChanged()"><option value="all">All my sites</option><option value="some">Selected sites</option></select></div>
           <div id="acc-g-sites" style="display:none;margin-bottom:10px;"></div>
           <div class="form-row"><label>Longest access you can grant (days, optional)</label><input type="number" id="acc-g-maxdays" min="1" max="365" placeholder="No limit"></div>
+          </div>
+          <div class="ag-right">
           <div id="acc-g-allow-row" style="margin-bottom:10px;">
             <label style="display:block;margin-bottom:4px;">Free allowance per guest (optional)</label>
             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
@@ -2492,14 +2501,15 @@ body.member-mode #bell-btn{display:none !important;}
             <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">Total for the whole access period, shared across all charges. The charge stops as soon as the first limit is reached. Free groups only.</div>
           </div>
           <div class="form-row"><label style="display:flex;gap:8px;align-items:flex-start;font-weight:400;"><input type="checkbox" id="acc-g-reception" style="margin-top:3px;"><span>Reception staff can add guests to this group<br><span style="font-size:12px;color:var(--text-muted);">Only operators you allow in &ldquo;My operators&rdquo; can do it, and only for the groups ticked here.</span></span></label></div>
-          <div style="display:flex;gap:8px;">
+          </div>
+          <div class="ag-actions" style="display:flex;gap:8px;">
             <button class="btn btn-primary" onclick="saveAccessGroup()">Save group</button>
             <button class="btn" onclick="closeAccessGroupForm()">Cancel</button>
           </div>
           <div id="acc-g-error" style="color:var(--red, #c0392b);font-size:12px;margin-top:8px;"></div>
         </div>
         <div id="acc-list-error" style="color:var(--red, #c0392b);font-size:12px;margin:8px 0;"></div>
-        <div id="acc-groups-list"></div>
+        <div id="acc-groups-list" class="acc-groups-grid"></div>
         <div id="acc-members-panel" class="card card-pad" style="display:none;margin-top:16px;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
             <div style="font-weight:600;" id="acc-m-title"></div>
@@ -8213,7 +8223,7 @@ async function loadAccessGroups(){
   const el = document.getElementById('acc-groups-list');
   if(!accGroups.length){ el.innerHTML = '<div class="card card-pad" style="color:var(--text-muted);">No groups yet. Create one to give your staff or guests access.</div>'; return; }
   el.innerHTML = accGroups.map(g => `
-    <div class="card card-pad" style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+    <div class="card card-pad" data-acc-id="${g.id}" style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
       <div>
         <div style="font-weight:600;">${accEsc(g.name)}</div>
         <div style="font-size:12px;color:var(--text-muted);">${accTariffText(g)} · ${accScopeText(g)}${g.max_days ? ' · max ' + g.max_days + ' days' : ''}${accAllowText(g) ? ' · allowance ' + accEsc(accAllowText(g)) : ''}${g.reception_can_add ? ' · reception can add' : ''} · ${g.member_count} active member(s)</div>
@@ -8265,9 +8275,16 @@ function openAccessGroupForm(groupId){
     `<label style="display:block;"><input type="checkbox" class="acc-site-cb" value="${l.id}" ${chosen.includes(l.id) ? 'checked' : ''}> ${accEsc(l.name)}</label>`).join('') || '<span style="color:var(--text-muted);">No sites yet.</span>';
   document.getElementById('acc-g-error').textContent = '';
   accModeChanged(); accScopeChanged();
-  document.getElementById('acc-group-form').style.display = 'block';
+  document.getElementById('acc-g-title').textContent = g ? 'Edit ' + g.name : 'New group';
+  document.querySelectorAll('#acc-groups-list [data-acc-id]').forEach(c => { c.style.display = (g && c.dataset.accId === g.id) ? 'none' : 'flex'; });
+  const gf = document.getElementById('acc-group-form');
+  gf.style.display = 'block';
+  if(gf.scrollIntoView) gf.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
-function closeAccessGroupForm(){ document.getElementById('acc-group-form').style.display = 'none'; }
+function closeAccessGroupForm(){
+  document.getElementById('acc-group-form').style.display = 'none';
+  document.querySelectorAll('#acc-groups-list [data-acc-id]').forEach(c => { c.style.display = 'flex'; });
+}
 async function saveAccessGroup(){
   const errEl = document.getElementById('acc-g-error'); errEl.textContent = '';
   const name = document.getElementById('acc-g-name').value.trim();
