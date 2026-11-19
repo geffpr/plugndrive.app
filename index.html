@@ -1163,8 +1163,8 @@ body.member-mode #bell-btn{display:none !important;}
         </div>
 
         <div id="todo-block" style="display:none;">
-          <div class="section-title">To deal with</div>
-          <div class="card" id="todo-card"></div>
+          <div class="section-title" id="todo-head" style="margin-top:20px;"></div>
+          <div class="card" id="todo-card" style="display:none;"></div>
         </div>
 
         <div class="section-title">All complexes</div>
@@ -5442,6 +5442,13 @@ function todoAdvice(action){
     default: return '';
   }
 }
+let todoOpen = false;
+try{ todoOpen = localStorage.getItem('pnd_todo_open') === '1'; }catch(e){ /* storage unavailable */ }
+function toggleTodo(){
+  todoOpen = !todoOpen;
+  try{ localStorage.setItem('pnd_todo_open', todoOpen ? '1' : '0'); }catch(e){ /* storage unavailable */ }
+  renderTodo();
+}
 function renderTodo(){
   const box = document.getElementById('todo-block'), card = document.getElementById('todo-card');
   if(!box || !card) return;
@@ -5468,6 +5475,13 @@ function renderTodo(){
     '<button class="btn btn-sm" onclick="openCharger(\'' + esc(g.id) + '\')">Open</button></div>'
   ).join('');
   box.style.display = '';
+  const urgent = groups.filter(g => g.sev === 'high').length;
+  const head = document.getElementById('todo-head');
+  head.innerHTML = '<button type="button" onclick="toggleTodo()" aria-expanded="' + todoOpen + '" style="all:unset;cursor:pointer;display:flex;align-items:center;gap:8px;">' +
+    '<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:' + (urgent ? 'var(--red)' : 'var(--amber)') + ';"></span>' +
+    '<span>To deal with</span><span style="font-weight:400;">· ' + groups.length + ' charger' + (groups.length > 1 ? 's' : '') + (urgent ? ', ' + urgent + ' urgent' : '') + '</span>' +
+    '<span style="font-size:11px;">' + (todoOpen ? '▲ Hide' : '▼ Show') + '</span></button>';
+  card.style.display = todoOpen ? '' : 'none';
 }
 function fmtOutage(sec){
   sec = Math.max(0, Math.round(sec));
