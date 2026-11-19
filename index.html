@@ -95,6 +95,9 @@ input,select{font-family:'Inter',sans-serif;font-size:13px;}
 .main{display:flex;flex-direction:column;min-height:100vh;}
 .topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 26px;border-bottom:1px solid var(--border);}
 .topbar-title{font-size:18px;}
+.topbar-left{display:flex;align-items:baseline;gap:14px;min-width:0;}
+.topbar-hello{font-size:14px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.topbar-hello:empty{display:none;}
 .topbar-right{display:flex;align-items:center;gap:14px;}
 .avatar{width:30px;height:30px;border-radius:50%;background:var(--blue-light);color:var(--blue-dark);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;}
 
@@ -1117,7 +1120,7 @@ body.member-mode #bell-btn{display:none !important;}
 
   <div class="main">
     <div class="topbar">
-      <div class="topbar-title" id="topbar-title">Dashboard</div>
+      <div class="topbar-left"><div class="topbar-title" id="topbar-title">Dashboard</div><span class="topbar-hello" id="topbar-hello"></span></div>
       <div class="topbar-right">
         <div style="font-size:12px;color:var(--text-muted);">Amounts shown per site currency</div>
         <button type="button" class="bell" id="bell-btn" aria-label="Notifications" aria-haspopup="dialog" aria-expanded="false" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6.5 2 6.5H4S6 14 6 9z"/><path d="M10 19a2 2 0 0 0 4 0"/></svg><span class="bell-count" id="bell-count" hidden></span></button>
@@ -3719,6 +3722,7 @@ function enterMemberApp(acc){
   const idEl = document.getElementById('sidebar-identity');
   if(idEl) idEl.textContent = (acc.name || 'Guest') + (acc.client_name ? ' · ' + acc.client_name : '');
   document.getElementById('app-root').style.display = '';
+  updateTopbarHello();
   showPage('campaigns');
 }
 
@@ -4195,7 +4199,13 @@ async function opgRemove(memberId){
   await opgLoadList();
 }
 
+function updateTopbarHello(){
+  const el = document.getElementById('topbar-hello'); if(!el) return;
+  const n = currentMember ? currentMember.name : (currentStaff && currentStaff.name);
+  el.textContent = n ? 'Hello ' + n : '';
+}
 function updateSidebarIdentity(){
+  updateTopbarHello();
   const el = document.getElementById('sidebar-identity');
   if(!el) return;
   if(currentMember){ el.textContent = currentMember.name + ' · ' + currentMember.client_name; return; }
