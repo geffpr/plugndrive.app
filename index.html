@@ -736,6 +736,7 @@ body.member-mode #bell-btn{display:none !important;}
 .sm-title{display:none;padding:2px 14px 10px;font-weight:800;font-size:15px;color:var(--navy);}
 
 /* team rights: one row per section with a 3-way switch */
+.pnd-ro .page.active .btn-primary, .pnd-ro .page.active [data-write]{display:none !important;}
 .team-row{display:flex;justify-content:space-between;align-items:center;gap:10px 16px;flex-wrap:wrap;padding:10px 0;border-bottom:1px solid var(--border);}
 .team-row-text{flex:1 1 220px;min-width:0;}
 .team-hint{font-size:12px;color:var(--text-muted);margin-top:2px;line-height:1.4;}
@@ -768,6 +769,11 @@ body.member-mode #bell-btn{display:none !important;}
   #team-form{max-width:none !important;display:none;}
   #team-form[style*="display: block"], #team-form[style*="display:block"]{display:grid !important;grid-template-columns:340px minmax(0,1fr);column-gap:44px;align-items:start;}
   #team-form .tm-title{margin-top:0 !important;}
+  #pt-form{max-width:none !important;display:none;}
+  #pt-form[style*="display: block"], #pt-form[style*="display:block"]{display:grid !important;grid-template-columns:340px minmax(0,1fr);column-gap:44px;align-items:start;}
+  #pt-form > #pt-form-title, #pt-form > div:nth-last-child(2), #pt-form > #pt-error{grid-column:1 / -1;}
+  #pt-form > #pt-rights-wrap{grid-column:2;grid-row:2 / span 5;}
+  #pt-form > #pt-rights-wrap > div:first-child{margin-top:0 !important;}
   #team-form .tm-actions, #team-form #team-error{grid-column:1 / -1;}
   #team-list{grid-template-columns:repeat(auto-fill,minmax(520px,1fr));}
   #acc-group-form{max-width:none !important;}
@@ -1214,6 +1220,7 @@ body.member-mode #bell-btn{display:none !important;}
     <a class="navitem" id="quotes-nav" href="/quote" style="display:none;"><span class="ic">▤</span>Quotes</a>
     <a class="navitem" data-page="exchangerates" onclick="showPage('exchangerates')"><span class="ic">⇄</span>Exchange rates</a>
     <a class="navitem" data-page="datafeeds" id="datafeeds-nav" onclick="showPage('datafeeds')" style="display:none;"><span class="ic">⇢</span>Data feeds</a>
+    <a class="navitem" data-page="pndteam" id="pndteam-nav" onclick="showPage('pndteam')" style="display:none;"><span class="ic">◉</span>Team</a>
     <div style="margin-top:auto;padding-top:14px;border-top:1px solid rgba(255,255,255,.12);">
       <div id="sidebar-identity" style="font-size:12px;color:rgba(255,255,255,.7);margin-bottom:8px;"></div>
       <a href="#" onclick="handleSignOut();return false;" style="font-size:13px;color:#fff;display:flex;align-items:center;gap:6px;"><span class="ic">⏻</span>Sign out</a>
@@ -2472,6 +2479,44 @@ body.member-mode #bell-btn{display:none !important;}
       </div>
 
       <!-- TEAM (client admin only): colleagues with their own login and limited rights -->
+      <div class="page" id="page-pndteam">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+          <div class="section-title" style="margin:0;">Plug n Drive team</div>
+          <button class="btn btn-primary" onclick="openPndForm()">+ Add team member</button>
+        </div>
+        <div style="color:var(--text-muted);font-size:12px;margin:6px 0 12px;max-width:720px;">Owner: full control, including the team. Admin: everything, and can manage limited members. Limited: only the sections you choose below. Every change is logged and e-mailed to the owner and admins.</div>
+        <div id="pt-form" class="card card-pad" style="display:none;max-width:560px;margin:12px 0;">
+          <div id="pt-form-title" style="font-weight:700;font-size:15px;margin-bottom:6px;"></div>
+          <div class="form-row"><label>Name</label><input type="text" id="pt-name" maxlength="100"></div>
+          <div class="form-row"><label>E-mail (used to sign in)</label><input type="email" id="pt-email" autocapitalize="none"></div>
+          <div class="form-row" id="pt-level-row"><label>Level</label><select id="pt-level" onchange="pndLevelChanged()"><option value="limited">Limited member</option><option value="admin">Admin</option></select></div>
+          <div id="pt-level-note" style="display:none;font-size:12px;color:var(--text-muted);margin:-4px 0 8px;"></div>
+          <div id="pt-confirm-row" class="form-row" style="display:none;"><label id="pt-confirm-label">Type the person's e-mail to confirm the level change</label><input type="email" id="pt-confirm" autocapitalize="none"></div>
+          <div id="pt-rights-wrap">
+            <div style="font-weight:600;margin:12px 0 6px;">What they can see or manage</div>
+            <div id="pt-grid"></div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:14px;">
+            <button class="btn btn-primary" id="pt-save" onclick="submitPndForm()">Send invitation</button>
+            <button class="btn" onclick="closePndForm()">Cancel</button>
+          </div>
+          <div id="pt-error" style="color:var(--red, #c0392b);font-size:12px;margin-top:8px;"></div>
+        </div>
+        <div id="pt-remove" class="card card-pad" style="display:none;max-width:560px;margin:12px 0;border-color:#e6b4ae;">
+          <div id="pt-remove-title" style="font-weight:700;font-size:15px;margin-bottom:6px;"></div>
+          <div style="font-size:13px;color:var(--text-muted);margin-bottom:8px;">Their login ends immediately. Type their e-mail address to confirm.</div>
+          <input type="email" id="pt-remove-email" autocapitalize="none" style="width:100%;">
+          <div style="display:flex;gap:8px;margin-top:12px;">
+            <button class="btn btn-primary" id="pt-remove-go" onclick="confirmPndRemove()">Remove</button>
+            <button class="btn" onclick="closePndRemove()">Cancel</button>
+          </div>
+          <div id="pt-remove-error" style="color:var(--red, #c0392b);font-size:12px;margin-top:8px;"></div>
+        </div>
+        <div id="pt-list" style="display:grid;gap:10px;"></div>
+        <div class="section-title" style="margin-top:24px;">Recent changes</div>
+        <div class="card" id="pt-log"></div>
+      </div>
+
       <div class="page" id="page-team">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
           <div class="section-title" style="margin:0;">Team</div>
@@ -3828,6 +3873,7 @@ let currentMember = null;   // set for an invited person (read-only access to so
 function resetAppData(){
   locations = []; chargers = []; sessions = []; rfidCards = []; users = []; tariffs = []; clients = [];
   myFeat = null;   // the previous account's plan and options
+  pndAccess = null;
   if(typeof supReset === 'function') supReset();   // a half-written support message must not follow into the next account
 }
 // Full-screen loading view (Plug n Drive logo) held until the account's data and options are ready.
@@ -3865,6 +3911,7 @@ async function enterAppInner(){
     return;
   }
 
+  if(currentStaff.role === 'plugndrive_admin') await loadPndAccess();
   applyRoleBasedNav();
   document.getElementById('app-root').style.display = '';
   await loadAll();
@@ -4375,7 +4422,8 @@ function updateSidebarIdentity(){
     const cl = clients.find(c=>c.id===currentStaff.client_id);
     el.textContent = cl ? cl.name : 'Client account';
   } else {
-    el.textContent = 'Plug n Drive Admin';
+    const lv = pndAccess && pndAccess.level;
+    el.textContent = lv === 'owner' ? 'Plug n Drive Owner' : lv === 'limited' ? 'Plug n Drive team member' : 'Plug n Drive Admin';
   }
 }
 function applyRoleBasedNav(){
@@ -4422,6 +4470,7 @@ function applyRoleBasedNav(){
   }
   if(isClientAdmin) ensurePlanLimits();
   applyTeamNav();
+  applyPndNav();
   updateNavSections();
   updateTrialBar();
 }
@@ -5155,6 +5204,7 @@ const ROUTES = {
   addclient: () => '/addclient',
   myoperators: () => '/myoperators',
   team: () => '/team',
+  pndteam: () => '/pndteam',
   apikeys: () => '/apikeys',
   campaigns: () => '/campaigns',
   settings: () => '/settings',
@@ -5175,6 +5225,8 @@ function navigate(path){
 function showPage(id, opts){
   opts = opts || {};
   if(currentMember) id = 'campaigns';   // an invited person has no other page
+  if(isPndLimited() && !pndPageAllowed(id)) id = 'dashboard';   // a limited Plug n Drive member only reaches the sections they were given
+  if(id === 'pndteam' && !pndCanManageTeam()) id = 'dashboard';
   if(isTeam() && !teamPageAllowed(id)) id = 'dashboard';   // a team member only reaches the sections they were given
   if(id === 'team' && !(currentStaff && currentStaff.role === 'client_admin')) id = 'dashboard';
   if(id === 'fleet' && !fleetAllowed()) id = 'dashboard';   // Fleet Control only where the option is on
@@ -5197,7 +5249,7 @@ function showPage(id, opts){
   const parentNav = { addsite:'sites', addcharger:'chargers', addclient:'clients' };
   const navEl = document.querySelector(`.navitem[data-page="${parentNav[id] || id}"]`);
   if(navEl) navEl.classList.add('active');
-  const titles={billing:'Billing',dashboard:'Dashboard',sites:'Sites',addsite:'Add site',chargers:'Chargers',addcharger:'Add charger',sessions:'Sessions',rfid:'RFID cards',load:'Load management',tariffs:'Tariffs',clients:'Clients',addclient:'Add client',myoperators:'My operators',team:'Team',apikeys:'API & Keys',campaigns:'Campaigns',walletactivity:'Wallet activity',payments:'Payments',shop:'Shop',proshop:'Shop',photos:'Site photos',settings:'Settings',exchangerates:'Exchange rates',datafeeds:'Data feeds',reporting:'Reporting',access:'Access',fleet:'Fleet Control'};
+  const titles={billing:'Billing',dashboard:'Dashboard',sites:'Sites',addsite:'Add site',chargers:'Chargers',addcharger:'Add charger',sessions:'Sessions',rfid:'RFID cards',load:'Load management',tariffs:'Tariffs',clients:'Clients',addclient:'Add client',myoperators:'My operators',team:'Team',apikeys:'API & Keys',campaigns:'Campaigns',walletactivity:'Wallet activity',payments:'Payments',shop:'Shop',proshop:'Shop',photos:'Site photos',settings:'Settings',exchangerates:'Exchange rates',datafeeds:'Data feeds',reporting:'Reporting',access:'Access',fleet:'Fleet Control',pndteam:'Team'};
   document.getElementById('topbar-title').textContent = titles[id];
   if(!opts.skipNav) navigate(ROUTES[id] ? ROUTES[id]() : '/'+id);
   if(id==='sites') renderSites();
@@ -5215,6 +5267,8 @@ function showPage(id, opts){
   if(id==='addclient') renderAddClient();
   if(id==='myoperators') renderMyOperators();
   if(id==='team') renderTeam();
+  if(id==='pndteam') renderPndTeam();
+  applyPndReadOnly(id);
   if(id==='apikeys') renderApiKeys();
   if(id==='campaigns') renderCampaigns();
   if(id==='walletactivity') renderWalletActivity();
@@ -5236,7 +5290,7 @@ function routeFromLocation(){
   if(currentMember){ showPage('campaigns', {skipNav:true}); return; }
   const parts = location.pathname.split('/').filter(Boolean); // e.g. ['sites','<id>']
   const page = parts[0] || 'dashboard';
-  const knownPages = ['dashboard','sites','addsite','chargers','addcharger','sessions','rfid','load','tariffs','clients','addclient','myoperators','team','apikeys','campaigns','walletactivity','payments','shop','proshop','photos','settings','exchangerates','datafeeds','reporting','access','billing','fleet'];
+  const knownPages = ['dashboard','sites','addsite','chargers','addcharger','sessions','rfid','load','tariffs','clients','addclient','myoperators','team','apikeys','campaigns','walletactivity','payments','shop','proshop','photos','settings','exchangerates','datafeeds','reporting','access','billing','fleet','pndteam'];
   if(!knownPages.includes(page)){ showPage('dashboard'); return; }
 
   showPage(page, {skipNav:true});
@@ -10280,6 +10334,192 @@ function toast(msg, kind){
   el.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.remove('show'), kind === 'error' ? 6000 : 3500);
+}
+
+// ---------------- PLUG N DRIVE TEAM (owner / admin / limited) ----------------
+// Every Plug n Drive login keeps the plugndrive_admin role. The level decides the rest: the owner and admins see everything,
+// a limited member only the sections they were given. The menu hides what a limited member has no right to; the database
+// itself refuses the sensitive actions (money, payouts, client access, the team) whatever the screen shows.
+let pndAccess = null;   // { level: 'owner'|'admin'|'limited', rights: { section: 'view'|'manage' } }
+let pndList = [], pndEditing = null, pndRemoving = null;
+const PND_SECTIONS = [
+  { key:'clients',   label:'Clients',                          hint:'Client accounts, their sites and logins.' },
+  { key:'sites',     label:'Sites',                            hint:'Sites and site settings.' },
+  { key:'chargers',  label:'Chargers and load',                hint:'Chargers, their status, and load management.' },
+  { key:'tariffs',   label:'Tariffs',                          hint:'Prices per site and per charger.' },
+  { key:'rfid',      label:'RFID, access and fleet',           hint:'Cards, access groups and Fleet Control.' },
+  { key:'sessions',  label:'Sessions',                         hint:'Charging sessions.' },
+  { key:'finance',   label:'Wallet, payments and exchange rates', hint:'Wallet activity, payments and rates. Payouts and settlements stay with the owner and admins.' },
+  { key:'shop',      label:'Shop',                             hint:'Shop orders and products.' },
+  { key:'photos',    label:'Photos',                           hint:'Site photos.' },
+  { key:'reporting', label:'Reporting',                        hint:'Reports.' },
+  { key:'campaigns', label:'Campaigns',                        hint:'E-mail campaigns.' },
+  { key:'datafeeds', label:'Data feeds and API',               hint:'Data feeds and API keys.' },
+];
+const PND_PAGE_SECTION = { clients:'clients', addclient:'clients', sites:'sites', addsite:'sites', chargers:'chargers', addcharger:'chargers', load:'chargers',
+  tariffs:'tariffs', rfid:'rfid', access:'rfid', fleet:'rfid', sessions:'sessions', walletactivity:'finance', payments:'finance', exchangerates:'finance',
+  shop:'shop', proshop:'shop', photos:'photos', reporting:'reporting', campaigns:'campaigns', datafeeds:'datafeeds', apikeys:'datafeeds' };
+function isPndLimited(){ return !!(currentStaff && currentStaff.role === 'plugndrive_admin' && pndAccess && pndAccess.level === 'limited'); }
+function pndCanManageTeam(){ return !!(currentStaff && currentStaff.role === 'plugndrive_admin' && pndAccess && (pndAccess.level === 'owner' || pndAccess.level === 'admin')); }
+function pndPageAllowed(id){ if(id === 'dashboard') return true; const sec = PND_PAGE_SECTION[id]; return !!(sec && pndAccess.rights[sec]); }
+async function loadPndAccess(){
+  pndAccess = null;
+  try { const { data, error } = await sb.rpc('pnd_my_access'); if(!error && data && data.level) pndAccess = { level: data.level, rights: data.rights || {} }; } catch(e){ /* handled below */ }
+  // if the level cannot be read, fall back to the narrowest one: nothing but the dashboard
+  if(!pndAccess) pndAccess = { level:'limited', rights:{} };
+}
+function applyPndNav(){
+  const pn = document.getElementById('pndteam-nav');
+  const isPnd = !!(currentStaff && currentStaff.role === 'plugndrive_admin');
+  if(pn) pn.style.display = (isPnd && pndCanManageTeam()) ? '' : 'none';
+  document.body.classList.toggle('pnd-limited', isPndLimited());
+  if(!isPndLimited()) return;
+  document.querySelectorAll('.navitem, #bottom-nav .bn-item').forEach(n => {
+    const pg = n.dataset.page;
+    if(!pg){ n.style.display = 'none'; return; }   // e-mail quotes and other links outside the sections
+    if(!pndPageAllowed(pg)) n.style.display = 'none';
+  });
+}
+// A section given as "View" hides the buttons that add or change things. The menu and buttons are a convenience, not the lock.
+function applyPndReadOnly(id){
+  const sec = PND_PAGE_SECTION[id];
+  document.body.classList.toggle('pnd-ro', !!(isPndLimited() && sec && pndAccess.rights[sec] === 'view'));
+}
+const PND_LEVEL_LABEL = { owner:'Owner', admin:'Admin', limited:'Limited' };
+function pndSummary(m){
+  if(m.level !== 'limited') return m.level === 'owner' ? 'Everything, including the team' : 'Everything, and manages limited members';
+  const parts = PND_SECTIONS.filter(x => m.rights[x.key]).map(x => x.label + (m.rights[x.key] === 'manage' ? ' (manage)' : ''));
+  return parts.length ? parts.join(', ') : 'Dashboard only';
+}
+async function pndCall(body){
+  const { data, error } = await sb.functions.invoke('manage-pnd-team', { body });
+  if(error || (data && data.error)){
+    let msg = data && data.error;
+    if(!msg && error && error.context){ try { msg = (await error.context.json()).error; } catch(e){} }
+    return { error: msg || (error && error.message) || 'Something went wrong.' };
+  }
+  return { data };
+}
+async function renderPndTeam(){
+  closePndForm(); closePndRemove();
+  const body = document.getElementById('pt-list');
+  const { data, error } = await sb.rpc('pnd_team_list');
+  if(error){ body.innerHTML = `<div class="card card-pad empty">${escHtml(error.message)}</div>`; return; }
+  pndList = data || [];
+  const me = currentStaff && currentStaff.id, myLevel = pndAccess && pndAccess.level;
+  body.innerHTML = pndList.map(m => {
+    const canEdit = m.id !== me && m.level !== 'owner' && (myLevel === 'owner' || m.level === 'limited');
+    const badge = `<span style="display:inline-block;margin-left:8px;padding:2px 9px;border-radius:10px;font-size:11px;font-weight:700;background:${m.level==='owner'?'#1a3260':m.level==='admin'?'#3a8fd4':'#e7edf6'};color:${m.level==='limited'?'#1a3260':'#fff'};">${PND_LEVEL_LABEL[m.level] || ''}</span>`;
+    return `<div class="card card-pad" data-pt-id="${m.id}" style="display:flex;align-items:center;gap:14px 28px;flex-wrap:wrap;">
+      <div style="flex:1 1 220px;min-width:0;">
+        <div style="font-weight:700;">${escHtml(m.name)}${m.id === me ? ' <span style="font-weight:400;color:var(--text-muted);">(you)</span>' : ''}${badge}</div>
+        <div style="font-size:13px;color:var(--text-muted);word-break:break-all;">${escHtml(m.email || '-')}</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">Added ${(m.created_at || '').slice(0,10)}</div>
+      </div>
+      <div style="flex:2 1 260px;min-width:0;font-size:13px;line-height:1.6;"><b>Access:</b> ${escHtml(pndSummary(m))}</div>
+      ${canEdit ? `<div style="display:flex;gap:8px;flex-wrap:wrap;flex:0 0 auto;margin-left:auto;"><button class="btn btn-sm" onclick="openPndForm('${m.id}')">Edit</button><button class="btn btn-sm" onclick="resendPndInvite('${m.id}', this)">Resend invite</button><button class="btn btn-sm" onclick="openPndRemove('${m.id}')">Remove</button></div>` : ''}
+    </div>`;
+  }).join('') || '<div class="card card-pad empty">No team members yet.</div>';
+  renderPndLog();
+}
+async function renderPndLog(){
+  const box = document.getElementById('pt-log'); if(!box) return;
+  const { data, error } = await sb.rpc('pnd_team_log_list', { p_limit: 30 });
+  if(error){ box.innerHTML = `<div class="card-pad empty">${escHtml(error.message)}</div>`; return; }
+  const LBL = { invite:'invited', update:'changed', resend:'re-sent the invitation to', remove:'removed' };
+  box.innerHTML = (data || []).map(l => {
+    const d = l.detail == null ? '' : (typeof l.detail === 'string' ? l.detail : JSON.stringify(l.detail));
+    return `<div style="padding:10px 16px;border-bottom:1px solid var(--border);font-size:13px;"><b>${escHtml(l.actor_name || 'Someone')}</b> ${escHtml(LBL[l.action] || l.action || '')} <b>${escHtml(l.target_name || l.target_email || '')}</b>${d ? `<div style="font-size:12px;color:var(--text-muted);word-break:break-word;">${escHtml(d)}</div>` : ''}<div style="font-size:11px;color:var(--text-muted);">${escHtml(new Date(l.at).toLocaleString('en-GB'))}</div></div>`;
+  }).join('') || '<div class="card-pad empty">Nothing yet.</div>';
+}
+function pndGridHtml(cur){
+  return PND_SECTIONS.map(x => {
+    const v = cur[x.key] || 'hidden';
+    const opt = (val, label) => `<button type="button" class="seg-btn${v===val?' on':''}" data-v="${val}" onclick="teamSetLevel(this)">${label}</button>`;
+    return `<div class="team-row"><div class="team-row-text"><div style="font-weight:600;">${x.label}</div><div class="team-hint">${x.hint}</div></div>
+      <div class="seg" data-pt-section="${x.key}" data-value="${v}">${opt('hidden','Hidden')}${opt('view','View')}${opt('manage','Manage')}</div></div>`;
+  }).join('');
+}
+function pndLevelChanged(){
+  const lv = document.getElementById('pt-level').value;
+  document.getElementById('pt-rights-wrap').style.display = lv === 'limited' ? '' : 'none';
+  const cr = document.getElementById('pt-confirm-row');
+  cr.style.display = (pndEditing && lv !== pndEditing.level) ? '' : 'none';
+}
+function openPndForm(id){
+  closePndRemove();
+  pndEditing = id ? pndList.find(m => m.id === id) : null;
+  const owner = pndAccess && pndAccess.level === 'owner';
+  document.getElementById('pt-name').value = pndEditing ? pndEditing.name : '';
+  const em = document.getElementById('pt-email'); em.value = pndEditing ? (pndEditing.email || '') : ''; em.disabled = !!pndEditing;
+  const lvSel = document.getElementById('pt-level');
+  lvSel.innerHTML = '<option value="limited">Limited member</option>' + (owner ? '<option value="admin">Admin</option>' : '');
+  lvSel.value = pndEditing ? pndEditing.level : 'limited';
+  document.getElementById('pt-level-row').style.display = (owner || !pndEditing) ? '' : 'none';
+  const note = document.getElementById('pt-level-note');
+  note.style.display = owner ? 'none' : ''; note.textContent = owner ? '' : 'Only the owner can create admins. You add limited members.';
+  document.getElementById('pt-confirm').value = '';
+  document.getElementById('pt-grid').innerHTML = pndGridHtml(pndEditing ? (pndEditing.rights || {}) : {});
+  document.getElementById('pt-save').textContent = pndEditing ? 'Save changes' : 'Send invitation';
+  document.getElementById('pt-error').textContent = '';
+  document.getElementById('pt-form-title').textContent = pndEditing ? 'Edit ' + pndEditing.name : 'New team member';
+  document.querySelectorAll('#pt-list [data-pt-id]').forEach(c => { c.style.display = (pndEditing && c.dataset.ptId === pndEditing.id) ? 'none' : 'flex'; });
+  pndLevelChanged();
+  const f = document.getElementById('pt-form'); f.style.display = 'block';
+  if(f.scrollIntoView) f.scrollIntoView({ behavior:'smooth', block:'nearest' });
+}
+function closePndForm(){
+  const f = document.getElementById('pt-form'); if(f) f.style.display = 'none'; pndEditing = null;
+  document.querySelectorAll('#pt-list [data-pt-id]').forEach(c => { c.style.display = 'flex'; });
+}
+async function submitPndForm(){
+  const err = document.getElementById('pt-error'); err.textContent = '';
+  const name = document.getElementById('pt-name').value.trim();
+  const email = document.getElementById('pt-email').value.trim();
+  const level = document.getElementById('pt-level').value;
+  const rights = {}; if(level === 'limited') document.querySelectorAll('[data-pt-section]').forEach(sel => { if(sel.dataset.value !== 'hidden') rights[sel.dataset.ptSection] = sel.dataset.value; });
+  if(!name || (!pndEditing && !email)){ err.textContent = 'A name and an e-mail address are required.'; return; }
+  if(level === 'limited' && !Object.keys(rights).length){ err.textContent = 'Choose at least one section, or the person will only see the dashboard.'; return; }
+  const body = pndEditing ? { action:'update', staffId: pndEditing.id, name, rights } : { action:'invite', name, email, level, rights };
+  if(pndEditing && level !== pndEditing.level){
+    body.level = level; body.confirmEmail = document.getElementById('pt-confirm').value.trim();
+    if(!body.confirmEmail){ err.textContent = 'Type the person\'s e-mail address to confirm the level change.'; return; }
+  }
+  const btn = document.getElementById('pt-save'); btn.disabled = true;
+  const r = await pndCall(body);
+  btn.disabled = false;
+  if(r.error){ err.textContent = r.error; return; }
+  if(pndEditing) toast('Changes saved');
+  else if(r.data && r.data.mail === 'failed') toast('Team member added, but the invitation e-mail could not be sent. Use Resend invite.', 'error');
+  else toast('Invitation sent to ' + email);
+  closePndForm(); renderPndTeam();
+}
+async function resendPndInvite(id, btn){
+  if(btn) btn.disabled = true;
+  const r = await pndCall({ action:'resend', staffId:id });
+  if(btn) btn.disabled = false;
+  if(r.error) toastErr(r.error); else { toast('Invitation sent again'); renderPndLog(); }
+}
+function openPndRemove(id){
+  closePndForm();
+  pndRemoving = pndList.find(m => m.id === id); if(!pndRemoving) return;
+  document.getElementById('pt-remove-title').textContent = 'Remove ' + pndRemoving.name;
+  document.getElementById('pt-remove-email').value = '';
+  document.getElementById('pt-remove-error').textContent = '';
+  const box = document.getElementById('pt-remove'); box.style.display = 'block';
+  if(box.scrollIntoView) box.scrollIntoView({ behavior:'smooth', block:'nearest' });
+}
+function closePndRemove(){ const b = document.getElementById('pt-remove'); if(b) b.style.display = 'none'; pndRemoving = null; }
+async function confirmPndRemove(){
+  if(!pndRemoving) return;
+  const err = document.getElementById('pt-remove-error'); err.textContent = '';
+  const confirmEmail = document.getElementById('pt-remove-email').value.trim();
+  if(!confirmEmail){ err.textContent = 'Type the e-mail address to confirm.'; return; }
+  const btn = document.getElementById('pt-remove-go'); btn.disabled = true;
+  const r = await pndCall({ action:'remove', staffId: pndRemoving.id, confirmEmail });
+  btn.disabled = false;
+  if(r.error){ err.textContent = r.error; return; }
+  toast('Team member removed'); closePndRemove(); renderPndTeam();
 }
 
 // ---------------- TEAM ACCESS ----------------
