@@ -2598,6 +2598,7 @@ body.member-mode #bell-btn{display:none !important;}
               <div class="card card-pad cd-actions" style="display:flex;flex-direction:column;gap:8px;">
                 <button class="btn btn-primary btn-block" id="cd-remote-btn" onclick="toggleRemote()"></button>
                 <button class="btn btn-block" onclick="testChargerConnection()">Test connection</button>
+                <button class="btn btn-block" id="cd-refresh-btn" onclick="refreshChargerStatus()">Refresh status</button>
                 <div id="cd-maint" style="display:none;flex-direction:column;gap:8px;">
                   <button class="btn btn-block" onclick="chargerMaint('reset')">Restart charger</button>
                   <button class="btn btn-block" onclick="chargerMaint('unlock')">Release cable</button>
@@ -5846,6 +5847,31 @@ function chargerMaint(action){
     }
     if(isPndAdmin()) renderChargerHealth();
   }, t[2]);
+}
+// Asks the charger for its current status without interrupting anything.
+let refreshBusy = false;
+async function refreshChargerStatus(){
+  const c = chargers.find(x=>x.id===currentChargerId); if(!c || refreshBusy) return;
+  const btn = document.getElementById('cd-refresh-btn');
+  refreshBusy = true; if(btn){ btn.disabled = true; btn.textContent = 'Asking the charger…'; }
+  try{
+    const { data, error } = await sb.functions.invoke('remote-control', { body: { chargerId: c.id, action: 'refresh' } });
+    let msg = data && data.error;
+    if(!msg && error){ try { const b = await error.context.json(); msg = b && b.error; } catch(e) { msg = error.message; } }
+    if(msg){
+      toastErr(msg === 'charger not connected' ? 'The charger is not connected right now, so it cannot answer.' :
+               msg === 'charger did not respond' ? 'The charger did not answer in time.' :
+               msg === 'charger refused' ? 'The charger does not support this request.' : msg);
+    } else {
+      await new Promise(r=>setTimeout(r, 1500));
+      await loadAll();
+      const u = chargers.find(x=>x.id===c.id);
+      renderChargerDetail();
+      toast('Status refreshed' + (u ? ': ' + u.status : '') + '.');
+    }
+  } finally {
+    refreshBusy = false; if(btn){ btn.disabled = false; btn.textContent = 'Refresh status'; }
+  }
 }
 function renderChargerMaint(){
   const box = document.getElementById('cd-maint'); if(!box) return;
