@@ -7562,6 +7562,7 @@ async function shopSetStatus(id, status){
   if(error){ shopMsg('shop-orders-msg', error.message, true); return; }
   shopMsg('shop-orders-msg', '');
   await renderShopOrders();
+  toast('Order ' + o.number + ': ' + ({preparing:'marked as preparing', shipped:'marked as shipped', delivered:'marked as delivered', cancelled:'cancelled'}[status] || 'updated'));
 }
 function shopShipOpen(id){
   if(!shopIsAdmin()) return;
@@ -7588,8 +7589,8 @@ async function shopShipConfirm(){
     shopMsg('shop-ship-msg', m || (error && error.message) || 'Could not save.', true); return;
   }
   shopShipCancel();
-  if(data.mailSent) shopMsg('shop-orders-msg', 'Shipped. The customer has been e-mailed.');
-  else if(data.already) shopMsg('shop-orders-msg', 'Saved. No new e-mail (same tracking number as before).');
+  if(data.mailSent){ shopMsg('shop-orders-msg', ''); toast('Order shipped. The customer has been e-mailed.'); }
+  else if(data.already){ shopMsg('shop-orders-msg', ''); toast('Tracking saved. No new e-mail (same tracking number as before).'); }
   else shopMsg('shop-orders-msg', data.error || 'Shipped, but no e-mail was sent.', true);
   await renderShopOrders();
 }
@@ -7605,7 +7606,8 @@ async function saveShopSettings(){
   const { error } = await sb.from('shop_settings').update({ shipping_fee: Math.round(fee * 100) / 100, free_shipping_over: free === null ? null : Math.round(free * 100) / 100, order_email: email || null }).eq('id', true);
   btn.disabled = false;
   if(error){ shopMsg('shop-settings-msg', error.message, true); return; }
-  shopMsg('shop-settings-msg', 'Saved.');
+  shopMsg('shop-settings-msg', '');
+  toast('Shop settings saved');
 }
 
 function shopFillEditor(p){
@@ -7698,6 +7700,7 @@ async function shopToggle(id, field){
   const { error } = await sb.from('shop_products').update({ [field]: !p[field] }).eq('id', id);
   if(error){ toastErr(error.message); return; }
   await renderShop();
+  toast(({active:'Product', active_pro:'Pro price'}[field]) + (!p[field] ? ' switched on' : ' switched off'));
 }
 
 // --- Exchange rates (plugndrive_admin only): the single shared source for
