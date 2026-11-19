@@ -6253,6 +6253,7 @@ async function submitNewSite(){
 
   await loadAll();
   showPage('sites');
+  toast('Site added: ' + name);
 }
 
 // --- Site settings (per-site advanced fields) ---
@@ -6434,6 +6435,7 @@ async function saveSiteSettings(){
   }
   await loadAll();
   cancelSiteSettings();
+  toast('Site settings saved');
 }
 
 // --- Clients ---
@@ -6612,6 +6614,7 @@ async function savePayoutSettings(){
   const { error } = await sb.rpc('payout_set_settings', { p: { enabled: mode !== 'off', dry_run: mode !== 'on', interval_days: Number(document.getElementById('po-interval').value), min_amount: Number(document.getElementById('po-min').value) } });
   if(error){ document.getElementById('po-result').textContent = error.message; return; }
   loadPayoutAdmin();
+  toast('Payout settings saved');
 }
 async function payoutAction(action){
   const out = document.getElementById('po-result');
@@ -7058,6 +7061,7 @@ async function submitNewClient(){
   editingClientId = null;
   await loadAll();
   if(wasEditing){ showPage('clients'); openClient(wasEditing); } else { showPage('clients'); }
+  toast(wasEditing ? 'Client saved' : 'Client added');
 }
 
 // --- My operators (client_admin only) ---
@@ -7684,6 +7688,7 @@ async function saveShopProduct(){
   if(uploaded && cur.image_path && cur.image_path !== uploaded){ try{ await sb.storage.from('shop-products').remove([cur.image_path]); }catch(e){ /* best effort */ } }
   shopCancel();
   await renderShop();
+  toast('Product saved');
 }
 
 async function shopToggle(id, field){
@@ -8261,6 +8266,7 @@ async function saveAccessGroup(){
   if(error){ if(handleFeatureError(error.message)){ errEl.textContent = ''; return; } errEl.textContent = error.message; return; }
   closeAccessGroupForm();
   await loadAccessGroups();
+  toast('Access group saved');
 }
 async function archiveAccessGroup(groupId){
   const g = accGroups.find(x => x.id === groupId);
@@ -8905,6 +8911,7 @@ async function submitCampaignSub(){
   csBusy = false; btn.disabled = false;
   if(err){ errEl.textContent = csCleanMessage(err.message); return; }
   await renderCampaigns();
+  toast('Sub-account saved');
 }
 async function setCampaignSubStatus(btn){
   const id = btn.dataset.sid, st = btn.dataset.st;
@@ -10070,6 +10077,7 @@ async function submitCampaignDraft(){
   }
   closeCampaignDraft();
   await loadCampaignDrafts();
+  toast('Campaign draft saved');
 }
 async function duplicateCampaignDraft(btn){
   btn.disabled = true;
@@ -10384,6 +10392,7 @@ async function submitAddOperator(){
   }
   closeAddOperator();
   renderMyOperators();
+  toast('Operator added');
 }
 async function deleteOperator(staffId){
   const { data, error } = await sb.functions.invoke('manage-operators', { body: { action: 'delete', staffId } });
