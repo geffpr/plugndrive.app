@@ -9774,6 +9774,7 @@ async function loadTeamContext(){
     (r.data || []).forEach(x => { teamRights[x.section] = x.level; });
     if(c && c.data) clients = [mapClient(c.data)];
   } catch(e){ /* the menu then shows only the dashboard */ }
+  applyRoleBasedNav();   // the first menu was built before the rights were known
 }
 function applyTeamNav(){
   const tn = document.getElementById('team-nav');
