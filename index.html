@@ -4694,7 +4694,8 @@ function fmtLastSeen(lastSeenAt){
 }
 function livenessDot(lastSeenAt){
   const fresh = isChargerFresh(lastSeenAt);
-  const color = fresh ? '#1a7f37' : '#c0392b';
+  const off = lastSeenAt ? Date.now() - new Date(lastSeenAt).getTime() : Infinity;
+  const color = fresh ? '#1a7f37' : (off > OFFLINE_RED_MS && off <= OFFLINE_DORMANT_MS ? '#c0392b' : '#9aa5b5');
   return `<span title="${fresh?'Seen recently':'Silent for a while'}" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:5px;"></span>`;
 }
 function fmtMoney(n, currency){
@@ -5110,10 +5111,21 @@ window.addEventListener('popstate', routeFromLocation);
 
 function isArchivedLoc(locId){ const r = rootOf(locId); return !!r && r.status === 'Archived'; }
 function activeRoots(){ return locations.filter(l=>!l.parentId && l.status !== 'Archived'); }
-function chargerNeedsAttention(c){
-  if(isArchivedLoc(c.locationId)) return false;
-  return c.status === 'Faulted' || c.status === 'Offline' || !isChargerFresh(c.lastSeenAt);
+// Dashboard state of a charger: 'charging', 'red' (really needs a look: faulted, or
+// offline for more than 24h), 'dormant' (offline for more than 7 days, assumed
+// unplugged on purpose) or 'ok' (includes a short outage, which is normal life).
+const OFFLINE_RED_MS = 24*3600000, OFFLINE_DORMANT_MS = 7*86400000;
+function chargerState(c){
+  if(c.status === 'Charging') return 'charging';
+  if(isArchivedLoc(c.locationId)) return 'ok';
+  if(c.status === 'Faulted') return 'red';
+  if(c.status === 'Offline' || !isChargerFresh(c.lastSeenAt)){
+    const off = c.lastSeenAt ? Date.now() - new Date(c.lastSeenAt).getTime() : Infinity;
+    return off > OFFLINE_DORMANT_MS ? 'dormant' : (off > OFFLINE_RED_MS ? 'red' : 'ok');
+  }
+  return 'ok';
 }
+function chargerNeedsAttention(c){ return chargerState(c) === 'red'; }
 // A charger is billed with its own tariff, otherwise the tariff of its top-level site
 // (exactly what the OCPP server does). With neither, its charges are NOT billed.
 function chargerHasTariff(c){
@@ -5151,18 +5163,19 @@ function renderDashboard(){
       <td>${used} / ${cap} kW</td></tr>`;
   }).join('');
 
-  // Problem chargers first, then charging, then everything else — so
-  // what needs a look is always at the top, no scrolling required.
-  const priority = c => chargerNeedsAttention(c) ? 0 : (c.status === 'Charging' ? 1 : 2);
+  // Charging first, then chargers that really need a look (red), then the rest,
+  // and chargers offline for over a week at the very bottom.
+  const priority = c => ({charging:0, red:1, ok:2, dormant:3})[chargerState(c)];
   const sortedChargers = chargers.slice().sort((a,b) => priority(a) - priority(b));
 
   document.getElementById('dash-chargers-body').innerHTML = sortedChargers.length ? sortedChargers.map(c=>{
     const root = rootOf(c.locationId);
     const client = root && root.clientId ? clients.find(cl=>cl.id===root.clientId) : null;
     const problem = chargerNeedsAttention(c);
+    const dormant = chargerState(c) === 'dormant';
     const activeSession = c.status === 'Charging' ? sessions.find(s=>s.chargerId===c.id && !s.endedAt) : null;
     const cardholder = activeSession ? users.find(u=>u.id===activeSession.userId) : null;
-    return `<tr class="rowlink" style="${problem ? 'background:#fdecea;' : ''}" onclick="openCharger('${c.id}')">
+    return `<tr class="rowlink" style="${problem ? 'background:#fdecea;' : ''}${dormant ? 'opacity:.55;' : ''}" onclick="openCharger('${c.id}')">
       <td>${c.name}</td>
       <td class="path">${pathOf(c.locationId)}</td>
       <td>${client ? client.name : '-'}</td>
