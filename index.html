@@ -804,6 +804,12 @@ body.member-mode #bell-btn{display:none !important;}
 .copy-mini:hover{color:var(--text);border-color:var(--text-muted);}
 .copy-mini svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;pointer-events:none;}
 .copy-mini.done{color:#1fa463;border-color:#1fa463;}
+.tg{-webkit-appearance:none;appearance:none;position:relative;display:inline-block;width:36px !important;height:21px !important;flex:none !important;margin:0 !important;padding:0 !important;border:0 !important;border-radius:12px !important;background:#cbd5e1;cursor:pointer;vertical-align:middle;transition:background .15s;box-shadow:none !important;}
+.tg:after{content:"";position:absolute;top:3px;left:3px;width:15px;height:15px;border-radius:50%;background:#fff;transition:left .15s;box-shadow:0 1px 2px rgba(0,0,0,.25);}
+.tg:checked{background:#1fa463;}
+.tg:checked:after{left:18px;}
+.tg:disabled{opacity:.45;cursor:not-allowed;}
+.tg:focus-visible{outline:2px solid var(--blue,#2b6cb0);outline-offset:2px;}
 .tf-sw{position:relative;width:38px;height:22px;flex:none;margin-top:2px;}
 .tf-sw input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer;z-index:1;}
 .tf-sw i{position:absolute;inset:0;border-radius:12px;background:#cbd5e1;transition:background .15s;}
@@ -1640,7 +1646,7 @@ body.member-mode #bell-btn{display:none !important;}
             <input type="email" id="ss-contact-email">
           </div>
           <div class="form-row" id="ss-ocpi-row" style="display:none;">
-            <label style="display:flex;gap:8px;align-items:center;font-weight:600;"><input type="checkbox" id="ss-ocpi" style="width:auto;"> Publish in OCPI feed</label>
+            <label style="display:flex;gap:8px;align-items:center;font-weight:600;"><input type="checkbox" class="tg" id="ss-ocpi" style="width:auto;"> Publish in OCPI feed</label>
             <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">Shares this site and its public chargers (name, address, position, plugs, power, status) with Open Charge Map and partners under the CC0 open licence. Only chargers marked public are included. Leave it off for demo and test sites. Only Plug n Drive admins see this setting.</div>
           </div>
           <button class="btn btn-primary btn-block" onclick="saveSiteSettings()">Save settings</button>
@@ -1681,7 +1687,7 @@ body.member-mode #bell-btn{display:none !important;}
             <option value="extra_unpaid">Extra amount unpaid</option>
             <option value="stuck_pending">Never completed</option>
           </select>
-          <label style="font-size:13px;color:var(--text-secondary);display:flex;align-items:center;gap:6px;"><input type="checkbox" id="pay-handled" onchange="renderPayments()"> Show handled</label>
+          <label style="font-size:13px;color:var(--text-secondary);display:flex;align-items:center;gap:6px;"><input type="checkbox" class="tg" id="pay-handled" onchange="renderPayments()"> Show handled</label>
         </div>
         <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);">
           <div class="kpi"><div class="kpi-label">To return to customers</div><div class="kpi-value" id="pay-kpi-return">-</div></div>
@@ -1757,8 +1763,8 @@ body.member-mode #bell-btn{display:none !important;}
           <div class="form-row"><label>Internal notes (never shown to customers)</label><textarea id="shop-notes" maxlength="2000"></textarea></div>
           <div class="shop-2col">
             <div class="form-row"><label>Order in the shop</label><input type="number" id="shop-sort" step="1" inputmode="numeric"><div class="hint">Smaller numbers come first.</div></div>
-            <div class="form-row"><label class="check-row"><input type="checkbox" id="shop-active"> <span>Visible to the public (website)</span></label>
-              <label class="check-row" style="margin-top:8px;"><input type="checkbox" id="shop-active-pro"> <span>Visible to pro clients (console)</span></label></div>
+            <div class="form-row"><label class="check-row"><input type="checkbox" class="tg" id="shop-active"> <span>Visible to the public (website)</span></label>
+              <label class="check-row" style="margin-top:8px;"><input type="checkbox" class="tg" id="shop-active-pro"> <span>Visible to pro clients (console)</span></label></div>
           </div>
           <button class="btn btn-primary" id="shop-save-btn" onclick="saveShopProduct()">Save product</button>
           <button class="btn" onclick="shopCancel()">Cancel</button>
@@ -1871,19 +1877,19 @@ body.member-mode #bell-btn{display:none !important;}
               <tr><td style="color:var(--text-muted);">Client since</td><td id="cl-since" style="text-align:right;"></td></tr>
               <tr><td style="color:var(--text-muted);" title="Lets this client add operators who take cash/Mpesa top-ups on site. Off by default — only turn this on for a client you trust to handle cash, since it's the only situation that can create a roaming debt between clients.">Cash recharges</td><td style="text-align:right;">
                 <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
-                  <input type="checkbox" id="cl-cash-recharges" onchange="toggleClientCashRecharges(this.checked)">
+                  <input type="checkbox" class="tg" id="cl-cash-recharges" onchange="toggleClientCashRecharges(this.checked)">
                   <span id="cl-cash-recharges-label"></span>
                 </label>
               </td></tr>
               <tr><td style="color:var(--text-muted);" title="Lets this client's operators add guests and staff to access groups on their own chargers. Independent of Cash recharges: a client can have either, both, or neither.">Guest access</td><td style="text-align:right;">
                 <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
-                  <input type="checkbox" id="cl-guest-access" onchange="toggleClientGuestAccess(this.checked)">
+                  <input type="checkbox" class="tg" id="cl-guest-access" onchange="toggleClientGuestAccess(this.checked)">
                   <span id="cl-guest-access-label"></span>
                 </label>
               </td></tr>
               <tr id="cl-billing-demo-row"><td style="color:var(--text-muted);" title="For demos to prospects: shows this client the real Billing page (plans and prices) in read-only mode. Nothing can be bought or changed from it. Only you can change this. Turn it off after the demo.">Show billing (demo)</td><td style="text-align:right;">
                 <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
-                  <input type="checkbox" id="cl-billing-demo" onchange="toggleClientBillingDemo(this.checked)">
+                  <input type="checkbox" class="tg" id="cl-billing-demo" onchange="toggleClientBillingDemo(this.checked)">
                   <span id="cl-billing-demo-label"></span>
                 </label>
               </td></tr>
@@ -2382,7 +2388,7 @@ body.member-mode #bell-btn{display:none !important;}
             </div>
             <div style="font-size:12px;color:var(--text-muted);margin:6px 0 10px;max-width:760px;">Build your e-mail in the tool you already use, paste its HTML here and save it as a template. Nothing is sent from this page. Write {{first_name}}, {{site}}, {{brand}}, {{offer_name}}, {{offer_code}}, {{coupon_url}} (the coupon page with its QR code) or {{unsubscribe_url}} where you want them filled in. Scripts, forms and unsafe links are refused.</div>
             <div id="ct-error" style="color:var(--red, #c0392b);font-size:12px;margin-bottom:8px;"></div>
-            <label style="display:flex;gap:8px;align-items:center;font-weight:400;font-size:12px;margin-bottom:8px;"><input type="checkbox" id="ct-arch" style="width:auto;" onchange="ctToggleArch()"> Show archived templates</label>
+            <label style="display:flex;gap:8px;align-items:center;font-weight:400;font-size:12px;margin-bottom:8px;"><input type="checkbox" class="tg" id="ct-arch" style="width:auto;" onchange="ctToggleArch()"> Show archived templates</label>
             <div id="ct-list" class="card" style="overflow:auto;"></div>
             <div id="ct-editor" style="display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--border);">
               <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;">
@@ -2669,7 +2675,7 @@ body.member-mode #bell-btn{display:none !important;}
                   <tr id="cd-help-row" style="display:none;"><td colspan="2" style="font-size:12px;color:var(--text-secondary);padding-top:6px;">Enter the URL, the Charge ID and the password in your charger's OCPP settings (Charge ID is also the user name if your charger asks for one). The status turns to Connected within a minute.</td></tr>
                   <tr><td style="color:var(--text-muted);">Public site</td><td style="text-align:right;">
                     <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
-                      <input type="checkbox" id="cd-listed" onchange="toggleChargerListing(this.checked)">
+                      <input type="checkbox" class="tg" id="cd-listed" onchange="toggleChargerListing(this.checked)">
                       <span id="cd-listed-label"></span>
                     </label>
                   </td></tr>
@@ -2779,7 +2785,7 @@ body.member-mode #bell-btn{display:none !important;}
               </div>
               <div class="form-row">
                 <label class="check-row">
-                  <input type="checkbox" id="new-charger-public">
+                  <input type="checkbox" class="tg" id="new-charger-public">
                   <span>Show on the public site (charge.plugndrive.co.za)</span>
                 </label>
                 <div class="check-hint" id="new-charger-public-hint">Off by default. A hidden charger stays reachable through its own QR code or link, handy for demos.</div>
@@ -3012,12 +3018,12 @@ body.member-mode #bell-btn{display:none !important;}
           <div class="filters"><select id="fleet-sched-client" style="display:none;" onchange="renderFleetSchedule()"></select></div>
           <div id="fleet-sched-body" style="max-width:560px;">
             <div class="card card-pad" style="margin-bottom:16px;">
-              <label style="display:flex;gap:8px;align-items:center;font-weight:600;"><input type="checkbox" id="fleet-s-auto"> Start the plugged-in vehicles every day</label>
+              <label style="display:flex;gap:8px;align-items:center;font-weight:600;"><input type="checkbox" class="tg" id="fleet-s-auto"> Start the plugged-in vehicles every day</label>
               <div style="font-size:12px;color:var(--text-muted);margin:6px 0 10px;">At this time, every charger that has a vehicle plugged in and a vehicle chosen on the Start charging tab is started. Chargers with nothing plugged in are skipped.</div>
               <div class="form-row"><label>Time (South Africa)</label><input type="time" id="fleet-s-auto-time" value="07:00"></div>
             </div>
             <div class="card card-pad" style="margin-bottom:16px;">
-              <label style="display:flex;gap:8px;align-items:center;font-weight:600;"><input type="checkbox" id="fleet-s-sum"> Send a summary e-mail every morning</label>
+              <label style="display:flex;gap:8px;align-items:center;font-weight:600;"><input type="checkbox" class="tg" id="fleet-s-sum"> Send a summary e-mail every morning</label>
               <div style="font-size:12px;color:var(--text-muted);margin:6px 0 10px;">Yesterday's charges per vehicle, vehicles that did not charge, and how the daily start went.</div>
               <div class="form-row"><label>Time (South Africa)</label><input type="time" id="fleet-s-sum-time" value="07:30"></div>
               <div class="form-row"><label>E-mail</label><input type="text" id="fleet-s-email" maxlength="200" placeholder="name@yourcompany.com"></div>
@@ -6319,7 +6325,7 @@ function ssHoursBuild(){
   g.dataset.built = '1';
   g.innerHTML = SS_DAYS.map(([k,label]) =>
     `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;">
-      <label style="width:110px;display:flex;align-items:center;gap:6px;margin:0;"><input type="checkbox" id="ss-h-${k}-on"> ${label}</label>
+      <label style="width:110px;display:flex;align-items:center;gap:6px;margin:0;"><input type="checkbox" class="tg" id="ss-h-${k}-on"> ${label}</label>
       <input type="time" id="ss-h-${k}-from" value="08:00" style="width:110px;"> <span>to</span>
       <input type="time" id="ss-h-${k}-to" value="18:00" style="width:110px;">
     </div>`).join('') +
@@ -6629,7 +6635,7 @@ async function renderClientPayoutBox(clientId){
   if(error){ el.innerHTML = ''; return; }
   el.innerHTML = '<div style="font-size:12px;font-weight:600;margin-bottom:6px;">Automatic payouts</div>' +
     `<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">${cl.paystackRecipientCode ? 'Bank account connected: paid automatically.' : 'No bank account connected: you pay this client yourself, then use Settle a period.'}</div>` +
-    `<label style="font-size:12px;display:flex;align-items:center;gap:6px;margin-bottom:8px;"><input type="checkbox" id="cl-payout-paused" ${cl.payoutPaused ? 'checked' : ''} onchange="togglePayoutPaused()"> Pause automatic payouts for this client</label>` +
+    `<label style="font-size:12px;display:flex;align-items:center;gap:6px;margin-bottom:8px;"><input type="checkbox" class="tg" id="cl-payout-paused" ${cl.payoutPaused ? 'checked' : ''} onchange="togglePayoutPaused()"> Pause automatic payouts for this client</label>` +
     payoutRowsHtml(data || [], true);
 }
 async function togglePayoutPaused(){
@@ -6761,7 +6767,7 @@ function drawFeatureRows(values){
   let h = '';
   FT_BOOLS.forEach(([k, label]) => {
     const [src, ov] = ftSrcLabel(k);
-    h += `<div class="ft-row"><div class="ft-name">${bEsc(label)}</div><input type="checkbox" id="ft-b-${k}" ${vals[k] ? 'checked' : ''} onchange="ftMark('${k}')"><span class="ft-src${ov ? ' ov' : ''}" id="ft-s-${k}">${src}</span></div>`;
+    h += `<div class="ft-row"><div class="ft-name">${bEsc(label)}</div><input type="checkbox" class="tg" id="ft-b-${k}" ${vals[k] ? 'checked' : ''} onchange="ftMark('${k}')"><span class="ft-src${ov ? ' ov' : ''}" id="ft-s-${k}">${src}</span></div>`;
   });
   FT_LIMITS.forEach(([k, label]) => {
     const [src, ov] = ftSrcLabel(k);
@@ -8712,7 +8718,7 @@ function csChRender(){
         <label style="font-weight:400;font-size:12px;display:flex;flex-direction:column;gap:2px;">Sender name shown to drivers<input type="text" id="cs-ch-fn" maxlength="60" value="${bEsc(e.from_name)}"></label>
         <label style="font-weight:400;font-size:12px;display:flex;flex-direction:column;gap:2px;">Replies go to (optional)<input type="text" id="cs-ch-rt" maxlength="120" value="${bEsc(e.reply_to)}" placeholder="hello@yourbrand.co.za"></label>
       </div>
-      <label style="display:flex;gap:8px;align-items:center;font-weight:400;font-size:13px;margin-top:10px;"><input type="checkbox" id="cs-ch-e-on" style="width:auto;"${e.enabled ? ' checked' : ''}> Use e-mail for this brand</label>
+      <label style="display:flex;gap:8px;align-items:center;font-weight:400;font-size:13px;margin-top:10px;"><input type="checkbox" class="tg" id="cs-ch-e-on" style="width:auto;"${e.enabled ? ' checked' : ''}> Use e-mail for this brand</label>
       <div style="margin-top:8px;"><button class="btn btn-primary btn-sm" onclick="csChSaveEmail()">Save e-mail settings</button></div></div>
     <div style="${box}"><div style="font-weight:600;">Offer codes</div>
       <div style="font-size:12px;color:var(--text-muted);margin:4px 0 8px;">Each offer carries a one-time code. Drivers see it in the e-mail and on a coupon page with a QR code. Your staff check and mark it as used on the <a href="/redeem.html" target="_blank" rel="noopener">redeem page</a>.</div>
@@ -8721,7 +8727,7 @@ function csChRender(){
       <div style="margin-top:8px;"><button class="btn btn-primary btn-sm" onclick="csChSaveValidity()">Save</button></div></div>
     <div style="${box}"><div style="font-weight:600;">SMS sent by Plug n Drive</div>
       <div style="font-size:12px;color:var(--text-muted);margin:4px 0 8px;">Short messages with the offer code, sent only to drivers who agreed to receive SMS offers. Each SMS carries an opt-out link. In test mode, SMS can only go to the test numbers below.</div>
-      <label style="display:flex;gap:8px;align-items:center;font-weight:400;font-size:13px;"><input type="checkbox" id="cs-ch-s-on" style="width:auto;"${(d.sms || {}).enabled ? ' checked' : ''}> Use SMS for this brand</label>
+      <label style="display:flex;gap:8px;align-items:center;font-weight:400;font-size:13px;"><input type="checkbox" class="tg" id="cs-ch-s-on" style="width:auto;"${(d.sms || {}).enabled ? ' checked' : ''}> Use SMS for this brand</label>
       <div style="margin-top:8px;"><button class="btn btn-primary btn-sm" onclick="csChSaveSms()">Save SMS settings</button></div>
       <div style="font-weight:600;margin-top:14px;font-size:13px;">Test numbers</div>
       <div id="cs-ch-phones" style="font-size:13px;margin:6px 0;">${phones}</div>
@@ -8738,7 +8744,7 @@ function csChRender(){
         <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">It is shown only once. Renewing it makes the old one stop working.</div>
         <div id="cs-ch-secret" class="pay-ref" style="padding:10px;background:var(--surface, #f7f9fb);border:1px solid var(--border);border-radius:8px;word-break:break-all;"></div>
         <div style="display:flex;gap:8px;margin-top:10px;"><button class="btn btn-primary btn-sm" id="cs-ch-copy" onclick="csChCopySecret()">Copy</button><button class="btn btn-sm" onclick="csChHideSecret()">I have copied it</button></div></div>
-      <label style="display:flex;gap:8px;align-items:center;font-weight:400;font-size:13px;margin-top:10px;"><input type="checkbox" id="cs-ch-w-on" style="width:auto;"${w.enabled ? ' checked' : ''}> Use the webhook for this brand</label>
+      <label style="display:flex;gap:8px;align-items:center;font-weight:400;font-size:13px;margin-top:10px;"><input type="checkbox" class="tg" id="cs-ch-w-on" style="width:auto;"${w.enabled ? ' checked' : ''}> Use the webhook for this brand</label>
       <div style="margin-top:8px;"><button class="btn btn-primary btn-sm" onclick="csChSaveWebhook()">Save webhook settings</button></div></div>
     <div style="${box}margin-bottom:0;"><div style="font-weight:600;">Test addresses</div>
       <div style="font-size:12px;color:var(--text-muted);margin:4px 0 8px;">While a campaign is in test mode, e-mails can only go to these addresses (up to 10), never to drivers.</div>
@@ -10425,7 +10431,7 @@ async function renderMyOperators(){
   document.getElementById('operators-body').innerHTML = (data||[]).map(o=>{
     const site = locations.find(l=>l.id===o.location_id);
     const guestCell = guestOn
-      ? `<td><input type="checkbox" ${o.can_add_guests ? 'checked' : ''} onchange="setOperatorGuestRight('${o.id}', this.checked, this)" aria-label="Can add guests"></td>` : '';
+      ? `<td><input type="checkbox" class="tg" ${o.can_add_guests ? 'checked' : ''} onchange="setOperatorGuestRight('${o.id}', this.checked, this)" aria-label="Can add guests"></td>` : '';
     return `<tr><td>${o.name}</td><td>${o.email||'-'}</td><td>${site?site.name:'-'}</td><td>${(o.created_at||'').slice(0,10)}</td>${guestCell}
       <td><button class="btn btn-sm" onclick="deleteOperator('${o.id}')">Remove</button></td></tr>`;
   }).join('') || '<tr><td colspan="6" class="empty">No operators yet.</td></tr>';
@@ -11501,7 +11507,7 @@ function renderLoad(){
       const rows = under.slice().sort((a,b)=>(b.loadPriority?1:0)-(a.loadPriority?1:0) || String(a.name).localeCompare(String(b.name))).map(c=>
         `<label style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid var(--border);font-size:13px;cursor:pointer;">
           <span><b>${escHtml(c.name)}</b> <span style="color:var(--text-muted);">· ${Number(c.powerKW)||0} kW · ${escHtml(c.status||'')}</span></span>
-          <span style="display:flex;align-items:center;gap:6px;white-space:nowrap;"><input type="checkbox" ${c.loadPriority?'checked':''} onchange="toggleChargerPriority('${c.id}', this.checked)"> Priority</span>
+          <span style="display:flex;align-items:center;gap:6px;white-space:nowrap;"><input type="checkbox" class="tg" ${c.loadPriority?'checked':''} onchange="toggleChargerPriority('${c.id}', this.checked)"> Priority</span>
         </label>`).join('');
       prioHtml = `<div style="margin-top:14px;">
         <div style="font-weight:600;font-size:13px;">Charger priority</div>
@@ -11515,7 +11521,7 @@ function renderLoad(){
       <div style="display:flex;justify-content:space-between;align-items:center;">
         <div><div style="font-weight:600;">${r.name}</div><div class="path">${r.city||''} · ${under.length} chargers</div></div>
         <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
-          <input type="checkbox" ${r.loadManagementEnabled ? 'checked' : ''} onchange="toggleLoadManagement('${r.id}', this.checked)">
+          <input type="checkbox" class="tg" ${r.loadManagementEnabled ? 'checked' : ''} onchange="toggleLoadManagement('${r.id}', this.checked)">
           Enforce capacity (first-come, first-served)
         </label>
       </div>
