@@ -732,6 +732,7 @@ body.member-mode #bell-btn{display:none !important;}
 /* toast: short confirmation or error, bottom centre, disappears by itself */
 #pnd-toast{position:fixed;left:50%;width:max-content;bottom:28px;transform:translate(-50%,12px);max-width:min(440px,calc(100vw - 32px));background:#1a3260;color:#fff;font-size:14px;line-height:1.4;padding:11px 16px 11px 14px;border-radius:10px;box-shadow:0 8px 24px rgba(26,50,96,.28);display:flex;align-items:center;gap:10px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:10000;}
 #pnd-toast.show{opacity:1;transform:translate(-50%,0);}
+@media(max-width:900px){#pnd-toast{bottom:calc(86px + env(safe-area-inset-bottom));}}
 #pnd-toast.err{background:#a93226;}
 #pnd-toast svg{flex:none;width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;}
 </style>
@@ -2360,12 +2361,7 @@ body.member-mode #bell-btn{display:none !important;}
           </div>
           <div id="team-error" style="color:var(--red, #c0392b);font-size:12px;margin-top:8px;"></div>
         </div>
-        <div class="card">
-          <table>
-            <thead><tr><th>Name</th><th>E-mail</th><th>Access</th><th>Site</th><th>Added</th><th></th></tr></thead>
-            <tbody id="team-body"></tbody>
-          </table>
-        </div>
+        <div id="team-list" style="display:grid;gap:10px;"></div>
       </div>
 
       <!-- ACCESS (client_admin, when "Guest access" is on): groups with a tariff, valid on this client's own chargers only -->
@@ -9763,7 +9759,7 @@ const TEAM_SECTIONS = [
   { key:'tariffs',  label:'Tariffs',          canManage:true  },
   { key:'sessions', label:'Sessions',         canManage:false },
   { key:'users',    label:'Users and cards',  canManage:true  },
-  { key:'finance',  label:'Finance (wallet activity)', canManage:false },
+  { key:'finance',  label:'Wallet and finance', canManage:false },
 ];
 const TEAM_PAGE_SECTION = { sites:'sites', addsite:'sites', chargers:'chargers', addcharger:'chargers', tariffs:'tariffs', rfid:'users', sessions:'sessions', walletactivity:'finance' };
 function isTeam(){ return !!(currentStaff && currentStaff.role === 'team_member'); }
@@ -9791,26 +9787,34 @@ function teamSummary(rows){
 }
 async function renderTeam(){
   closeTeamForm();
-  const body = document.getElementById('team-body');
+  const body = document.getElementById('team-list');
   const [st, rt] = await Promise.all([
     sb.from('staff').select('*').eq('role', 'team_member').order('created_at', {ascending:false}),
     sb.from('team_rights').select('staff_id, section, level'),
   ]);
-  if(st.error){ body.innerHTML = `<tr><td colspan="6" class="empty">${escHtml(st.error.message)}</td></tr>`; return; }
+  if(st.error){ body.innerHTML = `<div class="card card-pad empty">${escHtml(st.error.message)}</div>`; return; }
   const byStaff = {}; (rt.data || []).forEach(r => { (byStaff[r.staff_id] = byStaff[r.staff_id] || []).push(r); });
   teamList = (st.data || []).map(m => Object.assign({}, m, { rights: byStaff[m.id] || [] }));
   body.innerHTML = teamList.map(m => {
     const site = m.location_id ? (locations.find(l => l.id === m.location_id) || {}).name : 'All sites';
-    return `<tr><td>${escHtml(m.name)}</td><td>${escHtml(m.email || '-')}</td><td>${escHtml(teamSummary(m.rights))}</td><td>${escHtml(site || '-')}</td><td>${(m.created_at || '').slice(0,10)}</td>
-      <td style="white-space:nowrap;"><button class="btn btn-sm" onclick="openTeamForm('${m.id}')">Edit</button> <button class="btn btn-sm" onclick="resendTeamInvite('${m.id}', this)">Resend invite</button> <button class="btn btn-sm" onclick="removeTeamMember('${m.id}')">Remove</button></td></tr>`;
-  }).join('') || '<tr><td colspan="6" class="empty">No team members yet.</td></tr>';
+    return `<div class="card card-pad">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline;flex-wrap:wrap;">
+        <div style="font-weight:700;">${escHtml(m.name)}</div>
+        <div style="font-size:12px;color:var(--text-muted);">Added ${(m.created_at || '').slice(0,10)}</div>
+      </div>
+      <div style="font-size:13px;color:var(--text-muted);word-break:break-all;">${escHtml(m.email || '-')}</div>
+      <div style="font-size:13px;margin-top:8px;"><b>Access:</b> ${escHtml(teamSummary(m.rights))}</div>
+      <div style="font-size:13px;margin-top:2px;"><b>Site:</b> ${escHtml(site || '-')}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;"><button class="btn btn-sm" onclick="openTeamForm('${m.id}')">Edit</button><button class="btn btn-sm" onclick="resendTeamInvite('${m.id}', this)">Resend invite</button><button class="btn btn-sm" onclick="removeTeamMember('${m.id}')">Remove</button></div>
+    </div>`;
+  }).join('') || '<div class="card card-pad empty">No team members yet.</div>';
 }
 function teamGridHtml(current){
   return TEAM_SECTIONS.map(x => {
     const v = current[x.key] || 'hidden';
     return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border);">
       <span>${x.label}</span>
-      <select data-team-section="${x.key}"><option value="hidden"${v==='hidden'?' selected':''}>Hidden</option><option value="view"${v==='view'?' selected':''}>View</option>${x.canManage ? `<option value="manage"${v==='manage'?' selected':''}>View and manage</option>` : ''}</select>
+      <select data-team-section="${x.key}" style="width:170px;padding:8px 10px;border:1px solid var(--border);border-radius:10px;background:var(--bg, #f5f8fc);color:inherit;font:inherit;font-size:14px;"><option value="hidden"${v==='hidden'?' selected':''}>Hidden</option><option value="view"${v==='view'?' selected':''}>View</option>${x.canManage ? `<option value="manage"${v==='manage'?' selected':''}>View and manage</option>` : ''}</select>
     </div>`;
   }).join('');
 }
