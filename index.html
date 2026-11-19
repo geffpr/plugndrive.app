@@ -765,6 +765,11 @@ body.member-mode #bell-btn{display:none !important;}
   #page-proshop #ps-banner, #page-proshop #ps-main > .card{max-width:none !important;}
   #photos-body{max-width:none !important;}
   #page-photos > div[style*="max-width:1000px"]{max-width:none !important;}
+  #team-form{max-width:none !important;display:none;}
+  #team-form[style*="display: block"], #team-form[style*="display:block"]{display:grid !important;grid-template-columns:340px minmax(0,1fr);column-gap:44px;align-items:start;}
+  #team-form .tm-title{margin-top:0 !important;}
+  #team-form .tm-actions, #team-form #team-error{grid-column:1 / -1;}
+  #team-list{grid-template-columns:repeat(auto-fill,minmax(520px,1fr));}
   .cols-auto{column-width:440px;column-gap:20px;}
   .cols-auto > .card,.cols-auto > div[class*="card"]{max-width:none !important;break-inside:avoid;}
   .cols-auto > .section-title{break-after:avoid-column;}
@@ -2441,12 +2446,16 @@ body.member-mode #bell-btn{display:none !important;}
         </div>
         <div style="color:var(--text-muted);font-size:12px;margin:6px 0 12px;max-width:680px;">Give a colleague their own login and choose what they can see or manage. Billing, bank details, API keys and the team itself always stay with you.</div>
         <div id="team-form" class="card card-pad" style="display:none;max-width:560px;margin:12px 0;">
+          <div class="tm-left">
           <div class="form-row"><label>Name</label><input type="text" id="team-name" maxlength="100"></div>
           <div class="form-row"><label>E-mail (used to sign in)</label><input type="email" id="team-email" autocapitalize="none"></div>
           <div class="form-row"><label>Site</label><select id="team-site"></select></div>
-          <div style="font-weight:600;margin:12px 0 6px;">What they can do</div>
+          </div>
+          <div class="tm-right">
+          <div style="font-weight:600;margin:12px 0 6px;" class="tm-title">What they can do</div>
           <div id="team-rights-grid"></div>
-          <div style="display:flex;gap:8px;margin-top:14px;">
+          </div>
+          <div class="tm-actions" style="display:flex;gap:8px;margin-top:14px;">
             <button class="btn btn-primary" id="team-save" onclick="submitTeamForm()">Send invitation</button>
             <button class="btn" onclick="closeTeamForm()">Cancel</button>
           </div>
