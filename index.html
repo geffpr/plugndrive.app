@@ -759,6 +759,13 @@ body.member-mode #bell-btn{display:none !important;}
   .cols-auto > .card,.cols-auto > div[class*="card"]{max-width:none !important;break-inside:avoid;}
   .cols-auto > .section-title{break-after:avoid-column;}
 }
+/* Site settings: one long form becomes a few columns of fields on desktop (a single card on phones, as before). */
+@media (min-width:1100px){
+  #page-sitesettings > .card{max-width:none !important;column-width:380px;column-gap:44px;}
+  #page-sitesettings .form-row{break-inside:avoid;}
+  #page-sitesettings > .card > .btn-block,#page-sitesettings #site-settings-error{column-span:all;}
+  #page-sitesettings > .card > .btn-block{max-width:260px;}
+}
 </style>
 
 <link rel="icon" href="/favicon.ico" sizes="48x48">
