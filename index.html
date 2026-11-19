@@ -2446,6 +2446,7 @@ body.member-mode #bell-btn{display:none !important;}
         </div>
         <div style="color:var(--text-muted);font-size:12px;margin:6px 0 12px;max-width:680px;">Give a colleague their own login and choose what they can see or manage. Billing, bank details, API keys and the team itself always stay with you.</div>
         <div id="team-form" class="card card-pad" style="display:none;max-width:560px;margin:12px 0;">
+          <div id="team-form-title" style="font-weight:700;font-size:15px;margin-bottom:6px;grid-column:1 / -1;"></div>
           <div class="tm-left">
           <div class="form-row"><label>Name</label><input type="text" id="team-name" maxlength="100"></div>
           <div class="form-row"><label>E-mail (used to sign in)</label><input type="email" id="team-email" autocapitalize="none"></div>
@@ -10276,7 +10277,7 @@ async function renderTeam(){
   teamList = (st.data || []).map(m => Object.assign({}, m, { rights: byStaff[m.id] || [] }));
   body.innerHTML = teamList.map(m => {
     const site = m.location_id ? (locations.find(l => l.id === m.location_id) || {}).name : 'All sites';
-    return `<div class="card card-pad" style="display:flex;align-items:center;gap:14px 28px;flex-wrap:wrap;">
+    return `<div class="card card-pad" data-team-id="${m.id}" style="display:flex;align-items:center;gap:14px 28px;flex-wrap:wrap;">
       <div style="flex:1 1 220px;min-width:0;">
         <div style="font-weight:700;">${escHtml(m.name)}</div>
         <div style="font-size:13px;color:var(--text-muted);word-break:break-all;">${escHtml(m.email || '-')}</div>
@@ -10322,9 +10323,17 @@ function openTeamForm(staffId){
   document.getElementById('team-rights-grid').innerHTML = teamGridHtml(cur);
   document.getElementById('team-save').textContent = teamEditing ? 'Save changes' : 'Send invitation';
   document.getElementById('team-error').textContent = '';
-  document.getElementById('team-form').style.display = 'block';
+  document.getElementById('team-form-title').textContent = teamEditing ? 'Edit ' + teamEditing.name : 'New team member';
+  // the member being edited is shown in the form, so its card steps aside until the form closes
+  document.querySelectorAll('#team-list [data-team-id]').forEach(c => { c.style.display = (teamEditing && c.dataset.teamId === teamEditing.id) ? 'none' : 'flex'; });
+  const tf = document.getElementById('team-form');
+  tf.style.display = 'block';
+  if(tf.scrollIntoView) tf.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
-function closeTeamForm(){ const f = document.getElementById('team-form'); if(f) f.style.display = 'none'; teamEditing = null; }
+function closeTeamForm(){
+  const f = document.getElementById('team-form'); if(f) f.style.display = 'none'; teamEditing = null;
+  document.querySelectorAll('#team-list [data-team-id]').forEach(c => { c.style.display = 'flex'; });
+}
 async function teamCall(body){
   const { data, error } = await sb.functions.invoke('manage-team', { body });
   if(error || (data && data.error)){
