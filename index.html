@@ -1996,6 +1996,12 @@ body.display-mode .content{padding:26px 34px;pointer-events:none;user-select:non
             </div>
             <div class="form-row"><label>Driver site address</label><input type="text" id="br-charge" placeholder="charge.theirbrand.com" autocapitalize="none"></div>
             <div class="form-row"><label>Console address</label><input type="text" id="br-console" placeholder="console.theirbrand.com" autocapitalize="none"></div>
+            <div class="form-row"><label>Country (sets the phone code and the default country)</label><select id="br-country"></select></div>
+            <div style="display:flex;gap:14px;flex-wrap:wrap;">
+              <div class="form-row" style="flex:1 1 200px;"><label>Support e-mail</label><input type="email" id="br-sup-mail" maxlength="120" placeholder="support@theirbrand.com" autocapitalize="none"></div>
+              <div class="form-row" style="flex:1 1 200px;"><label>Support WhatsApp number</label><input type="text" id="br-sup-wa" maxlength="20" placeholder="250788123456" inputmode="numeric"></div>
+            </div>
+            <div class="hint" style="margin:-4px 0 10px;">WhatsApp: country code then number, digits only. If the e-mail is empty, the Help button still sends to Plug n Drive support. If the WhatsApp number is empty, the WhatsApp button is hidden.</div>
             <div class="ft-row"><div class="ft-name">Show "Powered by Plug n Drive"</div><input type="checkbox" class="tg" id="br-powered" checked></div>
             <div class="ft-row"><div class="ft-name">Brand is active</div><input type="checkbox" class="tg" id="br-active" checked></div>
             <div style="display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap;">
@@ -3755,7 +3761,11 @@ function initTrialPhoneUi() {
     if (hit) setTrialDial(hit[1], hit[2]);
     document.getElementById('tr-other-wrap').style.display = cs.value === '__other' ? '' : 'none';
   });
-  cs.value = 'South Africa'; setTrialDial('+27', 'za');
+  trialDefaultCountry();
+}
+function trialDefaultCountry(){
+  const hit = (typeof BRAND !== 'undefined' && BRAND && BRAND.country && TRIAL_COUNTRIES.find(c => c[2] === BRAND.country)) || TRIAL_COUNTRIES[0];
+  document.getElementById('tr-country').value = hit[0]; setTrialDial(hit[1], hit[2]);
 }
 function trialIsIndividual() { return document.getElementById('tr-kind').value === 'individual'; }
 // ---- wizard: 4 steps over the same fields; answers are kept on this device until the account is created ----
@@ -3848,7 +3858,7 @@ async function showTrialQuestions(user) {
   else {
     // a different person on this page: never show the previous person's answers
     TR_FIELDS.forEach(id => { if (id !== 'tr-name') document.getElementById(id).value = ''; });
-    document.getElementById('tr-country').value = 'South Africa'; setTrialDial('+27', 'za');
+    trialDefaultCountry();
     document.getElementById('tr-other-wrap').style.display = 'none';
     document.getElementById('tr-kind').value = 'business'; applyTrialKind();
     if (savedStart() === 'host' && !trKindPreset) { trKindPreset = true; document.getElementById('tr-kind').value = 'individual'; applyTrialKind(); }
@@ -6897,10 +6907,16 @@ async function renderBrandPanel(cl){
   ['c1','c2'].forEach((k, i) => { const v = (i ? b.accent_color : b.primary_color) || ''; document.getElementById('br-' + k + 't').value = v; document.getElementById('br-' + k).value = v || (i ? '#3a8fd4' : '#1a3260'); });
   document.getElementById('br-charge').value = b.charge_host || '';
   document.getElementById('br-console').value = b.console_host || '';
+  const bcs = document.getElementById('br-country');
+  if(!bcs.options.length){ bcs.innerHTML = '<option value="">Not set (South Africa, +27)</option>' + BR_COUNTRIES.map(c => '<option value="' + c[2] + '">' + c[0] + ' (' + c[1] + ')</option>').join(''); }
+  bcs.value = b.country || '';
+  document.getElementById('br-sup-mail').value = b.support_email || '';
+  document.getElementById('br-sup-wa').value = b.support_whatsapp || '';
   document.getElementById('br-powered').checked = b.show_powered_by !== false;
   document.getElementById('br-active').checked = b.active !== false;
   document.getElementById('br-remove').style.display = brandRow ? '' : 'none';
 }
+const BR_COUNTRIES = [['South Africa','+27','za'],['Mozambique','+258','mz'],['Namibia','+264','na'],['Botswana','+267','bw'],['Zimbabwe','+263','zw'],['Zambia','+260','zm'],['Eswatini','+268','sz'],['Lesotho','+266','ls'],['Malawi','+265','mw'],['Angola','+244','ao'],['Mauritius','+230','mu'],['Kenya','+254','ke'],['Tanzania','+255','tz'],['Uganda','+256','ug'],['Rwanda','+250','rw'],['Ethiopia','+251','et'],['DR Congo','+243','cd'],['Nigeria','+234','ng'],['Ghana','+233','gh'],['Senegal','+221','sn'],['Ivory Coast','+225','ci'],['France','+33','fr'],['Portugal','+351','pt'],['United Kingdom','+44','gb'],['United States','+1','us']];
 function brHost(v){ return String(v || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, ''); }
 async function saveBrand(){
   const msg = document.getElementById('br-msg'); msg.textContent = '';
@@ -6914,7 +6930,10 @@ async function saveBrand(){
   const hostRe = /^[a-z0-9.-]+\.[a-z]{2,}$/;
   if((ch && !hostRe.test(ch)) || (co && !hostRe.test(co))){ msg.textContent = 'Addresses look like charge.theirbrand.com (no https://, no path).'; return; }
   if(ch && ch === co){ msg.textContent = 'The driver site and the console need two different addresses.'; return; }
-  const row = { client_id: currentClientId, name, logo_url: logo || null, primary_color: c1 || null, accent_color: c2 || null, charge_host: ch || null, console_host: co || null,
+  const supMail = document.getElementById('br-sup-mail').value.trim(), supWa = document.getElementById('br-sup-wa').value.replace(/[\s+\-()]/g, '');
+  if(supMail && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(supMail)){ msg.textContent = 'The support e-mail does not look right.'; return; }
+  if(supWa && !/^[0-9]{7,15}$/.test(supWa)){ msg.textContent = 'WhatsApp number: country code then number, digits only (for example 250788123456).'; return; }
+  const row = { client_id: currentClientId, name, support_email: supMail || null, support_whatsapp: supWa || null, country: document.getElementById('br-country').value || null, logo_url: logo || null, primary_color: c1 || null, accent_color: c2 || null, charge_host: ch || null, console_host: co || null,
     show_powered_by: document.getElementById('br-powered').checked, active: document.getElementById('br-active').checked };
   const btn = document.getElementById('br-save'); btn.disabled = true;
   const { data, error } = await sb.from('brands').upsert(row, { onConflict: 'client_id' }).select().maybeSingle();
@@ -12280,6 +12299,10 @@ function brReplaceText(root){
   const hits = []; while(w.nextNode()) hits.push(w.currentNode);
   hits.forEach(n => { n.nodeValue = n.nodeValue.replace(/Plug n Drive/g, name); });
 }
+function brPlaceholders(root){
+  if(!BRAND || !BRAND.dial || !root.querySelectorAll) return;
+  root.querySelectorAll('input[placeholder*="+27"]').forEach(i => { i.placeholder = i.placeholder.replace('+27', BRAND.dial); });
+}
 function applyConsoleBrand(b){
   BRAND = b;
   const root = document.documentElement.style;
@@ -12298,8 +12321,10 @@ function applyConsoleBrand(b){
   document.head.appendChild(style);
   const brandBox = document.querySelector('.sidebar .brand');
   if(brandBox && b.show_powered_by){ const d = document.createElement('div'); d.className = 'brand-pw powered-by'; d.textContent = 'Powered by Plug n Drive'; brandBox.appendChild(d); }
-  brReplaceText(document.body);
-  new MutationObserver(muts => { muts.forEach(m => { m.addedNodes.forEach(n => { if(n.nodeType === 1) brReplaceText(n); else if(n.nodeType === 3 && n.parentElement) brReplaceText(n.parentElement); }); if(m.type === 'characterData' && m.target.parentElement) brReplaceText(m.target.parentElement); }); })
+  const bc = b.country && BR_COUNTRIES.find(c => c[2] === b.country);
+  if(bc){ BRAND.dial = bc[1]; BRAND.countryName = bc[0]; }
+  brReplaceText(document.body); brPlaceholders(document.body);
+  new MutationObserver(muts => { muts.forEach(m => { m.addedNodes.forEach(n => { if(n.nodeType === 1){ brReplaceText(n); brPlaceholders(n); } else if(n.nodeType === 3 && n.parentElement) brReplaceText(n.parentElement); }); if(m.type === 'characterData' && m.target.parentElement) brReplaceText(m.target.parentElement); }); })
     .observe(document.body, { childList: true, subtree: true, characterData: true });
 }
 
@@ -12345,7 +12370,11 @@ function applyConsoleBrand(b){
 <script>
 /* Help button: write to support (stored and e-mailed by the support-request function) or open WhatsApp. */
 (function(){
-  var WA = '27611531743', MAIL = 'support@plugndrive.co.za';
+  var WA0 = '27611531743', MAIL0 = 'support@plugndrive.co.za';
+  function B(){ try { return BRAND || null; } catch(e){ return null; } }
+  function WA_(){ var b = B(); return b ? (b.support_whatsapp || '') : WA0; }
+  function MAIL_(){ var b = B(); return (b && b.support_email) || MAIL0; }
+  function who(){ var b = B(); return b && b.name ? b.name : 'Plug n Drive'; }
   var $ = function(id){ return document.getElementById(id); };
   var busy = false;
   function email(){ try { return (currentStaff && currentStaff.email) || ''; } catch(e){ return ''; } }
@@ -12362,15 +12391,15 @@ function applyConsoleBrand(b){
   }
   function waLink(){
     var c = ctx(), em = email();
-    var text = 'Hello Plug n Drive, I need help.' + (c.client ? '\nClient: ' + c.client : '') + (em ? '\nAccount: ' + em : '') + '\nPage: ' + c.page + (c.charger ? '\nCharger: ' + c.charger : '');
-    return 'https://wa.me/' + WA + '?text=' + encodeURIComponent(text);
+    var text = 'Hello ' + who() + ', I need help.' + (c.client ? '\nClient: ' + c.client : '') + (em ? '\nAccount: ' + em : '') + '\nPage: ' + c.page + (c.charger ? '\nCharger: ' + c.charger : '');
+    return 'https://wa.me/' + WA_() + '?text=' + encodeURIComponent(text);
   }
   function view(name){ ['choose','form','done'].forEach(function(v){ $('sup-' + v).hidden = (v !== name); }); }
   function showErr(m){ var e = $('sup-err'); e.textContent = m; e.hidden = false; }
   function hideErr(){ var e = $('sup-err'); e.textContent = ''; e.hidden = true; }
   function open(){
     $('sup-panel').hidden = false; $('sup-fab').setAttribute('aria-expanded', 'true');
-    $('sup-opt-wa').href = waLink();
+    $('sup-opt-wa').href = waLink(); $('sup-opt-wa').style.display = WA_() ? '' : 'none';
     if($('sup-done').hidden === false) return;
     view($('sup-msg').value.trim() ? 'form' : 'choose');
     var first = $('sup-form').hidden ? $('sup-opt-mail') : $('sup-msg'); if(first) first.focus();
@@ -12396,7 +12425,7 @@ function applyConsoleBrand(b){
         $('sup-done-s').textContent = 'Reference ' + d.ref + '. We will reply to ' + (email() || 'your e-mail address') + '.';
         view('done'); $('sup-done-btn').focus();
       } else if(d && d.error === 'rate_limited'){ showErr('You have sent several messages recently. Please wait a little, or reach us on WhatsApp.'); }
-      else if(d && d.error === 'send_failed'){ showErr('We saved your message but could not e-mail it. Please write to ' + MAIL + ' or use WhatsApp, and quote ' + (d.ref || 'this message') + '.'); }
+      else if(d && d.error === 'send_failed'){ showErr('We saved your message but could not e-mail it. Please write to ' + MAIL_() + ' or use WhatsApp, and quote ' + (d.ref || 'this message') + '.'); }
       else if(d && d.error === 'message_too_short'){ showErr('Please write a few words about what you need.'); }
       else { showErr('Something went wrong. Please try again, or use WhatsApp.'); }
     }).catch(function(){ showErr('Something went wrong. Please try again, or use WhatsApp.'); }).then(done, done);
@@ -12404,7 +12433,11 @@ function applyConsoleBrand(b){
   $('sup-fab').addEventListener('click', function(){ if($('sup-panel').hidden) open(); else close(); });
   $('sup-close').addEventListener('click', function(){ close(); $('sup-fab').focus(); });
   $('sup-done-btn').addEventListener('click', function(){ close(); $('sup-fab').focus(); });
-  $('sup-opt-mail').addEventListener('click', toForm);
+  $('sup-opt-mail').addEventListener('click', function(){
+    var b = B();
+    if(b && b.support_email){ var c = ctx(), em = email(); location.href = 'mailto:' + b.support_email + '?subject=' + encodeURIComponent(b.name + ' support') + '&body=' + encodeURIComponent('\n\n' + (c.client ? 'Client: ' + c.client + '\n' : '') + (em ? 'Account: ' + em + '\n' : '') + 'Page: ' + c.page + (c.charger ? '\nCharger: ' + c.charger : '')); return; }
+    toForm();
+  });
   $('sup-back').addEventListener('click', function(){ hideErr(); view('choose'); $('sup-opt-mail').focus(); });
   $('sup-form').addEventListener('submit', send);
   $('sup-msg').addEventListener('input', hideErr);
