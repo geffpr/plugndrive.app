@@ -7056,6 +7056,9 @@ async function ybSave(){
   const btn = document.getElementById('yb-save'); btn.disabled = true;
   const before = ybRow || {};
   const payload = { name: g('yb-name'), logo_url: g('yb-logo'), primary_color: g('yb-c1t'), accent_color: g('yb-c2t'), country: g('yb-country'), support_email: g('yb-mail'), support_whatsapp: g('yb-wa'), charge_host: brHost(g('yb-charge')), console_host: brHost(g('yb-console')) };
+  const hostOk = h => !h || /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+\.[a-z]{2,}$/.test(h);
+  if(!hostOk(payload.charge_host)){ msg.textContent = 'Driver site address: "' + payload.charge_host + '" does not look right. Use an address like charge.yourbrand.com, or clear the field.'; btn.disabled = false; return; }
+  if(!hostOk(payload.console_host)){ msg.textContent = 'Console address: "' + payload.console_host + '" does not look right. Use an address like console.yourbrand.com, or clear the field.'; btn.disabled = false; return; }
   const { data, error } = await sb.rpc('client_brand_save', { p: payload });
   btn.disabled = false;
   if(error){ msg.textContent = ybErr(error.message); toastErr('Not saved'); return; }
