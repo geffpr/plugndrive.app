@@ -6882,6 +6882,9 @@ async function renderBrandPanel(cl){
   const box = document.getElementById('cl-brand-panel'); if(!box) return;
   const canEdit = currentStaff && currentStaff.role === 'plugndrive_admin' && pndAccess && (pndAccess.level === 'owner' || pndAccess.level === 'admin');
   if(!canEdit){ box.style.display = 'none'; return; }
+  const fr = await sb.rpc('admin_client_features', { p_client: cl.id });
+  if(cl.id !== currentClientId) return;
+  if(fr.error || !fr.data || !fr.data.features || fr.data.features.white_label !== true){ box.style.display = 'none'; return; }
   box.style.display = '';
   document.getElementById('br-msg').textContent = '';
   const { data, error } = await sb.from('brands').select('*').eq('client_id', cl.id).maybeSingle();
@@ -6928,7 +6931,7 @@ async function removeBrand(){
   renderBrandPanel(clients.find(x => x.id === currentClientId) || { id: currentClientId, name: '' });
 }
 // ---------- Features panel (Plug n Drive admin, on the client page) ----------
-const FT_BOOLS = [['reporting','Reporting'],['load_management','Load management'],['tariff_advanced','Day and night tariffs, idle fee'],['sms_activation','Automatic SMS activation'],['resident_billing','Resident billing (coming soon)'],['white_label','White label (coming soon)'],['campaigns','Campaigns (needs API keys)'],['fleet_control','Fleet Control']];
+const FT_BOOLS = [['reporting','Reporting'],['load_management','Load management'],['tariff_advanced','Day and night tariffs, idle fee'],['sms_activation','Automatic SMS activation'],['resident_billing','Resident billing (coming soon)'],['white_label','White label'],['campaigns','Campaigns (needs API keys)'],['fleet_control','Fleet Control']];
 const FT_LIMITS = [['max_chargers','Chargers'],['api_keys','API keys'],['access_groups','Access groups'],['operator_accounts','Operator accounts']];
 const FT_PRESETS = {
   starter:    { reporting:true, load_management:false, tariff_advanced:false, sms_activation:false, resident_billing:false, white_label:false, max_chargers:1,    api_keys:1,    access_groups:0,    operator_accounts:0 },
@@ -7021,6 +7024,7 @@ async function ftPush(overrides, okText){
   ftData = data; ftDirty = new Set();
   drawFeatureRows();
   msg.textContent = okText;
+  renderBrandPanel(clients.find(x => x.id === currentClientId) || { id: currentClientId, name: '' });
 }
 async function saveClientFeatures(){
   if(!ftData) return;
