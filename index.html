@@ -8183,8 +8183,13 @@ function rptAvailableBlocks(){
   const isAdmin = currentStaff && currentStaff.role === 'plugndrive_admin';
   return RPT_ALL_BLOCKS.filter(b => (isAdmin || b !== 'fx_margin') && (fleetAllowed() || !RPT_FLEET_BLOCKS.includes(b)));
 }
-// Without a saved choice, the fleet blocks stay off: a fleet client picks the ones they want.
-function rptDefaultOrder(){ return rptAvailableBlocks().filter(b => !RPT_FLEET_BLOCKS.includes(b)); }
+// Without a saved choice, key figures come first. With Fleet Control, the fleet key figures sit right below them; the other fleet blocks stay off and are picked in Customize.
+function rptDefaultOrder(){
+  const base = rptAvailableBlocks().filter(b => !RPT_FLEET_BLOCKS.includes(b));
+  if(!fleetAllowed()) return base;
+  const i = base.indexOf('kpis') + 1;
+  return [...base.slice(0, i), 'fleet_kpis', ...base.slice(i)];
+}
 function applyRptLayout(){
   const available = rptAvailableBlocks();
   const order = (rptLayout || rptDefaultOrder()).filter(b => available.includes(b));
@@ -8480,7 +8485,7 @@ function renderRptCharts(){
 let rptFleetRows = null, rptFleetSeq = 0;
 function fleetWanted(){
   if(!fleetAllowed()) return false;
-  const order = rptLayout || [];
+  const order = rptLayout || rptDefaultOrder();
   return RPT_FLEET_BLOCKS.some(b => order.includes(b));
 }
 async function rptFleetRefresh(clientId, from, to){
