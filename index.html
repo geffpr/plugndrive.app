@@ -813,6 +813,14 @@ body.display-mode .content{padding:26px 34px;pointer-events:none;user-select:non
   #team-form{max-width:none !important;display:none;}
   #team-form[style*="display: block"], #team-form[style*="display:block"]{display:grid !important;grid-template-columns:340px minmax(0,1fr);column-gap:44px;align-items:start;}
   #team-form .tm-title{margin-top:0 !important;}
+  /* Your brand: identity on the left, addresses on the right, full width */
+  #page-yourbrand.active{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:20px;align-items:start;}
+  #page-yourbrand > *{max-width:none !important;grid-column:1 / -1;}
+  #page-yourbrand > .card{margin-bottom:0 !important;}
+  #page-yourbrand > #yb-card-id{grid-column:1;}
+  #page-yourbrand > #yb-card-addr{grid-column:2;}
+  #page-yourbrand > #yb-status{margin-bottom:16px !important;}
+  #page-yourbrand > #yb-card-addr + div{margin-top:16px;}
   #pt-form{max-width:none !important;display:none;}
   #pt-form[style*="display: block"], #pt-form[style*="display:block"]{display:grid !important;grid-template-columns:340px minmax(0,1fr);column-gap:44px;align-items:start;}
   #pt-form > #pt-form-title, #pt-form > div:nth-last-child(2), #pt-form > #pt-error{grid-column:1 / -1;}
@@ -1253,6 +1261,7 @@ body.display-mode .content{padding:26px 34px;pointer-events:none;user-select:non
     <div class="nav-section-label" id="nav-lbl-account" style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:rgba(255,255,255,.45);padding:14px 10px 4px;">Account</div>
     <a class="navitem" data-page="myoperators" id="myoperators-nav" onclick="showPage('myoperators')" style="display:none;"><span class="ic">◉</span>My operators</a>
     <a class="navitem" data-page="team" id="team-nav" onclick="showPage('team')" style="display:none;"><span class="ic">◉</span>Team</a>
+    <a class="navitem" data-page="yourbrand" id="yourbrand-nav" onclick="showPage('yourbrand')" style="display:none;"><span class="ic">◈</span>Your brand</a>
     <a class="navitem" data-page="apikeys" id="apikeys-nav" onclick="showPage('apikeys')" style="display:none;"><span class="ic">&lt;/&gt;</span>API &amp; Keys</a>
     <a class="navitem" data-page="campaigns" id="campaigns-nav" onclick="showPage('campaigns')" style="display:none;"><span class="ic">✉</span>Campaigns</a>
     <a class="navitem" data-page="settings" id="settings-nav" onclick="showPage('settings')" style="display:none;"><span class="ic">⚙</span>Settings</a>
@@ -1995,7 +2004,9 @@ body.display-mode .content{padding:26px 34px;pointer-events:none;user-select:non
               <div class="form-row" style="flex:1 1 200px;"><label>Accent colour (optional)</label><div style="display:flex;gap:8px;"><input type="color" id="br-c2" style="width:44px;padding:2px;" oninput="document.getElementById('br-c2t').value=this.value"><input type="text" id="br-c2t" maxlength="7" placeholder="#3a8fd4" oninput="brSyncColor('c2')"></div></div>
             </div>
             <div class="form-row"><label>Driver site address</label><input type="text" id="br-charge" placeholder="charge.theirbrand.com" autocapitalize="none"></div>
+            <div id="br-st-charge" class="hint" style="margin:-6px 0 10px;"></div>
             <div class="form-row"><label>Console address</label><input type="text" id="br-console" placeholder="console.theirbrand.com" autocapitalize="none"></div>
+            <div id="br-st-console" class="hint" style="margin:-6px 0 10px;"></div>
             <div class="form-row"><label>Country (sets the phone code and the default country)</label><select id="br-country"></select></div>
             <div style="display:flex;gap:14px;flex-wrap:wrap;">
               <div class="form-row" style="flex:1 1 200px;"><label>Support e-mail</label><input type="email" id="br-sup-mail" maxlength="120" placeholder="support@theirbrand.com" autocapitalize="none"></div>
@@ -2003,7 +2014,7 @@ body.display-mode .content{padding:26px 34px;pointer-events:none;user-select:non
             </div>
             <div class="hint" style="margin:-4px 0 10px;">WhatsApp: country code then number, digits only. If the e-mail is empty, the Help button still sends to Plug n Drive support. If the WhatsApp number is empty, the WhatsApp button is hidden.</div>
             <div class="ft-row"><div class="ft-name">Show "Powered by Plug n Drive"</div><input type="checkbox" class="tg" id="br-powered" checked></div>
-            <div class="ft-row"><div class="ft-name">Brand is active</div><input type="checkbox" class="tg" id="br-active" checked></div>
+            <div class="ft-row"><div class="ft-name">Brand is active <span class="hint">(only you can change this)</span></div><input type="checkbox" class="tg" id="br-active" checked></div>
             <div style="display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap;">
               <button class="btn btn-primary" id="br-save" onclick="saveBrand()">Save brand</button>
               <button class="btn btn-sm" id="br-remove" onclick="removeBrand()" style="display:none;">Remove brand</button>
@@ -2593,6 +2604,43 @@ body.display-mode .content{padding:26px 34px;pointer-events:none;user-select:non
         <div class="card" id="pt-log"></div>
       </div>
 
+      <div class="page" id="page-yourbrand">
+        <div class="section-title" style="margin:0;">Your brand</div>
+        <div style="color:var(--text-muted);font-size:12px;margin:6px 0 14px;max-width:680px;">Your name, logo, colours and support contacts, shown to your drivers and your team on your own addresses.</div>
+        <div id="yb-status" class="card card-pad" style="max-width:720px;margin-bottom:14px;"></div>
+        <div class="card card-pad" id="yb-card-id" style="max-width:720px;margin-bottom:14px;">
+          <div class="section-title" style="margin-top:0;">Identity</div>
+          <div class="form-row"><label>Brand name</label><input type="text" id="yb-name" maxlength="60"></div>
+          <div class="form-row"><label>Logo address (https link to a PNG or SVG)</label><input type="url" id="yb-logo" placeholder="https://" autocapitalize="none"></div>
+          <div style="display:flex;gap:14px;flex-wrap:wrap;">
+            <div class="form-row" style="flex:1 1 200px;"><label>Main colour</label><div style="display:flex;gap:8px;"><input type="color" id="yb-c1" style="width:44px;padding:2px;" oninput="document.getElementById('yb-c1t').value=this.value"><input type="text" id="yb-c1t" maxlength="7" placeholder="#1a3260" oninput="if(/^#[0-9a-fA-F]{6}$/.test(this.value))document.getElementById('yb-c1').value=this.value"></div></div>
+            <div class="form-row" style="flex:1 1 200px;"><label>Accent colour (optional)</label><div style="display:flex;gap:8px;"><input type="color" id="yb-c2" style="width:44px;padding:2px;" oninput="document.getElementById('yb-c2t').value=this.value"><input type="text" id="yb-c2t" maxlength="7" placeholder="#3a8fd4" oninput="if(/^#[0-9a-fA-F]{6}$/.test(this.value))document.getElementById('yb-c2').value=this.value"></div></div>
+          </div>
+          <div class="form-row"><label>Country (sets the phone code and the default country)</label><select id="yb-country"></select></div>
+          <div style="display:flex;gap:14px;flex-wrap:wrap;">
+            <div class="form-row" style="flex:1 1 200px;"><label>Support e-mail</label><input type="email" id="yb-mail" maxlength="120" placeholder="support@yourbrand.com" autocapitalize="none"></div>
+            <div class="form-row" style="flex:1 1 200px;"><label>Support WhatsApp number</label><input type="text" id="yb-wa" maxlength="20" placeholder="250788123456" inputmode="numeric"></div>
+          </div>
+          <div class="hint" style="margin-top:-4px;">WhatsApp: country code then number, digits only. If you leave it empty, the WhatsApp button is hidden for your drivers.</div>
+        </div>
+        <div class="card card-pad" id="yb-card-addr" style="max-width:720px;margin-bottom:14px;">
+          <div class="section-title" style="margin-top:0;">Your addresses</div>
+          <div class="hint" style="margin-bottom:10px;">Use an address on a domain you own, such as charge.yourbrand.com. Save, then add the record we show you at the company that manages your domain.</div>
+          <div class="form-row"><label>Driver site address</label><input type="text" id="yb-charge" placeholder="charge.yourbrand.com" autocapitalize="none"></div>
+          <div id="yb-charge-box"></div>
+          <div class="form-row" style="margin-top:14px;"><label>Console address</label><input type="text" id="yb-console" placeholder="console.yourbrand.com" autocapitalize="none"></div>
+          <div id="yb-console-box"></div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;max-width:720px;margin-bottom:6px;">
+          <button class="btn btn-primary" id="yb-save" onclick="ybSave()">Save</button>
+          <span id="yb-msg" class="hint"></span>
+        </div>
+        <div class="hint" style="max-width:720px;margin-bottom:18px;">The "Powered by Plug n Drive" mention and the on and off switch of your brand are managed by Plug n Drive. To remove the mention, contact us.</div>
+        <div class="card card-pad" style="max-width:720px;">
+          <div class="section-title" style="margin-top:0;">Recent changes</div>
+          <div id="yb-log" class="hint">Loading...</div>
+        </div>
+      </div>
       <div class="page" id="page-team">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
           <div class="section-title" style="margin:0;">Team</div>
@@ -4553,6 +4601,7 @@ function applyRoleBasedNav(){
   if(isClientAdmin) ensurePlanLimits();
   applyTeamNav();
   applyPndNav();
+  const ybn = document.getElementById('yourbrand-nav'); if(ybn) ybn.style.display = ybAllowed() ? '' : 'none';
   updateNavSections();
   updateTrialBar();
 }
@@ -5286,6 +5335,7 @@ const ROUTES = {
   addclient: () => '/addclient',
   myoperators: () => '/myoperators',
   team: () => '/team',
+  yourbrand: () => '/yourbrand',
   pndteam: () => '/pndteam',
   apikeys: () => '/apikeys',
   campaigns: () => '/campaigns',
@@ -5311,6 +5361,7 @@ function showPage(id, opts){
   if(id === 'pndteam' && !pndCanManageTeam()) id = 'dashboard';
   if(isTeam() && !teamPageAllowed(id)) id = 'dashboard';   // a team member only reaches the sections they were given
   if(id === 'team' && !(currentStaff && currentStaff.role === 'client_admin')) id = 'dashboard';
+  if(id === 'yourbrand' && !ybAllowed()) id = 'dashboard';
   if(id === 'fleet' && !fleetAllowed()) id = 'dashboard';   // Fleet Control only where the option is on
   if(isLockedAccount() && id !== 'billing') id = 'billing';   // a locked trial can only reach the billing page
   // A page the plan does not include opens the "available from plan X" message instead.
@@ -5331,7 +5382,7 @@ function showPage(id, opts){
   const parentNav = { addsite:'sites', addcharger:'chargers', addclient:'clients' };
   const navEl = document.querySelector(`.navitem[data-page="${parentNav[id] || id}"]`);
   if(navEl) navEl.classList.add('active');
-  const titles={billing:'Billing',dashboard:'Dashboard',sites:'Sites',addsite:'Add site',chargers:'Chargers',addcharger:'Add charger',sessions:'Sessions',rfid:'RFID cards',load:'Load management',tariffs:'Tariffs',clients:'Clients',addclient:'Add client',myoperators:'My operators',team:'Team',apikeys:'API & Keys',campaigns:'Campaigns',walletactivity:'Wallet activity',payments:'Payments',shop:'Shop',proshop:'Shop',photos:'Site photos',settings:'Settings',exchangerates:'Exchange rates',datafeeds:'Data feeds',reporting:'Reporting',access:'Access',fleet:'Fleet Control',pndteam:'Team'};
+  const titles={billing:'Billing',dashboard:'Dashboard',sites:'Sites',addsite:'Add site',chargers:'Chargers',addcharger:'Add charger',sessions:'Sessions',rfid:'RFID cards',load:'Load management',tariffs:'Tariffs',clients:'Clients',addclient:'Add client',myoperators:'My operators',team:'Team',apikeys:'API & Keys',campaigns:'Campaigns',walletactivity:'Wallet activity',payments:'Payments',shop:'Shop',proshop:'Shop',photos:'Site photos',settings:'Settings',exchangerates:'Exchange rates',datafeeds:'Data feeds',reporting:'Reporting',access:'Access',fleet:'Fleet Control',pndteam:'Team',yourbrand:'Your brand'};
   document.getElementById('topbar-title').textContent = titles[id];
   if(!opts.skipNav) navigate(ROUTES[id] ? ROUTES[id]() : '/'+id);
   if(id==='sites') renderSites();
@@ -5349,6 +5400,7 @@ function showPage(id, opts){
   if(id==='addclient') renderAddClient();
   if(id==='myoperators') renderMyOperators();
   if(id==='team') renderTeam();
+  if(id==='yourbrand') renderYourBrand();
   if(id==='pndteam') renderPndTeam();
   applyPndReadOnly(id);
   updateDisplayBtn(id);
@@ -5373,7 +5425,7 @@ function routeFromLocation(){
   if(currentMember){ showPage('campaigns', {skipNav:true}); return; }
   const parts = location.pathname.split('/').filter(Boolean); // e.g. ['sites','<id>']
   const page = parts[0] || 'dashboard';
-  const knownPages = ['dashboard','sites','addsite','chargers','addcharger','sessions','rfid','load','tariffs','clients','addclient','myoperators','team','apikeys','campaigns','walletactivity','payments','shop','proshop','photos','settings','exchangerates','datafeeds','reporting','access','billing','fleet','pndteam'];
+  const knownPages = ['dashboard','sites','addsite','chargers','addcharger','sessions','rfid','load','tariffs','clients','addclient','myoperators','team','yourbrand','apikeys','campaigns','walletactivity','payments','shop','proshop','photos','settings','exchangerates','datafeeds','reporting','access','billing','fleet','pndteam'];
   if(!knownPages.includes(page)){ showPage('dashboard'); return; }
 
   showPage(page, {skipNav:true});
@@ -6915,6 +6967,113 @@ async function renderBrandPanel(cl){
   document.getElementById('br-powered').checked = b.show_powered_by !== false;
   document.getElementById('br-active').checked = b.active !== false;
   document.getElementById('br-remove').style.display = brandRow ? '' : 'none';
+  brDrawStatus();
+}
+function brDrawStatus(){
+  const b = brandRow || {};
+  ['charge', 'console'].forEach(k => {
+    const el = document.getElementById('br-st-' + k); if(!el) return;
+    if(!b[k + '_host']){ el.innerHTML = ''; return; }
+    const s = (YB_STATUS[b[k + '_status']] || YB_STATUS.none)[0];
+    el.innerHTML = 'Status: <b>' + bEsc(s) + '</b>' + (b[k + '_checked_at'] ? ' (checked ' + bEsc(new Date(b[k + '_checked_at']).toLocaleString()) + ')' : '') + ' <button class="btn btn-sm" type="button" onclick="brCheck(\'' + k + '\', this)">Check now</button>';
+  });
+  const m = document.getElementById('br-msg');
+  if(brandRow && brandRow.updated_by_label && !m.textContent) m.textContent = 'Last change by ' + brandRow.updated_by_label + ', ' + new Date(brandRow.updated_at).toLocaleString();
+}
+async function brFn(action, kind){
+  const r = await sb.functions.invoke('brand-site-domain', { body: { action, client_id: currentClientId, kind } });
+  const { data } = await sb.from('brands').select('*').eq('client_id', currentClientId).maybeSingle();
+  if(data){ brandRow = data; brDrawStatus(); }
+  return r;
+}
+async function brCheck(kind, btn){ if(btn) btn.disabled = true; const r = await brFn('check', kind); if(r.error || (r.data && r.data.ok === false)) toastErr('Could not check right now'); }
+
+// ---------- Your brand (client side of white label) ----------
+function ybAllowed(){ return !!(currentStaff && currentStaff.role === 'client_admin' && !isTeam() && featOn('white_label')); }
+const YB_STATUS = { none: ['Not set', ''], pending_dns: ['Waiting for your DNS record', 'warn'], waiting_pnd: ['Plug n Drive is adding it', 'warn'], connected: ['Connected', 'ok'], error: ['Problem, contact Plug n Drive', 'bad'] };
+let ybRow = null;
+function ybErr(m){
+  const t = { white_label_off: 'White label is not on for your account.', invalid_name: 'Enter your brand name.', invalid_logo: 'The logo address must start with https://', invalid_colour: 'Colours look like #1a3260.', invalid_email: 'The support e-mail does not look right.', invalid_whatsapp: 'WhatsApp number: country code then number, digits only (for example 250788123456).', invalid_host: 'Addresses look like charge.yourbrand.com (no https://, no path).', same_host: 'The driver site and the console need two different addresses.', reserved_host: 'That address belongs to Plug n Drive. Use one of your own.', host_taken: 'That address is already used by another brand.' };
+  const k = Object.keys(t).find(x => String(m || '').indexOf(x) >= 0);
+  return k ? t[k] : (m || 'Something went wrong');
+}
+function ybBox(kind, host, st, det, checked){
+  if(!host) return '';
+  const s = YB_STATUS[st] || YB_STATUS.none;
+  const first = host.split('.')[0];
+  const test = (kind === 'charge' ? 'https://charge.plugndrive.co.za/?brandhost=' : 'https://app.plugndrive.co.za/?brandhost=') + encodeURIComponent(host);
+  let h = '<div style="border:1px solid var(--border);border-radius:10px;padding:12px;margin:-4px 0 4px;">';
+  h += '<div style="display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;"><div><span class="badge ' + (s[1] === 'ok' ? 'available' : s[1] === 'bad' ? 'faulted' : s[1] === 'warn' ? 'charging' : '') + '">' + bEsc(s[0]) + '</span>' + (checked ? ' <span class="hint">Checked ' + bEsc(new Date(checked).toLocaleString()) + '</span>' : '') + '</div>';
+  h += '<button class="btn btn-sm" onclick="ybCheck(\'' + kind + '\', this)">Check now</button></div>';
+  if(st !== 'connected'){
+    h += '<div style="font-size:13px;margin-top:10px;">At the company that manages <b>' + bEsc(host.split('.').slice(-2).join('.')) + '</b> (your domain provider), add this DNS record:</div>';
+    h += '<table style="margin:8px 0;font-size:13px;"><tr><td style="color:var(--text-muted);padding-right:14px;">Type</td><td><b>CNAME</b></td></tr><tr><td style="color:var(--text-muted);padding-right:14px;">Name</td><td><b>' + bEsc(first) + '</b></td></tr><tr><td style="color:var(--text-muted);padding-right:14px;">Value</td><td><b>cname.vercel-dns.com</b></td></tr></table>';
+    const v = det && Array.isArray(det.verification) ? det.verification : [];
+    v.forEach(x => { h += '<div class="hint">Also add: type <b>' + bEsc(x.type || 'TXT') + '</b>, name <b>' + bEsc(x.domain || '') + '</b>, value <b>' + bEsc(x.value || '') + '</b></div>'; });
+    h += '<div class="hint">It can take a few minutes, sometimes a few hours, to be seen. Then press Check now.</div>';
+  }
+  h += '<div class="hint" style="margin-top:6px;">Test it before it goes live: <a href="' + bEsc(test) + '" target="_blank" rel="noopener">open the preview</a>.</div>';
+  return h + '</div>';
+}
+async function renderYourBrand(){
+  const cs = document.getElementById('yb-country');
+  if(cs && !cs.options.length) cs.innerHTML = '<option value="">South Africa (+27)</option>' + BR_COUNTRIES.filter(c => c[2] !== 'za').map(c => '<option value="' + c[2] + '">' + c[0] + ' (' + c[1] + ')</option>').join('');
+  document.getElementById('yb-msg').textContent = '';
+  const cid = currentStaff && currentStaff.client_id; if(!cid) return;
+  const { data, error } = await sb.from('brands').select('*').eq('client_id', cid).maybeSingle();
+  if(error){ document.getElementById('yb-msg').textContent = error.message; return; }
+  ybRow = data || null;
+  const b = ybRow || {};
+  const c = clients[0] || {};
+  document.getElementById('yb-name').value = b.name || c.name || '';
+  document.getElementById('yb-logo').value = b.logo_url || '';
+  ['c1','c2'].forEach((k, i) => { const v = (i ? b.accent_color : b.primary_color) || ''; document.getElementById('yb-' + k + 't').value = v; document.getElementById('yb-' + k).value = v || (i ? '#3a8fd4' : '#1a3260'); });
+  document.getElementById('yb-country').value = b.country || '';
+  document.getElementById('yb-mail').value = b.support_email || '';
+  document.getElementById('yb-wa').value = b.support_whatsapp || '';
+  document.getElementById('yb-charge').value = b.charge_host || '';
+  document.getElementById('yb-console').value = b.console_host || '';
+  ybDraw();
+  const lg = await sb.from('brand_log').select('*').eq('client_id', cid).order('created_at', { ascending: false }).limit(8);
+  const rows = (lg.data || []);
+  document.getElementById('yb-log').innerHTML = rows.length ? rows.map(r => '<div style="padding:4px 0;border-bottom:1px solid var(--border);"><span style="color:var(--text-muted);">' + bEsc(new Date(r.created_at).toLocaleString()) + '</span> · ' + bEsc(r.actor_label || '') + ' · ' + bEsc(r.action === 'created' ? 'created the brand' : 'changed ' + ((r.detail && r.detail.fields) || []).join(', ')) + '</div>').join('') : 'Nothing yet.';
+}
+function ybDraw(){
+  const b = ybRow;
+  const st = document.getElementById('yb-status');
+  if(!b){ st.innerHTML = '<b>Not set up yet.</b><div class="hint">Fill in your identity and addresses below, then save. Plug n Drive switches your brand on once your addresses are connected.</div>'; }
+  else if(b.active){ st.innerHTML = '<span class="badge available">Live</span> <span style="margin-left:6px;">Your brand is shown on your addresses.</span>'; }
+  else { st.innerHTML = '<span class="badge">Not live yet</span> <span style="margin-left:6px;">Plug n Drive switches it on once your addresses are connected and checked. You can keep editing until then.</span>'; }
+  document.getElementById('yb-charge-box').innerHTML = b ? ybBox('charge', b.charge_host, b.charge_status, b.charge_detail, b.charge_checked_at) : '';
+  document.getElementById('yb-console-box').innerHTML = b ? ybBox('console', b.console_host, b.console_status, b.console_detail, b.console_checked_at) : '';
+}
+async function ybAttach(kind){
+  try { await sb.functions.invoke('brand-site-domain', { body: { action: 'attach', client_id: currentStaff.client_id, kind } }); } catch(e) { /* status stays as saved; Check now retries */ }
+}
+async function ybSave(){
+  const msg = document.getElementById('yb-msg'); msg.textContent = '';
+  const g = id => document.getElementById(id).value.trim();
+  const btn = document.getElementById('yb-save'); btn.disabled = true;
+  const before = ybRow || {};
+  const payload = { name: g('yb-name'), logo_url: g('yb-logo'), primary_color: g('yb-c1t'), accent_color: g('yb-c2t'), country: g('yb-country'), support_email: g('yb-mail'), support_whatsapp: g('yb-wa'), charge_host: brHost(g('yb-charge')), console_host: brHost(g('yb-console')) };
+  const { data, error } = await sb.rpc('client_brand_save', { p: payload });
+  btn.disabled = false;
+  if(error){ msg.textContent = ybErr(error.message); toastErr('Not saved'); return; }
+  ybRow = data;
+  toast('Brand saved');
+  for(const k of ['charge', 'console']){
+    const h = data[k + '_host'];
+    if(h && (h !== before[k + '_host'] || data[k + '_status'] === 'pending_dns')) await ybAttach(k);
+  }
+  await renderYourBrand();
+}
+async function ybCheck(kind, btn){
+  if(btn) btn.disabled = true;
+  try {
+    const r = await sb.functions.invoke('brand-site-domain', { body: { action: 'check', client_id: currentStaff.client_id, kind } });
+    if(r.error || (r.data && r.data.ok === false)) toastErr('Could not check right now');
+  } catch(e) { toastErr('Could not check right now'); }
+  await renderYourBrand();
 }
 const BR_COUNTRIES = [['South Africa','+27','za'],['Mozambique','+258','mz'],['Namibia','+264','na'],['Botswana','+267','bw'],['Zimbabwe','+263','zw'],['Zambia','+260','zm'],['Eswatini','+268','sz'],['Lesotho','+266','ls'],['Malawi','+265','mw'],['Angola','+244','ao'],['Mauritius','+230','mu'],['Kenya','+254','ke'],['Tanzania','+255','tz'],['Uganda','+256','ug'],['Rwanda','+250','rw'],['Ethiopia','+251','et'],['DR Congo','+243','cd'],['Nigeria','+234','ng'],['Ghana','+233','gh'],['Senegal','+221','sn'],['Ivory Coast','+225','ci'],['France','+33','fr'],['Portugal','+351','pt'],['United Kingdom','+44','gb'],['United States','+1','us']];
 function brHost(v){ return String(v || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, ''); }
@@ -6939,8 +7098,11 @@ async function saveBrand(){
   const { data, error } = await sb.from('brands').upsert(row, { onConflict: 'client_id' }).select().maybeSingle();
   btn.disabled = false;
   if(error){ msg.textContent = /duplicate key|unique/i.test(error.message) ? 'That address is already used by another brand.' : error.message; toastErr('Brand not saved'); return; }
+  const prev = brandRow || {};
   brandRow = data; document.getElementById('br-remove').style.display = '';
   toast('Brand saved');
+  for(const k of ['charge', 'console']){ if(data[k + '_host'] && data[k + '_host'] !== prev[k + '_host']) await brFn('attach', k); }
+  brDrawStatus();
 }
 async function removeBrand(){
   if(!brandRow || !confirm('Remove this brand? The client goes back to Plug n Drive branding.')) return;
