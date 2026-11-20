@@ -813,6 +813,14 @@ body.display-mode .content{padding:26px 34px;pointer-events:none;user-select:non
   #team-form{max-width:none !important;display:none;}
   #team-form[style*="display: block"], #team-form[style*="display:block"]{display:grid !important;grid-template-columns:340px minmax(0,1fr);column-gap:44px;align-items:start;}
   #team-form .tm-title{margin-top:0 !important;}
+  /* Your brand: identity on the left, addresses on the right, full width */
+  #page-yourbrand.active{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:20px;align-items:start;}
+  #page-yourbrand > *{max-width:none !important;grid-column:1 / -1;}
+  #page-yourbrand > .card{margin-bottom:0 !important;}
+  #page-yourbrand > #yb-card-id{grid-column:1;}
+  #page-yourbrand > #yb-card-addr{grid-column:2;}
+  #page-yourbrand > #yb-status{margin-bottom:16px !important;}
+  #page-yourbrand > #yb-card-addr + div{margin-top:16px;}
   #pt-form{max-width:none !important;display:none;}
   #pt-form[style*="display: block"], #pt-form[style*="display:block"]{display:grid !important;grid-template-columns:340px minmax(0,1fr);column-gap:44px;align-items:start;}
   #pt-form > #pt-form-title, #pt-form > div:nth-last-child(2), #pt-form > #pt-error{grid-column:1 / -1;}
@@ -2600,7 +2608,7 @@ body.display-mode .content{padding:26px 34px;pointer-events:none;user-select:non
         <div class="section-title" style="margin:0;">Your brand</div>
         <div style="color:var(--text-muted);font-size:12px;margin:6px 0 14px;max-width:680px;">Your name, logo, colours and support contacts, shown to your drivers and your team on your own addresses.</div>
         <div id="yb-status" class="card card-pad" style="max-width:720px;margin-bottom:14px;"></div>
-        <div class="card card-pad" style="max-width:720px;margin-bottom:14px;">
+        <div class="card card-pad" id="yb-card-id" style="max-width:720px;margin-bottom:14px;">
           <div class="section-title" style="margin-top:0;">Identity</div>
           <div class="form-row"><label>Brand name</label><input type="text" id="yb-name" maxlength="60"></div>
           <div class="form-row"><label>Logo address (https link to a PNG or SVG)</label><input type="url" id="yb-logo" placeholder="https://" autocapitalize="none"></div>
@@ -2615,7 +2623,7 @@ body.display-mode .content{padding:26px 34px;pointer-events:none;user-select:non
           </div>
           <div class="hint" style="margin-top:-4px;">WhatsApp: country code then number, digits only. If you leave it empty, the WhatsApp button is hidden for your drivers.</div>
         </div>
-        <div class="card card-pad" style="max-width:720px;margin-bottom:14px;">
+        <div class="card card-pad" id="yb-card-addr" style="max-width:720px;margin-bottom:14px;">
           <div class="section-title" style="margin-top:0;">Your addresses</div>
           <div class="hint" style="margin-bottom:10px;">Use an address on a domain you own, such as charge.yourbrand.com. Save, then add the record we show you at the company that manages your domain.</div>
           <div class="form-row"><label>Driver site address</label><input type="text" id="yb-charge" placeholder="charge.yourbrand.com" autocapitalize="none"></div>
