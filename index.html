@@ -2695,7 +2695,14 @@ body.display-mode .content{padding:26px 34px;pointer-events:none;user-select:non
               <div class="form-row" style="margin:0;"><label style="font-weight:400;font-size:12px;">kWh</label><input type="number" id="acc-g-kwh" min="0.1" max="1000" step="0.1" placeholder="No limit" style="width:110px;"></div>
               <div style="display:flex;gap:4px;"><button type="button" class="btn btn-sm" onclick="accSetMinutes(30)">30 min</button><button type="button" class="btn btn-sm" onclick="accSetMinutes(60)">1 h</button><button type="button" class="btn btn-sm" onclick="accSetMinutes(120)">2 h</button></div>
             </div>
-            <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">Total for the whole access period, shared across all charges. The charge stops as soon as the first limit is reached. Free groups only.</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">Shared across all charges. The charge stops as soon as the first limit is reached. Free groups only.</div>
+            <div class="form-row" style="margin:12px 0 0;"><label style="font-weight:400;font-size:12px;">Renewal</label>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <select id="acc-g-reset" onchange="accResetChanged()"><option value="none">Never (one total for the whole access period)</option><option value="week">Every week</option><option value="month">Every month</option></select>
+                <select id="acc-g-reset-day" style="display:none;"></select>
+              </div>
+              <div id="acc-g-reset-hint" style="font-size:12px;color:var(--text-muted);margin-top:4px;"></div>
+            </div>
           </div>
           <div class="form-row"><div style="display:flex;align-items:center;justify-content:space-between;gap:16px;border:1px solid var(--border);border-radius:10px;padding:12px 14px;">
             <div><div style="font-weight:600;font-size:13.5px;">Reception staff can add guests</div><div style="font-size:12px;color:var(--text-muted);margin-top:2px;">Only operators you allow in &ldquo;My operators&rdquo; can do it, and only for the groups where this is on.</div></div>
@@ -8671,7 +8678,7 @@ async function loadAccessGroups(){
     <div class="card card-pad" data-acc-id="${g.id}" style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
       <div>
         <div style="font-weight:600;">${accEsc(g.name)}</div>
-        <div style="font-size:12px;color:var(--text-muted);">${accTariffText(g)} · ${accScopeText(g)}${g.max_days ? ' · max ' + g.max_days + ' days' : ''}${accAllowText(g) ? ' · allowance ' + accEsc(accAllowText(g)) : ''}${g.reception_can_add ? ' · reception can add' : ''} · ${g.member_count} active member(s)</div>
+        <div style="font-size:12px;color:var(--text-muted);">${accTariffText(g)} · ${accScopeText(g)}${g.max_days ? ' · max ' + g.max_days + ' days' : ''}${accAllowText(g) ? ' · allowance ' + accEsc(accAllowText(g)) + (accResetText(g) ? ', ' + accEsc(accResetText(g)) : '') : ''}${g.reception_can_add ? ' · reception can add' : ''} · ${g.member_count} active member(s)</div>
       </div>
       <div style="display:flex;gap:6px;">
         <button class="btn btn-sm" onclick="openAccessMembers('${g.id}')">Members</button>
@@ -8684,6 +8691,21 @@ function accModeChanged(){
   const mode = document.getElementById('acc-g-mode').value;
   document.getElementById('acc-g-pct-row').style.display = mode === 'discount' ? '' : 'none';
   document.getElementById('acc-g-allow-row').style.display = mode === 'free' ? '' : 'none';
+}
+const ACC_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+function accOrd(n){ const v = n % 100; return n + (v >= 11 && v <= 13 ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] || 'th')); }
+function accResetText(g){
+  if(!g || !g.reset_period || g.reset_period === 'none') return '';
+  return g.reset_period === 'week' ? 'renews every ' + ACC_DAYS[(g.reset_day || 1) - 1] : 'renews on the ' + accOrd(g.reset_day || 1) + ' of each month';
+}
+function accResetChanged(keepDay){
+  const per = document.getElementById('acc-g-reset').value, dEl = document.getElementById('acc-g-reset-day'), hint = document.getElementById('acc-g-reset-hint');
+  if(per === 'none'){ dEl.style.display = 'none'; hint.textContent = 'The allowance is one total for the whole access period of each guest.'; return; }
+  const prev = keepDay || dEl.value;
+  dEl.innerHTML = per === 'week' ? ACC_DAYS.map((d, i) => '<option value="' + (i + 1) + '">' + d + '</option>').join('') : Array.from({ length: 28 }, (_, i) => '<option value="' + (i + 1) + '">' + accOrd(i + 1) + ' of the month</option>').join('');
+  dEl.value = prev && dEl.querySelector('option[value="' + prev + '"]') ? prev : '1';
+  dEl.style.display = '';
+  hint.textContent = per === 'week' ? 'Each guest\'s allowance starts again at midnight (South African time) on the chosen day, every week.' : 'Each guest\'s allowance starts again at midnight (South African time) on the chosen day, every month. Days go up to the 28th so every month has it.';
 }
 function accSetMinutes(n){ document.getElementById('acc-g-minutes').value = n; }
 // Free allowance shown as text, e.g. "60 min / 10 kWh"
@@ -8713,6 +8735,8 @@ function openAccessGroupForm(groupId){
   document.getElementById('acc-g-reception').checked = !!(g && g.reception_can_add);
   document.getElementById('acc-g-minutes').value = g && g.max_minutes ? g.max_minutes : '';
   document.getElementById('acc-g-kwh').value = g && g.max_kwh ? Number(g.max_kwh) : '';
+  document.getElementById('acc-g-reset').value = g && g.reset_period ? g.reset_period : 'none';
+  accResetChanged(g && g.reset_day ? String(g.reset_day) : '');
   accModeChanged();
   const rootSites = locations.filter(l => !l.parentId);
   const chosen = g ? (g.site_ids || []) : [];
@@ -8754,10 +8778,18 @@ async function saveAccessGroup(){
     if(maxMinutes !== null && !(Number.isInteger(maxMinutes) && maxMinutes >= 1 && maxMinutes <= 1440)){ errEl.textContent = 'The free minutes must be a whole number between 1 and 1440, or empty for no limit.'; return; }
     if(maxKwh !== null && !(maxKwh > 0 && maxKwh <= 1000)){ errEl.textContent = 'The free kWh must be a number between 0 and 1000, or empty for no limit.'; return; }
   }
+  let resetPeriod = 'none', resetDay = null;
+  if(mode === 'free'){
+    resetPeriod = document.getElementById('acc-g-reset').value;
+    if(resetPeriod !== 'none'){
+      if(maxMinutes === null && maxKwh === null){ errEl.textContent = 'Set a number of minutes or kWh before choosing a renewal.'; return; }
+      resetDay = Number(document.getElementById('acc-g-reset-day').value);
+    }
+  }
   const { error } = await sb.rpc('save_access_group', {
     p_client_id: clients[0].id, p_group_id: document.getElementById('acc-g-id').value || null, p_name: name,
     p_pricing_mode: mode, p_discount_percent: mode === 'discount' ? pct : null, p_all_sites: allSites, p_site_ids: allSites ? null : siteIds, p_max_days: maxDays, p_reception_can_add: document.getElementById('acc-g-reception').checked,
-    p_set_allowance: true, p_max_minutes: maxMinutes, p_max_kwh: maxKwh });
+    p_set_allowance: true, p_max_minutes: maxMinutes, p_max_kwh: maxKwh, p_reset_period: resetPeriod, p_reset_day: resetDay });
   if(error){ if(handleFeatureError(error.message)){ errEl.textContent = ''; return; } errEl.textContent = error.message; return; }
   closeAccessGroupForm();
   await loadAccessGroups();
