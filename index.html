@@ -2499,7 +2499,7 @@ body.display-mode .content{padding:26px 34px;pointer-events:none;user-select:non
               <div style="font-weight:600;">E-mail templates for <span id="ct-sub-name"></span></div>
               <div style="display:flex;gap:8px;"><button class="btn btn-primary btn-sm" onclick="ctEdit('')">+ New template</button><button class="btn btn-sm" onclick="closeCampaignTemplates()">Close</button></div>
             </div>
-            <div style="font-size:12px;color:var(--text-muted);margin:6px 0 10px;max-width:760px;">Build your e-mail in the tool you already use, paste its HTML here and save it as a template. Nothing is sent from this page. Write {{first_name}}, {{site}}, {{brand}}, {{offer_name}}, {{offer_code}}, {{coupon_url}} (the coupon page with its QR code) or {{unsubscribe_url}} where you want them filled in. Scripts, forms and unsafe links are refused.</div>
+            <div style="font-size:12px;color:var(--text-muted);margin:6px 0 10px;max-width:760px;">Design your e-mail in the visual editor, or use the HTML tab to paste your own, then save it as a template. Nothing is sent from this page. Write {{first_name}}, {{site}}, {{brand}}, {{offer_name}}, {{offer_code}}, {{coupon_url}} (the coupon page with its QR code) or {{unsubscribe_url}} where you want them filled in. Scripts, forms and unsafe links are refused.</div>
             <div id="ct-error" style="color:var(--red, #c0392b);font-size:12px;margin-bottom:8px;"></div>
             <label style="display:flex;gap:8px;align-items:center;font-weight:400;font-size:12px;margin-bottom:8px;"><input type="checkbox" class="tg" id="ct-arch" style="width:auto;" onchange="ctToggleArch()"> Show archived templates</label>
             <div id="ct-list" class="card" style="overflow:auto;"></div>
@@ -2508,7 +2508,30 @@ body.display-mode .content{padding:26px 34px;pointer-events:none;user-select:non
                 <label style="font-weight:400;font-size:12px;display:flex;flex-direction:column;gap:2px;">Template name<input type="text" id="ct-name" maxlength="80" placeholder="e.g. Thanks after a charge"></label>
                 <label style="font-weight:400;font-size:12px;display:flex;flex-direction:column;gap:2px;">Subject<input type="text" id="ct-subject" maxlength="150" placeholder="e.g. Thanks {{first_name}}, here is a treat" oninput="ctSoon()"></label>
               </div>
-              <label style="font-weight:400;font-size:12px;display:flex;flex-direction:column;gap:2px;margin-top:10px;">HTML of the e-mail<textarea id="ct-html" rows="14" spellcheck="false" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;width:100%;" oninput="ctSoon()"></textarea></label>
+              <div class="ct-chips"><span style="font-size:12px;color:var(--text-muted);align-self:center;">Insert in the subject:</span><button type="button" class="ct-chip" onclick="ctInsertVar('first_name')">First name</button><button type="button" class="ct-chip" onclick="ctInsertVar('site')">Site</button><button type="button" class="ct-chip" onclick="ctInsertVar('brand')">Brand</button><button type="button" class="ct-chip" onclick="ctInsertVar('offer_name')">Offer name</button><button type="button" class="ct-chip" onclick="ctInsertVar('offer_code')">Offer code</button></div>
+              <style>
+                .ct-chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;}
+                .ct-chip{border:1px solid var(--border);background:transparent;border-radius:999px;padding:3px 10px;font:inherit;font-size:12px;cursor:pointer;color:var(--text);}
+                .ct-tabs{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:14px 0 8px;}
+                .ct-tab{border:1px solid var(--border);background:transparent;border-radius:999px;padding:7px 14px;font:inherit;font-weight:600;font-size:13px;cursor:pointer;color:var(--text);}
+                .ct-tab.on{background:var(--navy,#0d1b3d);color:#fff;border-color:var(--navy,#0d1b3d);}
+                .ct-sp{flex:1;}
+                #ct-gjs{border:1px solid var(--border);border-radius:10px;overflow:hidden;min-height:200px;}
+                #ct-gjs .gjs-one-bg{background-color:var(--navy,#0d1b3d);}
+                #ct-gjs .gjs-two-color{color:#e8eef9;}
+                #ct-gjs .gjs-three-bg{background-color:var(--blue,#2f95d6);color:#fff;}
+                #ct-gjs .gjs-four-color,#ct-gjs .gjs-four-color-h:hover{color:var(--blue,#2f95d6);}
+              </style>
+              <div class="ct-tabs">
+                <button type="button" class="ct-tab on" id="ct-tab-visual" onclick="ctSetView('visual')">Visual editor</button>
+                <button type="button" class="ct-tab" id="ct-tab-html" onclick="ctSetView('html')">HTML</button>
+                <span id="ct-gdevs" style="display:flex;gap:6px;margin-left:8px;"><button type="button" class="ct-tab on" id="ct-gdev-d" onclick="ctGDevice('d')">Computer</button><button type="button" class="ct-tab" id="ct-gdev-m" onclick="ctGDevice('m')">Phone</button></span>
+                <span class="ct-sp"></span><span id="ct-copy-out" style="font-size:12px;color:var(--text-muted);"></span><button class="btn btn-sm" type="button" onclick="ctCopyHtml()">Copy the HTML</button>
+              </div>
+              <div id="ct-visual"><div id="ct-gjs"></div>
+                <div style="margin-top:6px;font-size:12px;color:var(--text-muted);">Drag blocks from the right panel. Variables such as {{first_name}} are in the Variables group, or type them in any text. The visual editor keeps the content of the e-mail body; to keep your own code exactly as written, use the HTML tab. To add a picture, drag the Image block, then upload a file (1 MB at most) or paste an https link.</div></div>
+              <div id="ct-code" style="display:none;"><textarea id="ct-html" rows="14" spellcheck="false" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;width:100%;min-height:420px;" oninput="ctSoon()"></textarea>
+                <div style="margin-top:6px;font-size:12px;color:var(--text-muted);">Paste your own HTML here. Switching back to the visual editor loads it into the editor.</div></div>
               <label style="font-weight:400;font-size:12px;display:flex;flex-direction:column;gap:2px;margin-top:10px;">Plain-text version (optional)<textarea id="ct-text" rows="4" style="width:100%;" placeholder="Shown by e-mail apps that do not display HTML. Left empty, one is generated."></textarea></label>
               <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center;">
                 <button class="btn btn-primary btn-sm" id="ct-save" onclick="ctSave()">Save template</button>
@@ -2528,6 +2551,7 @@ body.display-mode .content{padding:26px 34px;pointer-events:none;user-select:non
                 </div>
               </div>
               <div id="ct-test-none" style="display:none;font-size:12px;color:var(--text-muted);margin-top:12px;">To send a test e-mail, add a test address in this sub-account's channels first.</div>
+              <div id="ct-inline-prev" style="display:none;">
               <div style="display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap;">
                 <div style="font-weight:600;">Preview</div>
                 <button class="btn btn-sm" id="ct-dev-d" onclick="ctDevice('d')">Computer</button>
@@ -2536,6 +2560,7 @@ body.display-mode .content{padding:26px 34px;pointer-events:none;user-select:non
               </div>
               <div id="ct-subj-prev" style="font-size:13px;margin:6px 0;"></div>
               <iframe id="ct-frame" sandbox="" title="E-mail preview" style="display:block;width:100%;height:440px;border:1px solid var(--border);border-radius:8px;background:#fff;"></iframe>
+              </div>
             </div>
           </div>
         </div>
@@ -9535,6 +9560,8 @@ function ccCheckList(ids, checkedIds, cls){
 }
 function openCampaignDraft(id){
   const sub = csList.find(x => x.id === csEnv); if(!sub) return;
+  if(id) spClose();
+  if(!id && !spSkip && spShow()) return;
   const c = id ? ccList.find(x => x.id === id) : null;
   ccEditId = c ? c.id : null;
   const z = (c && c.zone) || {};
@@ -9555,6 +9582,107 @@ function openCampaignDraft(id){
   document.getElementById('cc-name').focus();
 }
 function closeCampaignDraft(){ const p = document.getElementById('cc-panel'); if(p) p.style.display = 'none'; ccEditId = null; ccPoints = []; scTouched = false; }
+
+// ---- "New campaign" start page: choose how the scenario begins (same as the Campaigns app). Every template only uses triggers, conditions and actions that exist in the scenario editor ----
+let spSkip = false;
+const SP_ICONS = {
+  blank: '<path d="M8 3h8l4 4v14H8z"/><path d="M16 3v4h4"/>',
+  clock: '<circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>',
+  user: '<circle cx="10" cy="9" r="3.5"/><path d="M3.5 20c.6-3.4 3.2-5.2 6.5-5.2s5.9 1.8 6.5 5.2"/><path d="M19 8v6M16 11h6"/>',
+  back: '<path d="M9 7 4 12l5 5"/><path d="M4 12h10a6 6 0 0 1 0 8h-3"/>',
+  star: '<path d="m12 3.5 2.6 5.3 5.9.8-4.3 4.1 1 5.8-5.2-2.8-5.2 2.8 1-5.8-4.3-4.1 5.9-.8z"/>',
+  cal: '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>',
+  plug: '<path d="M9 3v5M15 3v5"/><path d="M6 8h12v3a6 6 0 0 1-12 0z"/><path d="M12 17v4"/>',
+  tag: '<path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.3"/>',
+  cart: '<path d="M3 5h3l2.4 10h9.2L20 8H7"/><circle cx="10" cy="19" r="1.4"/><circle cx="17" cy="19" r="1.4"/>',
+  card: '<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18M7 15h4"/>'
+};
+const SP_OFFER = (label, message) => ({ type: 'send_offer', label, message });
+const SP_TEMPLATES = [
+  { key: 'blank', icon: 'blank', title: 'Blank', text: 'Start from an empty scenario.', name: '', graph: null },
+  { key: 'start', icon: 'plug', title: 'A charge starts', text: 'Reach drivers as soon as they plug in on one of your sites.', name: 'Charge starts',
+    graph: { nodes: [{ id: 'start', type: 'start', x: 300, y: 30, trigger: { type: 'charge_started' } }, { id: 'a1', type: 'action', x: 300, y: 180, action: SP_OFFER('Offer while you charge', 'You are charging next to us. Show this message to get your offer.') }],
+      edges: [{ from: 'start', to: 'a1', port: 'out', delay_minutes: 0 }] } },
+  { key: 'long', icon: 'clock', title: 'Long charge, time to spare', text: 'A charge passes 30 minutes: a good moment for a coffee, a meal or a visit.', name: 'Long charge offer',
+    graph: { nodes: [{ id: 'start', type: 'start', x: 300, y: 30, trigger: { type: 'charge_threshold', metric: 'duration_min', value: '30' } }, { id: 'a1', type: 'action', x: 300, y: 180, action: SP_OFFER('Make the most of your charge', 'Your car needs a little more time. Enjoy a free coffee while you wait.') }],
+      edges: [{ from: 'start', to: 'a1', port: 'out', delay_minutes: 0 }] } },
+  { key: 'new', icon: 'user', title: 'Welcome a new driver', text: 'A first-time driver in your zone gets a welcome offer. Others are left alone.', name: 'Welcome new drivers',
+    graph: { nodes: [{ id: 'start', type: 'start', x: 300, y: 30, trigger: { type: 'charge_started' } },
+      { id: 'c1', type: 'condition', x: 300, y: 170, conditions: { match: 'all', items: [{ field: 'driver.segment', op: 'eq', value: 'new', period_days: '' }] } },
+      { id: 'a1', type: 'action', x: 120, y: 330, action: SP_OFFER('Welcome offer', 'Welcome. Here is a first offer to thank you for stopping by.') },
+      { id: 'e1', type: 'end', x: 500, y: 330 }],
+      edges: [{ from: 'start', to: 'c1', port: 'out', delay_minutes: 0 }, { from: 'c1', to: 'a1', port: 'yes', delay_minutes: 0 }, { from: 'c1', to: 'e1', port: 'no', delay_minutes: 0 }] } },
+  { key: 'back', icon: 'back', title: 'Welcome back after a break', text: 'A driver charges again after 60 days or more away from your zone.', name: 'Welcome back',
+    graph: { nodes: [{ id: 'start', type: 'start', x: 300, y: 30, trigger: { type: 'charge_started' } },
+      { id: 'c1', type: 'condition', x: 300, y: 170, conditions: { match: 'all', items: [{ field: 'driver.days_since_last_charge', op: 'gte', value: '60', period_days: '' }] } },
+      { id: 'a1', type: 'action', x: 120, y: 330, action: SP_OFFER('We missed you', 'Good to see you again. Here is something to welcome you back.') },
+      { id: 'e1', type: 'end', x: 500, y: 330 }],
+      edges: [{ from: 'start', to: 'c1', port: 'out', delay_minutes: 0 }, { from: 'c1', to: 'a1', port: 'yes', delay_minutes: 0 }, { from: 'c1', to: 'e1', port: 'no', delay_minutes: 0 }] } },
+  { key: 'regular', icon: 'star', title: 'Thank your best drivers', text: 'When a loyal driver finishes a charge, say thank you with an offer.', name: 'Thank loyal drivers',
+    graph: { nodes: [{ id: 'start', type: 'start', x: 300, y: 30, trigger: { type: 'charge_ended' } },
+      { id: 'c1', type: 'condition', x: 300, y: 170, conditions: { match: 'any', items: [{ field: 'driver.rfm_segment', op: 'eq', value: 'champions', period_days: '' }, { field: 'driver.rfm_segment', op: 'eq', value: 'loyal', period_days: '' }] } },
+      { id: 'a1', type: 'action', x: 120, y: 340, action: SP_OFFER('Thank you', 'Thank you for charging with us so often. This one is for you.') },
+      { id: 'e1', type: 'end', x: 500, y: 340 }],
+      edges: [{ from: 'start', to: 'c1', port: 'out', delay_minutes: 0 }, { from: 'c1', to: 'a1', port: 'yes', delay_minutes: 0 }, { from: 'c1', to: 'e1', port: 'no', delay_minutes: 0 }] } },
+  { key: 'weekend', icon: 'cal', title: 'Weekend offer', text: 'Only on Saturdays and Sundays, when people have time to stop.', name: 'Weekend offer',
+    graph: { nodes: [{ id: 'start', type: 'start', x: 300, y: 30, trigger: { type: 'charge_started' } },
+      { id: 'c1', type: 'condition', x: 300, y: 170, conditions: { match: 'any', items: [{ field: 'time.weekday', op: 'eq', value: 'sat', period_days: '' }, { field: 'time.weekday', op: 'eq', value: 'sun', period_days: '' }] } },
+      { id: 'a1', type: 'action', x: 120, y: 340, action: SP_OFFER('Weekend treat', 'Enjoy your weekend. Here is an offer while you charge.') },
+      { id: 'e1', type: 'end', x: 500, y: 340 }],
+      edges: [{ from: 'start', to: 'c1', port: 'out', delay_minutes: 0 }, { from: 'c1', to: 'a1', port: 'yes', delay_minutes: 0 }, { from: 'c1', to: 'e1', port: 'no', delay_minutes: 0 }] } }
+];
+// "A coupon was used" needs the coupon trigger, which only exists in the brand version of Campaigns for now.
+const SP_LATER = [
+  { icon: 'tag', title: 'A coupon was used', text: 'Thank the driver, or offer something that goes with it.' },
+  { icon: 'clock', title: 'A coupon is about to expire', text: 'A reminder a few days before the end.' },
+  { icon: 'cal', title: 'Special dates', text: 'Christmas, Mother’s Day, summer, weddings and gifts.' },
+  { icon: 'card', title: 'Loyalty programme members', text: 'Reach the drivers who are also in your loyalty programme.' },
+  { icon: 'cart', title: 'A purchase was made', text: 'Follow up on a purchase made with your brand.' }
+];
+const SP_CSS = `<style>
+.sp-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px;}
+.sp-note{font-size:12.5px;color:var(--text-secondary);}
+.sp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin:12px 0 4px;}
+.sp-card{display:flex;flex-direction:column;gap:6px;text-align:left;border:1px solid var(--border);border-radius:12px;background:#fff;padding:14px;cursor:pointer;font:inherit;color:var(--text);}
+.sp-card:hover{border-color:var(--blue);box-shadow:0 2px 10px -4px rgba(47,149,214,.45);}
+.sp-card svg{width:34px;height:34px;fill:none;stroke:var(--blue);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;margin-bottom:4px;}
+.sp-card b{font-size:13.5px;}
+.sp-card span{font-size:12.5px;color:var(--text-secondary);line-height:1.4;}
+.sp-card.later{cursor:default;background:var(--surface);}
+.sp-card.later:hover{border-color:var(--border);box-shadow:none;}
+.sp-card.later svg{stroke:var(--text-muted);}
+.sp-card.later b{color:var(--text-secondary);}
+.sp-card .sp-later{font-size:11.5px;color:var(--text-muted);}
+</style>`;
+function spIcon(k){ return '<svg viewBox="0 0 24 24" aria-hidden="true">' + (SP_ICONS[k] || SP_ICONS.blank) + '</svg>'; }
+function spShow(){
+  const panel = document.getElementById('cc-panel'); if(!panel) return false;
+  let box = document.getElementById('sp-picker');
+  if(!box){ box = document.createElement('div'); box.id = 'sp-picker'; box.className = 'card card-pad'; box.style.cssText = 'max-width:none;margin:12px 0;'; panel.parentNode.insertBefore(box, panel); }
+  box.innerHTML = SP_CSS + `<div class="sp-head"><div><b>New campaign</b><div class="sp-note" style="margin-top:2px;">Choose how it starts. You can change everything afterwards.</div></div><button class="btn btn-sm" type="button" onclick="spClose()">Cancel</button></div>
+<div class="sp-grid">${SP_TEMPLATES.map(t => `<button type="button" class="sp-card" onclick="spPick('${t.key}')">${spIcon(t.icon)}<b>${bEsc(t.title)}</b><span>${bEsc(t.text)}</span></button>`).join('')}</div>
+<div class="sp-note" style="margin:14px 0 0;"><b>Coming later</b></div>
+<div class="sp-grid">${SP_LATER.map(t => `<div class="sp-card later">${spIcon(t.icon)}<b>${bEsc(t.title)}</b><span>${bEsc(t.text)}</span><span class="sp-later">Later</span></div>`).join('')}</div>`;
+  box.style.display = ''; box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  return true;
+}
+function spClose(){ const b = document.getElementById('sp-picker'); if(b) b.style.display = 'none'; }
+async function spPick(key){
+  const tpl = SP_TEMPLATES.find(x => x.key === key); if(!tpl) return;
+  spClose();
+  spSkip = true; try { openCampaignDraft(''); } finally { spSkip = false; }
+  if(!tpl.graph) return;
+  for(let i = 0; i < 60 && !scReady; i++) await new Promise(r => setTimeout(r, 100));
+  if(!scReady || !document.getElementById('cc-panel') || ccEditId) return;
+  scG = JSON.parse(JSON.stringify(tpl.graph)); scG.version = 2;
+  scSeq = 10; scSel = { kind: 'node', id: 'start' }; scTouched = true; scSim = null; scTrace = null; scConn = null;
+  scRenderNodes(); scInspector();
+  const nm = document.getElementById('cc-name'); if(nm && !nm.value.trim()) nm.value = tpl.name;
+  const old = document.getElementById('sp-used'); if(old) old.remove();
+  const note = document.createElement('div'); note.id = 'sp-used'; note.className = 'sp-note'; note.style.margin = '0 0 10px';
+  note.textContent = 'Template used: "' + tpl.title + '". The scenario is already filled in. Check it in the Scenario tab and change the texts to fit your brand.';
+  const tab = document.getElementById('cc-tab-settings'); if(tab) tab.parentNode.insertBefore(note, tab);
+}
 
 // ---- E-mail templates of one sub-account (step 5c-1). Nothing is sent from here ----
 let ctSub = null, ctList = [], ctEditing = null, ctBusy = false, ctTimer = null, ctDev = 'd';
@@ -9714,7 +9842,7 @@ async function openCampaignTemplates(){
   document.getElementById('ct-panel').style.display = 'block';
   await ctLoad();
 }
-function closeCampaignTemplates(){ clearTimeout(ctTimer); const p = document.getElementById('ct-panel'); if(p) p.style.display = 'none'; ctSub = null; ctEditing = null; }
+function closeCampaignTemplates(){ clearTimeout(ctTimer); ctDestroy(); const p = document.getElementById('ct-panel'); if(p) p.style.display = 'none'; ctSub = null; ctEditing = null; }
 function ctToggleArch(){ ctLoad(); }
 async function ctLoad(){
   const sub = ctSub, box = document.getElementById('ct-list'); if(!sub) return;
@@ -9732,7 +9860,7 @@ function ctRender(){
     const id = bEsc(t.id);
     const act = t.archived
       ? `<button class="btn btn-sm" data-tid="${id}" data-arch="0" onclick="ctArchive(this)">Restore</button>`
-      : `<button class="btn btn-sm" data-tid="${id}" onclick="ctPreviewSaved(this.dataset.tid)">Preview</button> <button class="btn btn-sm" data-tid="${id}" onclick="ctEdit(this.dataset.tid)">Edit</button> <button class="btn btn-sm btn-danger" data-tid="${id}" data-arch="1" onclick="ctArchive(this)">Archive</button>`;
+      : `<button class="btn btn-sm" data-tid="${id}" onclick="ctPreviewSaved(this.dataset.tid)">Preview</button> <button class="btn btn-sm" data-tid="${id}" onclick="ctEdit(this.dataset.tid)">Edit</button> <button class="btn btn-sm" data-tid="${id}" onclick="ctDuplicate(this)">Duplicate</button> <button class="btn btn-sm btn-danger" data-tid="${id}" data-arch="1" onclick="ctArchive(this)">Archive</button>`;
     return `<tr${t.archived ? ' style="opacity:.55;"' : ''}><td>${bEsc(t.name)}${t.archived ? ' <span style="font-size:11px;color:var(--text-muted);">(archived)</span>' : ''}</td><td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${bEsc(t.subject)}</td><td>v${bEsc(String(t.version))}</td><td>${t.used_by ? bEsc(String(t.used_by)) + ' campaign' + (t.used_by === 1 ? '' : 's') : '<span style="color:var(--text-muted);">Not used</span>'}</td><td style="white-space:nowrap;">${act}</td></tr>`;
   }).join('');
   box.innerHTML = `<table><thead><tr><th>Name</th><th>Subject</th><th>Version</th><th>Used by</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="5" class="empty">No template yet. Create one with + New template.</td></tr>'}</tbody></table>`;
@@ -9761,7 +9889,7 @@ function ctPvOpen(title, subject, html){
 }
 function ctPreviewNow(){
   ctPreview();
-  ctPvOpen(document.getElementById('ct-name').value || 'Preview', document.getElementById('ct-subject').value, document.getElementById('ct-html').value);
+  ctPvOpen(document.getElementById('ct-name').value || 'Preview', document.getElementById('ct-subject').value, ctCurHtml());
 }
 async function ctPreviewSaved(id){
   const err = document.getElementById('ct-error'); err.style.color = 'var(--red, #c0392b)'; err.textContent = '';
@@ -9774,14 +9902,16 @@ async function ctPreviewSaved(id){
 async function ctEdit(id){
   const ed = document.getElementById('ct-editor'), err = document.getElementById('ct-error'); err.textContent = '';
   document.getElementById('ct-check-out').innerHTML = '';
-  if(id === null){ ctEditing = null; ed.style.display = 'none'; return; }
+  if(id === null){ ctEditing = null; ctDestroy(); ed.style.display = 'none'; return; }
   if(!id){
     ctEditing = { id: null, version: 0 };
     document.getElementById('ct-name').value = ''; document.getElementById('ct-subject').value = '';
-    document.getElementById('ct-html').value = CT_STARTER; document.getElementById('ct-text').value = '';
+    document.getElementById('ct-text').value = '';
     document.getElementById('ct-ver-wrap').style.display = 'none';
     document.getElementById('ct-test-wrap').style.display = 'none'; document.getElementById('ct-test-none').style.display = 'none';
-    ed.style.display = 'block'; ctPreview(); document.getElementById('ct-name').focus(); return;
+    ed.style.display = 'block';
+    await ctOpenHtml(CT_STARTER);
+    document.getElementById('ct-name').focus({ preventScroll: true }); return;
   }
   const sub = ctSub;
   const { data, error } = await sb.rpc('get_campaign_template', { p_id: id });
@@ -9790,8 +9920,9 @@ async function ctEdit(id){
   const t = data.template;
   ctEditing = { id: t.id, version: t.version };
   document.getElementById('ct-name').value = t.name; document.getElementById('ct-subject').value = t.subject;
-  document.getElementById('ct-html').value = t.html; document.getElementById('ct-text').value = t.text || '';
-  ed.style.display = 'block'; ctRenderCheck(data.check); ctPreview(); ctVersions(); ctTestLoad();
+  document.getElementById('ct-text').value = t.text || '';
+  ed.style.display = 'block'; ctRenderCheck(data.check); ctVersions(); ctTestLoad();
+  await ctOpenHtml(t.html);
 }
 let ctTestBusy = false;
 async function ctTestLoad(){
@@ -9859,7 +9990,7 @@ function ctRenderCheck(r){
   out.innerHTML = h;
 }
 async function ctCheck(){
-  const { data, error } = await sb.rpc('check_campaign_template', { p_subject: document.getElementById('ct-subject').value, p_html: document.getElementById('ct-html').value, p_text: document.getElementById('ct-text').value });
+  const { data, error } = await sb.rpc('check_campaign_template', { p_subject: document.getElementById('ct-subject').value, p_html: ctCurHtml(), p_text: document.getElementById('ct-text').value });
   if(error || !data){ document.getElementById('ct-check-out').innerHTML = `<div style="color:var(--red, #c0392b);">${bEsc(csCleanMessage(error && error.message))}</div>`; return null; }
   ctRenderCheck(data); return data;
 }
@@ -9867,21 +9998,192 @@ function ctSoon(){ clearTimeout(ctTimer); ctTimer = setTimeout(ctPreview, 400); 
 function ctDevice(d){ ctDev = d; ctPreview(); }
 function ctPreview(){
   const f = document.getElementById('ct-frame'); if(!f) return;
+  if(ctView === 'visual') return;
   const html = document.getElementById('ct-html').value;
   f.style.width = ctDev === 'm' ? '375px' : '100%';
   const footer = /\{\{\s*unsubscribe_url\s*\}\}/.test(html) ? '' : '<div style="font:12px Arial,sans-serif;color:#777;padding:14px;text-align:center;border-top:1px solid #ddd;margin-top:16px;">Added automatically: you receive this e-mail because you charged at ' + bEsc(ctVals().site) + '. <a href="#">Unsubscribe</a></div>';
   f.srcdoc = '<base target="_blank">' + ctFill(html, true) + footer;
   document.getElementById('ct-subj-prev').innerHTML = 'Subject: <b>' + bEsc(ctFill(document.getElementById('ct-subject').value, false)) + '</b>';
 }
+// ---- Visual editor (GrapesJS), same as the Campaigns app. Loaded only when needed ----
+const CT_GJS_CSS = 'https://cdn.jsdelivr.net/npm/grapesjs@0.21.13/dist/css/grapes.min.css';
+const CT_GJS_JS = 'https://cdn.jsdelivr.net/npm/grapesjs@0.21.13/dist/grapes.min.js';
+const CT_PRESET_JS = 'https://cdn.jsdelivr.net/npm/grapesjs-preset-newsletter@1.0.2/dist/index.js';
+const CT_VARS = [['first_name', 'First name'], ['site', 'Site'], ['brand', 'Brand'], ['offer_name', 'Offer name'], ['offer_code', 'Offer code'], ['unsubscribe_url', 'Unsub. link'], ['coupon_url', 'Coupon link']];
+const CT_NL = String.fromCharCode(10);
+let ctGjs = null, ctView = 'visual', ctSrc = '', ctTouched = false, ctToken = 0, ctLoadP = null;
+function ctScript(src){ return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('load')); document.head.appendChild(s); }); }
+function ctPreset(){ const p = window['grapesjs-preset-newsletter']; return p && p.default ? p.default : p; }
+function ctLoadGjs(){
+  if(window.grapesjs && ctPreset()) return Promise.resolve(true);
+  if(ctLoadP) return ctLoadP;
+  const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = CT_GJS_CSS; document.head.appendChild(l);
+  ctLoadP = ctScript(CT_GJS_JS).then(() => ctScript(CT_PRESET_JS)).then(() => !!(window.grapesjs && ctPreset())).catch(() => false).then(ok => { if(!ok) ctLoadP = null; return ok; });
+  return ctLoadP;
+}
+function ctExport(){
+  let h = '';
+  try { h = ctGjs.runCommand('gjs-get-inlined-html'); } catch(e){ h = ''; }
+  if(!h || typeof h !== 'string') h = ctGjs.getHtml();
+  if(!/<html/i.test(h)){
+    const hd = '<!DOCTYPE html>' + CT_NL + '<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>';
+    h = /<body/i.test(h) ? hd + CT_NL + h + CT_NL + '</html>' : hd + '<body style="margin:0;padding:0;">' + CT_NL + h + CT_NL + '</body></html>';
+  }
+  return h;
+}
+// The visual editor only rewrites the HTML when something was changed in it; otherwise the code is kept exactly as it was.
+function ctCurHtml(){
+  if(ctView === 'html') return document.getElementById('ct-html').value;
+  if(ctGjs && ctTouched) return ctExport();
+  return ctSrc;
+}
+// Images: one library per sub-account, stored in the campaign-images bucket (JPG, PNG, GIF, WebP, 1 MB, 50 images)
+const CT_IMG_TYPES = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/gif': 'gif', 'image/webp': 'webp' };
+function ctImgMsg(t){ const el = document.getElementById('ct-error'); if(el){ el.style.color = 'var(--red, #c0392b)'; el.textContent = t || ''; } }
+function ctImgUrl(path){ return sb.storage.from('campaign-images').getPublicUrl(path).data.publicUrl; }
+async function ctLoadImages(ed){
+  if(!ctSub) return;
+  try {
+    const { data } = await sb.storage.from('campaign-images').list(ctSub, { limit: 100, sortBy: { column: 'created_at', order: 'desc' } });
+    (data || []).filter(f => f && f.name && /\.(jpg|png|gif|webp)$/i.test(f.name)).forEach(f => ed.AssetManager.add({ type: 'image', src: ctImgUrl(ctSub + '/' + f.name), name: f.name }));
+  } catch(e){ /* the library stays empty, links can still be pasted */ }
+}
+async function ctUploadFiles(ev){
+  const ed = ctGjs; if(!ed || !ctSub) return;
+  const files = Array.from((ev.dataTransfer && ev.dataTransfer.files) || (ev.target && ev.target.files) || []);
+  ctImgMsg(''); const errs = [];
+  for(const f of files){
+    const ext = CT_IMG_TYPES[f.type];
+    if(!ext){ errs.push('Only JPG, PNG, GIF or WebP images can be added.'); continue; }
+    if(f.size > 1048576){ errs.push('"' + f.name + '" is larger than 1 MB. Please reduce it first.'); continue; }
+    const path = ctSub + '/' + (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2)) + '.' + ext;
+    const { error } = await sb.storage.from('campaign-images').upload(path, f, { contentType: f.type, cacheControl: '31536000', upsert: false });
+    if(error){ errs.push(/limit|policy|row-level|exceeded|not found/i.test(error.message || '') ? 'The image library is full (50 images) or you are not allowed to add images.' : 'The image could not be added. Please try again.'); continue; }
+    ed.AssetManager.add({ type: 'image', src: ctImgUrl(path), name: f.name });
+  }
+  ctImgMsg(errs.join(' '));
+  if(ev.target && ev.target.value){ try { ev.target.value = ''; } catch(e){ /* ignore */ } }
+}
+// Inline shorthand colors are shown as "none" in the style panel; longhand ones are shown correctly.
+function ctLonghand(h){
+  return String(h || '').replace(/style\s*=\s*"([^"]*)"/gi, (m, v) => 'style="' + v.replace(/(^|;)(\s*)background\s*:\s*(#[0-9a-fA-F]{3,8}|rgba?\([^)]*\))\s*(?=;|$)/gi, '$1$2background-color:$3') + '"');
+}
+// One-click alignment on the selected element
+function ctAlignTools(ed){
+  const ico = d => '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="' + d + '"/></svg>';
+  const L = ico('M3 4h18v2H3zm0 4h12v2H3zm0 4h18v2H3zm0 4h12v2H3z'), C = ico('M3 4h18v2H3zm3 4h12v2H6zm-3 4h18v2H3zm3 4h12v2H6z'), R = ico('M3 4h18v2H3zm6 4h12v2H9zm-6 4h18v2H3zm6 4h12v2H9z');
+  const run = v => () => {
+    const c = ed.getSelected(); if(!c) return;
+    const tag = String(c.get('tagName') || '').toLowerCase();
+    const t = ['a', 'img', 'span', 'b', 'i', 'strong', 'em', 'button'].includes(tag) && c.parent() ? c.parent() : c;
+    t.addStyle({ 'text-align': v });
+  };
+  const add = c => {
+    const tb = c.get('toolbar') || [];
+    if(tb.some(x => x.id === 'ct-al-c')) return;
+    c.set('toolbar', tb.concat([{ id: 'ct-al-l', label: L, attributes: { title: 'Align left' }, command: run('left') }, { id: 'ct-al-c', label: C, attributes: { title: 'Center' }, command: run('center') }, { id: 'ct-al-r', label: R, attributes: { title: 'Align right' }, command: run('right') }]));
+  };
+  ed.on('component:selected', c => { if(c) add(c); });
+}
+function ctBlocks(ed){
+  const bm = ed.BlockManager, cat = 'Plug n Drive';
+  CT_VARS.forEach(v => bm.add('ct-var-' + v[0], { label: v[1], category: 'Variables', content: { type: 'text', content: '{{' + v[0] + '}}' } }));
+  bm.add('ct-footer', { label: 'Legal footer', category: cat, content: { type: 'text', content: '<p style="font-family:Arial,sans-serif;font-size:12px;color:#777777;text-align:center;margin:16px 0;">You receive this e-mail because you charged at {{site}}. Sent by {{brand}}. <a href="{{unsubscribe_url}}">Unsubscribe</a></p>' } });
+  bm.add('ct-code', { label: 'Code box', category: cat, content: { type: 'text', content: '<p style="font-family:Arial,sans-serif;font-size:22px;font-weight:bold;letter-spacing:2px;text-align:center;border:2px dashed #0a7d5a;border-radius:6px;padding:14px;margin:16px 0;color:#0a7d5a;">{{offer_code}}</p>' } });
+}
+async function ctInitEditor(html){
+  if(ctGjs){ try { ctGjs.destroy(); } catch(e){ /* already gone */ } ctGjs = null; }
+  const box = document.getElementById('ct-gjs'); box.innerHTML = '';
+  const plugin = ctPreset();
+  ctGjs = grapesjs.init({
+    container: box, height: '640px', width: 'auto', fromElement: false, storageManager: false,
+    assetManager: { upload: 'ct-upload', uploadName: 'files', embedAsBase64: false, multiUpload: true, uploadFile: ctUploadFiles, dropzoneContent: '<div class="gjs-am-dropzone-text" style="text-align:center;line-height:1.6;">Drop images here or click to upload<br><span style="font-size:12px;opacity:.7;">JPG, PNG, GIF or WebP, 1 MB maximum</span></div>', addBtnText: 'Add image link' },
+    deviceManager: { devices: [{ id: 'desktop', name: 'Computer' }, { id: 'mobile', name: 'Phone', width: '375px', widthMedia: '480px' }] },
+    plugins: [plugin], pluginsOpts: {}
+  });
+  const ed = ctGjs;
+  ['export-template', 'gjs-open-import-webpage'].forEach(id => { try { ed.Panels.removeButton('options', id); } catch(e){ /* not present */ } });
+  try { ed.Panels.removePanel('devices-c'); } catch(e){ /* not present */ }
+  ctBlocks(ed);
+  ed.setComponents(ctLonghand(html));
+  ctLoadImages(ed); ctAlignTools(ed);
+  ctTouched = false;
+  ed.on('update', () => { ctTouched = true; });
+}
+function ctGDevice(d){
+  if(ctGjs){ try { ctGjs.setDevice(d === 'm' ? 'mobile' : 'desktop'); } catch(e){ /* ignore */ } }
+  document.getElementById('ct-gdev-d').classList.toggle('on', d !== 'm'); document.getElementById('ct-gdev-m').classList.toggle('on', d === 'm');
+}
+function ctShowView(v){
+  ctView = v;
+  document.getElementById('ct-visual').style.display = v === 'visual' ? '' : 'none';
+  document.getElementById('ct-code').style.display = v === 'html' ? '' : 'none';
+  document.getElementById('ct-tab-visual').classList.toggle('on', v === 'visual');
+  document.getElementById('ct-tab-html').classList.toggle('on', v === 'html');
+  document.getElementById('ct-gdevs').style.display = v === 'visual' ? '' : 'none';
+  document.getElementById('ct-inline-prev').style.display = v === 'html' ? '' : 'none';
+  if(v === 'html') ctPreview();
+}
+async function ctSetView(v){
+  if(v === ctView) return;
+  const ta = document.getElementById('ct-html'), err = document.getElementById('ct-error');
+  if(v === 'html'){
+    ta.value = ctGjs ? ctCurHtml() : ctSrc;
+  } else {
+    const ok = await ctLoadGjs();
+    if(!ok){ ctImgMsg('The visual editor could not be loaded. You can keep editing the HTML.'); return; }
+    err.textContent = ''; ctSrc = ta.value;
+    document.getElementById('ct-visual').style.display = '';
+    await ctInitEditor(ctSrc); ctGDevice('d');
+  }
+  ctShowView(v);
+  if(v === 'visual' && ctGjs){ try { ctGjs.refresh(); } catch(e){ /* ignore */ } }
+}
+async function ctOpenHtml(html){
+  const my = ++ctToken, err = document.getElementById('ct-error');
+  ctSrc = html; ctTouched = false;
+  document.getElementById('ct-html').value = html;
+  // a narrow screen keeps the plain HTML box, as before
+  if(window.innerWidth < 900){ ctShowView('html'); return; }
+  ctShowView('visual');
+  document.getElementById('ct-gjs').innerHTML = '<div style="padding:18px;font-size:13px;color:var(--text-muted);">Loading the editor…</div>';
+  const ok = await ctLoadGjs();
+  if(my !== ctToken) return;
+  if(!ok){ err.style.color = 'var(--red, #c0392b)'; err.textContent = 'The visual editor could not be loaded. You can edit the HTML instead.'; ctShowView('html'); return; }
+  await ctInitEditor(ctSrc); ctGDevice('d');
+}
+function ctDestroy(){ ctToken++; if(ctGjs){ try { ctGjs.destroy(); } catch(e){ /* ignore */ } ctGjs = null; } }
+async function ctCopyHtml(){
+  const out = document.getElementById('ct-copy-out'), h = ctCurHtml();
+  try { await navigator.clipboard.writeText(h); out.textContent = 'Copied.'; }
+  catch(e){ if(ctView !== 'html') await ctSetView('html'); const ta = document.getElementById('ct-html'); ta.focus(); ta.select(); out.textContent = 'Press Ctrl+C to copy.'; }
+  setTimeout(() => { out.textContent = ''; }, 3000);
+}
+function ctInsertVar(k){
+  const el = document.getElementById('ct-subject'); const s0 = el.selectionStart == null ? el.value.length : el.selectionStart, e0 = el.selectionEnd == null ? s0 : el.selectionEnd;
+  const ins = '{{' + k + '}}'; el.value = el.value.slice(0, s0) + ins + el.value.slice(e0); el.focus(); el.selectionStart = el.selectionEnd = s0 + ins.length;
+}
+async function ctDuplicate(btn){
+  const err = document.getElementById('ct-error'); err.style.color = 'var(--red, #c0392b)'; err.textContent = ''; btn.disabled = true;
+  const g = await sb.rpc('get_campaign_template', { p_id: btn.dataset.tid });
+  if(g.error || !g.data || !g.data.template){ btn.disabled = false; err.textContent = csCleanMessage(g.error && g.error.message); return; }
+  const t = g.data.template; let name = (t.name + ' (copy)').slice(0, 80), n = 2;
+  while(ctList.some(x => !x.archived && x.name.toLowerCase() === name.toLowerCase())){ name = t.name.slice(0, 70) + ' (copy ' + n + ')'; n++; }
+  const r = await sb.rpc('save_campaign_template', { p_sub: ctSub, p_id: null, p_name: name, p_subject: t.subject, p_html: t.html, p_text: t.text || '' });
+  if(r.error){ btn.disabled = false; err.textContent = csCleanMessage(r.error.message); return; }
+  await ctLoad();
+}
 async function ctSave(){
   if(ctBusy || !ctEditing) return;
   const err = document.getElementById('ct-error'); err.style.color = 'var(--red, #c0392b)'; err.textContent = '';
   if(!document.getElementById('ct-name').value.trim()){ err.textContent = 'Give the template a name.'; return; }
   const btn = document.getElementById('ct-save'); ctBusy = true; btn.disabled = true;
-  const { data, error } = await sb.rpc('save_campaign_template', { p_sub: ctSub, p_id: ctEditing.id, p_name: document.getElementById('ct-name').value, p_subject: document.getElementById('ct-subject').value, p_html: document.getElementById('ct-html').value, p_text: document.getElementById('ct-text').value });
+  const html = ctCurHtml();
+  const { data, error } = await sb.rpc('save_campaign_template', { p_sub: ctSub, p_id: ctEditing.id, p_name: document.getElementById('ct-name').value, p_subject: document.getElementById('ct-subject').value, p_html: html, p_text: document.getElementById('ct-text').value });
   ctBusy = false; btn.disabled = false;
   if(error || !data || !data.template){ err.textContent = csCleanMessage(error && error.message); return; }
   ctEditing = { id: data.template.id, version: data.template.version };
+  ctSrc = html; ctTouched = false; document.getElementById('ct-html').value = html;
   ctRenderCheck(data.check);
   err.style.color = 'var(--green, #1a7f37)'; err.textContent = 'Saved (version ' + data.template.version + ').';
   ctVersions(); ctLoad(); ctTestLoad();
