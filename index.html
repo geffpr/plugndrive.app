@@ -9561,7 +9561,7 @@ function ccCheckList(ids, checkedIds, cls){
 function openCampaignDraft(id){
   const sub = csList.find(x => x.id === csEnv); if(!sub) return;
   if(id) spClose();
-  if(!id && !spSkip && spShow()) return;
+  if(!id && !spSkip){ if(!ccLeaveOk()) return; closeCampaignDraft(); if(spShow()) return; }
   const c = id ? ccList.find(x => x.id === id) : null;
   ccEditId = c ? c.id : null;
   const z = (c && c.zone) || {};
@@ -9581,6 +9581,8 @@ function openCampaignDraft(id){
   scInit(c);
   document.getElementById('cc-name').focus();
 }
+// An open campaign with unsaved changes asks before it is closed by another action.
+function ccLeaveOk(){ const p = document.getElementById('cc-panel'); if(p && p.style.display !== 'none' && scTouched) return confirm('Close this campaign without saving your changes?'); return true; }
 function closeCampaignDraft(){ const p = document.getElementById('cc-panel'); if(p) p.style.display = 'none'; ccEditId = null; ccPoints = []; scTouched = false; }
 
 // ---- "New campaign" start page: choose how the scenario begins (same as the Campaigns app). Every template only uses triggers, conditions and actions that exist in the scenario editor ----
@@ -9835,11 +9837,14 @@ async function crCreateCampaign(){
 }
 async function openCampaignTemplates(){
   const s = csList.find(x => x.id === csEnv); if(!s) return;
+  if(!ccLeaveOk()) return;
+  closeCampaignDraft(); spClose();
   ctSub = s.id; ctEditing = null;
   document.getElementById('ct-sub-name').textContent = s.name;
   document.getElementById('ct-error').textContent = '';
   document.getElementById('ct-editor').style.display = 'none';
   document.getElementById('ct-panel').style.display = 'block';
+  document.getElementById('ct-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
   await ctLoad();
 }
 function closeCampaignTemplates(){ clearTimeout(ctTimer); ctDestroy(); const p = document.getElementById('ct-panel'); if(p) p.style.display = 'none'; ctSub = null; ctEditing = null; }
