@@ -6740,7 +6740,7 @@ async function saveSiteSettings(){
 }
 
 // --- Clients ---
-// Recently opened clients are remembered in this browser only (no database change).
+// Recently opened or changed clients are remembered in this browser only (no database change).
 function clientsRecentGet(){ try { const a = JSON.parse(localStorage.getItem('pnd_recent_clients') || '[]'); return Array.isArray(a) ? a.filter(x=>typeof x==='string') : []; } catch { return []; } }
 function clientsRecentAdd(id){ try { const a = [id].concat(clientsRecentGet().filter(x=>x!==id)).slice(0,5); localStorage.setItem('pnd_recent_clients', JSON.stringify(a)); } catch { /* storage unavailable: the list just is not remembered */ } }
 function clientsNorm(t){ return String(t==null?'':t).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
@@ -6758,7 +6758,7 @@ function renderClients(){
   const recent = words.length ? [] : clientsRecentGet().map(id=>clients.find(c=>c.id===id)).filter(Boolean);
   if(recent.length){
     rec.style.display = 'block';
-    rec.innerHTML = '<div class="hint" style="margin:0 0 6px;">Recently opened</div><div style="display:flex;flex-wrap:wrap;gap:8px;">' + recent.map(cl=>`<button type="button" class="btn" onclick="openClient('${cl.id}')">${bEsc(cl.name)}</button>`).join('') + '</div>';
+    rec.innerHTML = '<div class="hint" style="margin:0 0 6px;">Recently opened or changed</div><div style="display:flex;flex-wrap:wrap;gap:8px;">' + recent.map(cl=>`<button type="button" class="btn" onclick="openClient('${cl.id}')">${bEsc(cl.name)}</button>`).join('') + '</div>';
   } else { rec.style.display = 'none'; rec.innerHTML = ''; }
   document.getElementById('clients-body').innerHTML = list.length ? list.map(cl=>{
     const sites = locations.filter(l=>l.clientId===cl.id);
@@ -7264,7 +7264,7 @@ async function ftPush(overrides, okText){
   const { data, error } = await sb.rpc('admin_set_client_features', { p_client: currentClientId, p_overrides: overrides });
   btn.disabled = false;
   if(error){ msg.textContent = String(error.message || '').replace(/^campaigns_requires_api:\s*/, 'Campaigns needs the API: '); return; }
-  ftData = data; ftDirty = new Set();
+  ftData = data; ftDirty = new Set(); clientsRecentAdd(currentClientId);
   drawFeatureRows();
   msg.textContent = okText;
   renderBrandPanel(clients.find(x => x.id === currentClientId) || { id: currentClientId, name: '' });
@@ -7564,10 +7564,11 @@ async function submitNewClient(){
     commission_duration_months: document.getElementById('new-client-commission-duration').value
       ? Number(document.getElementById('new-client-commission-duration').value) : null,
   };
-  const { error } = editingClientId
-    ? await sb.from('clients').update(payload).eq('id', editingClientId)
-    : await sb.from('clients').insert(payload);
+  const { data: saved, error } = editingClientId
+    ? await sb.from('clients').update(payload).eq('id', editingClientId).select('id')
+    : await sb.from('clients').insert(payload).select('id');
   if(error){ errEl.textContent = error.message; return; }
+  if(saved && saved[0] && saved[0].id) clientsRecentAdd(saved[0].id);
   const wasEditing = editingClientId;
   editingClientId = null;
   await loadAll();
