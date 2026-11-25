@@ -1926,6 +1926,8 @@ body.display-mode .content{padding:26px 34px;pointer-events:none;user-select:non
             <div class="section-title" style="margin:0;">All clients</div>
             <button class="btn btn-primary" onclick="showPage('addclient')">+ Add client</button>
           </div>
+          <div class="filters" style="margin:14px 0 10px;"><input class="search" type="text" id="clients-search" style="width:100%;max-width:560px;" placeholder="Search name, contact, e-mail, phone, city or site..." oninput="renderClients()" autocomplete="off"></div>
+          <div id="clients-recent" style="display:none;margin:0 0 14px;"></div>
           <div class="card">
             <table>
               <thead><tr><th>Name</th><th>Type</th><th>Sites</th><th>Chargers</th></tr></thead>
@@ -6738,18 +6740,43 @@ async function saveSiteSettings(){
 }
 
 // --- Clients ---
+// Recently opened clients are remembered in this browser only (no database change).
+function clientsRecentGet(){ try { const a = JSON.parse(localStorage.getItem('pnd_recent_clients') || '[]'); return Array.isArray(a) ? a.filter(x=>typeof x==='string') : []; } catch { return []; } }
+function clientsRecentAdd(id){ try { const a = [id].concat(clientsRecentGet().filter(x=>x!==id)).slice(0,5); localStorage.setItem('pnd_recent_clients', JSON.stringify(a)); } catch { /* storage unavailable: the list just is not remembered */ } }
+function clientsNorm(t){ return String(t==null?'':t).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
+function clientsHay(cl){
+  const sites = locations.filter(l=>l.clientId===cl.id);
+  return clientsNorm([cl.name, cl.businessType, cl.contactName, cl.contactEmail, cl.contactPhone, cl.address].concat(sites.map(s=>[s.name, s.city, s.address].join(' '))).join(' '));
+}
 function renderClients(){
   document.getElementById('clients-list-view').style.display = 'block';
   document.getElementById('client-detail-view').style.display = 'none';
-  document.getElementById('clients-body').innerHTML = clients.map(cl=>{
+  const qRaw = (document.getElementById('clients-search') || {}).value || '';
+  const words = clientsNorm(qRaw).split(/\s+/).filter(Boolean);
+  const list = words.length ? clients.filter(cl=>{ const h = clientsHay(cl); return words.every(w=>h.includes(w)); }) : clients;
+  const rec = document.getElementById('clients-recent');
+  const recent = words.length ? [] : clientsRecentGet().map(id=>clients.find(c=>c.id===id)).filter(Boolean);
+  if(recent.length){
+    rec.style.display = 'block';
+    rec.innerHTML = '<div class="hint" style="margin:0 0 6px;">Recently opened</div><div style="display:flex;flex-wrap:wrap;gap:8px;">' + recent.map(cl=>`<button type="button" class="btn" onclick="openClient('${cl.id}')">${bEsc(cl.name)}</button>`).join('') + '</div>';
+  } else { rec.style.display = 'none'; rec.innerHTML = ''; }
+  document.getElementById('clients-body').innerHTML = list.length ? list.map(cl=>{
     const sites = locations.filter(l=>l.clientId===cl.id);
     const siteIds = sites.map(s=>s.id);
     const chargerCount = chargers.filter(c=>{ const root=rootOf(c.locationId); return root && siteIds.includes(root.id); }).length;
     return `<tr class="rowlink" onclick="openClient('${cl.id}')">
-      <td>${cl.name}${cl.accountType==='self_serve' ? ' <span class="hint">('+(cl.accountStatus==='active'?'active':cl.accountStatus==='locked'?'locked':'trial')+')</span>' : ''}</td><td>${cl.businessType}</td><td>${sites.length}</td><td>${chargerCount}</td>
+      <td>${bEsc(cl.name)}${cl.accountType==='self_serve' ? ' <span class="hint">('+(cl.accountStatus==='active'?'active':cl.accountStatus==='locked'?'locked':'trial')+')</span>' : ''}</td><td>${bEsc(cl.businessType)}</td><td>${sites.length}</td><td>${chargerCount}</td>
     </tr>`;
-  }).join('');
+  }).join('') : `<tr><td colspan="4" class="hint" style="padding:18px;">No client matches "${bEsc(qRaw.trim())}".</td></tr>`;
 }
+document.addEventListener('keydown', function(e){
+  if(e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
+  const t = e.target, tag = t && t.tagName;
+  if(tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (t && t.isContentEditable)) return;
+  const pg = document.getElementById('page-clients'), lv = document.getElementById('clients-list-view');
+  const inp = document.getElementById('clients-search');
+  if(pg && pg.classList.contains('active') && lv && lv.style.display !== 'none' && inp){ e.preventDefault(); inp.focus(); inp.select(); }
+});
 async function toggleClientCashRecharges(checked){
   const box = document.getElementById('cl-cash-recharges');
   const { data, error } = await sb.from('clients').update({ cash_recharges_enabled: checked }).eq('id', currentClientId).select();
@@ -7352,6 +7379,7 @@ async function activateSelfServe(){
 function openClient(id, opts){
   opts = opts || {};
   currentClientId = id;
+  clientsRecentAdd(id);
   document.getElementById('clients-list-view').style.display = 'none';
   document.getElementById('client-detail-view').style.display = 'block';
   document.getElementById('assign-sites-panel').style.display = 'none';
