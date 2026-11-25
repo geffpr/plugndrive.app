@@ -215,6 +215,7 @@ select.st{border:0;cursor:pointer;font-family:inherit;padding:.12rem .4rem}
   <button class="qb-btn qb-primary" id="qbSave" onclick="qSave(true)">Save</button>
   <select id="qbStatus" onchange="qSetStatus(this.value)" title="Status"></select>
   <button class="qb-btn" id="qbZoho" onclick="qZoho(false)" style="display:none" title="Create or update the deal in Zoho CRM">Send to Zoho</button>
+  <button class="qb-btn" id="qbNurture" onclick="qNurtureClick()" style="display:none" title="Add the contact to the Plug n Drive e-mail series (first e-mail the next morning, 08:30)">Add to e-mail series</button>
   <span class="qb-info" id="qbInfo">Not saved yet. The number is assigned on save.</span>
 </div>
 <div class="q-lock" id="qLock">This quote was sent: it can no longer be edited. Use "My quotes", then Duplicate, to make a new version. You can still generate its PDF.</div>
@@ -2680,6 +2681,7 @@ function qUi() {
   const locked = !!qCur && st !== 'draft';
   save.disabled = locked; lock.style.display = locked ? 'block' : 'none';
   const zb = document.getElementById('qbZoho'); if (zb) zb.style.display = locked ? '' : 'none';
+  const nb = document.getElementById('qbNurture'); if (nb) nb.style.display = qCur ? '' : 'none';
   info.textContent = qCur ? `${qCur.quote_no} - ${qStatusLabel(st)}` : 'Not saved yet. The number is assigned on save.';
   document.getElementById('quoteNum').readOnly = !!qCur;
 }
@@ -2723,6 +2725,21 @@ async function qNurture() {
     if (!nm || !em || !qCur) return;
     await sb.rpc('nurture_enqueue', { p_email: em, p_name: nm, p_source: 'console_quote', p_quote_id: qCur.id });
   } catch (e) { console.warn('nurture', e); }
+}
+
+async function qNurtureClick() {
+  const info = document.getElementById('qbInfo'), btn = document.getElementById('qbNurture');
+  const nm = (document.getElementById('contactPerson').value || '').trim();
+  const em = (document.getElementById('clientEmail').value || '').trim();
+  if (!qCur) return;
+  if (!nm || !em) { info.textContent = 'Fill in the contact person and the e-mail first.'; return; }
+  btn.disabled = true;
+  try {
+    const r = await sb.rpc('nurture_enqueue', { p_email: em, p_name: nm, p_source: 'console_quote', p_quote_id: qCur.id });
+    if (r.error) throw r.error;
+    info.textContent = ({ queued: 'Added: first e-mail tomorrow at 08:30.', email_updated: 'E-mail address updated in the series queue.', unchanged: 'Already in the series.', already_in: 'This address is already in the series.', replaced_existing_elsewhere: 'This address is already in the series.', invalid_email: 'This e-mail address looks invalid.' })[r.data] || 'Done.';
+  } catch (e) { info.textContent = 'Could not add to the series: ' + (e.message || e); }
+  btn.disabled = false;
 }
 
 async function qSetStatus(v) {
