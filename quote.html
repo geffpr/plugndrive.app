@@ -2706,11 +2706,23 @@ async function qSave(verbose) {
       if (up.error) throw up.error;
     }
     qUi();
+    qNurture();
     if (verbose) { const i = document.getElementById('qbInfo'); const keep = i.textContent; i.textContent = keep + '  (saved ' + new Date().toLocaleTimeString() + ')'; }
     return true;
   } catch (e) {
     alert('Could not save: ' + (e.message || e)); return false;
   }
+}
+
+// Contact name + e-mail on a saved quote: the contact enters the Plug n Drive e-mail series (first mail the next morning, 08:30 South Africa).
+// Best effort and silent: one funnel per e-mail address, and an e-mail corrected before the start replaces the pending one.
+async function qNurture() {
+  try {
+    const nm = (document.getElementById('contactPerson').value || '').trim();
+    const em = (document.getElementById('clientEmail').value || '').trim();
+    if (!nm || !em || !qCur) return;
+    await sb.rpc('nurture_enqueue', { p_email: em, p_name: nm, p_source: 'console_quote', p_quote_id: qCur.id });
+  } catch (e) { console.warn('nurture', e); }
 }
 
 async function qSetStatus(v) {
